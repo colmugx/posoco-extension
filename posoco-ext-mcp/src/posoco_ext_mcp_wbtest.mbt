@@ -505,16 +505,16 @@ fn registry_test_call(name : String) -> @posoco.ToolCall {
 }
 
 ///|
-/// Pack a registry test ToolCall into the 0.21 ToolCallContext the provider
-/// now receives: no-op register_cancel keeps cancellation NotPropagated.
+/// Pack a registry test ToolCall into the ToolCallContext the provider
+/// receives: no-op register_cancel keeps cancellation NotPropagated.
 fn registry_test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: call.call_id,
-    name: call.name,
-    arguments: call.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|
@@ -578,6 +578,9 @@ fn registry_test_bridge(
     activated: true,
     catalog_revision: 0,
     closing: false,
+    contributions: None,
+    reserved_names: [],
+    published_names: [],
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),

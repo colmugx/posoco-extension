@@ -11,26 +11,44 @@
 /// `cancel_effects` back to the registered facet.
 
 ///|
-fn shell_port_runtime(shell : ShellTools) -> @runtime.PortRuntime {
+fn shell_port_runtime() -> @runtime.PortRuntime {
   let no_steps : Array[@posoco.ScriptedModelStep] = []
   @runtime.PortRuntime(
     model=@posoco.ScriptedModel(no_steps) as &@posoco.ModelPort,
-    tools=Map::from_array([("bash", shell as &@posoco.ToolProvider)]),
   )
 }
 
 ///|
+/// Fixed-binding probe context: `bound_tool` routes `execute_tool` straight
+/// to the shell provider; the context factory hands the provider a
+/// `ToolCallContext` whose `register_cancel` feeds the runtime registry.
 fn probe_effect_context(
+  shell : ShellTools,
   effect_value : Int32,
   cmd : String,
 ) -> @runtime.EffectContext {
-  {
-    effect_id: @kernel.EffectId::{ value: effect_value, },
-    owner: @posoco.OwnerId::unchecked("probe"),
-    call_id: @kernel.CallId::unchecked("call_probe"),
-    tool_name: @kernel.ToolName::unchecked("bash"),
-    arguments: Json::object(Map::from_array([("cmd", Json::string(cmd))])),
-  }
+  let effect_id = @kernel.EffectId::{ value: effect_value, }
+  let call_id = @kernel.CallId::unchecked("call_probe")
+  let tool_name = @kernel.ToolName::unchecked("bash")
+  let arguments = Json::object(Map::from_array([("cmd", Json::string(cmd))]))
+  @runtime.EffectContext::EffectContext(
+    run_id=@kernel.RunId::unchecked("run_probe"),
+    effect_id~,
+    owner=@kernel.OwnerId::unchecked("probe"),
+    call_id~,
+    tool_name~,
+    arguments~,
+    bound_tool=shell as &@posoco.ToolProvider,
+    tool_context=fn(register_cancel : (&@posoco.ToolCancellable) -> Unit) {
+      @posoco.ToolCallContext(
+        effect_id~,
+        call_id~,
+        name=tool_name,
+        arguments~,
+        register_cancel~,
+      )
+    },
+  )
 }
 
 ///|
@@ -57,9 +75,13 @@ async fn remove_marker(path : String) -> Unit {
 ///|
 async test "cancellable shell: normal completion returns output and unregisters" {
   let shell = ShellTools()
-  let runtime = shell_port_runtime(shell)
+  let runtime = shell_port_runtime()
   let marker = probe_marker("t0")
-  let ctx = probe_effect_context(40, "echo probe-ok; echo done > \{marker}")
+  let ctx = probe_effect_context(
+    shell,
+    40,
+    "echo probe-ok; echo done > \{marker}",
+  )
   let outcome = @runtime.Runtime::execute_tool(runtime, ctx)
   guard outcome is @kernel.ToolOutcome::Success(content~, ..) else {
     fail("expected success outcome for a normal command")
@@ -71,6 +93,7 @@ async test "cancellable shell: normal completion returns output and unregisters"
   // Settled effect: cancel reports NotPropagated, the registry entry is gone.
   let dispositions = @runtime.Runtime::cancel_effects(
     runtime,
+    run_id=ctx.run_id,
     [ctx.effect_id],
     @kernel.CancelReason::HostRequested(detail=None),
   )
@@ -83,9 +106,13 @@ async test "cancellable shell: normal completion returns output and unregisters"
 ///|
 async test "cancellable shell: cancel kills a live child and reports Propagated" {
   let shell = ShellTools()
-  let runtime = shell_port_runtime(shell)
+  let runtime = shell_port_runtime()
   let marker = probe_marker("t1")
-  let ctx = probe_effect_context(41, "sleep 30; echo finished > \{marker}")
+  let ctx = probe_effect_context(
+    shell,
+    41,
+    "sleep 30; echo finished > \{marker}",
+  )
   @async.with_task_group(async fn(group) {
     group.spawn_bg(async fn() {
       let outcome = @runtime.Runtime::execute_tool(runtime, ctx)
@@ -97,6 +124,7 @@ async test "cancellable shell: cancel kills a live child and reports Propagated"
     let started = @async.now()
     let dispositions = @runtime.Runtime::cancel_effects(
       runtime,
+      run_id=ctx.run_id,
       [ctx.effect_id],
       @kernel.CancelReason::HostRequested(detail=None),
     )
@@ -120,11 +148,12 @@ async test "cancellable shell: cancel kills a live child and reports Propagated"
 ///|
 async test "cancellable shell: signal-immune child is hard-killed after the grace window" {
   let shell = ShellTools()
-  let runtime = shell_port_runtime(shell)
+  let runtime = shell_port_runtime()
   // `trap '' TERM` makes the child ignore the graceful signal; only the
   // post-grace hard kill can stop it.
   let marker = probe_marker("t2")
   let ctx = probe_effect_context(
+    shell,
     42,
     "trap '' TERM; sleep 30; echo survived > \{marker}",
   )
@@ -138,6 +167,7 @@ async test "cancellable shell: signal-immune child is hard-killed after the grac
     }
     let dispositions = @runtime.Runtime::cancel_effects(
       runtime,
+      run_id=ctx.run_id,
       [ctx.effect_id],
       @kernel.CancelReason::HostRequested(detail=None),
     )
@@ -154,17 +184,17 @@ async test "cancellable shell: signal-immune child is hard-killed after the grac
 async test "cancellable shell: execute offers its facet through the context" {
   let shell = ShellTools()
   let mut registrations = 0
-  let ctx : @posoco.ToolCallContext = {
-    effect_id: @kernel.EffectId::{ value: 44, },
-    call_id: @kernel.CallId::unchecked("call_probe"),
-    name: @kernel.ToolName::unchecked("bash"),
-    arguments: Json::object(
+  let ctx : @posoco.ToolCallContext = @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 44, },
+    call_id=@kernel.CallId::unchecked("call_probe"),
+    name=@kernel.ToolName::unchecked("bash"),
+    arguments=Json::object(
       Map::from_array([("cmd", Json::string("echo facet"))]),
     ),
-    register_cancel: fn(_ : &@posoco.ToolCancellable) {
+    register_cancel=fn(_ : &@posoco.ToolCancellable) {
       registrations = registrations + 1
     },
-  }
+  )
   let outcome = @posoco.ToolProvider::execute(shell, ctx) catch {
     _ => @kernel.ToolOutcome::Success(content="failed", structured=None)
   }

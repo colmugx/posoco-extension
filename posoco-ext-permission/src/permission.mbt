@@ -570,7 +570,6 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
 pub extend PermissionPolicy with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   before_tool,
   on_turn_end,
@@ -656,7 +655,12 @@ async fn PermissionPolicy::semantic_risk(
     }),
     questions: semantic_risk_questions(),
   }
-  let result = decision.evaluate(request) catch { _ => return false }
+  let result = decision.evaluate(
+    request,
+    context=@posoco.DecisionCallContext::make(purpose="auto_permission"),
+  ) catch {
+    _ => return false
+  }
   result.validate_for(request) catch {
     _ => return false
   }
@@ -776,7 +780,10 @@ async fn PermissionPolicy::auto_gate(
     }),
     questions,
   }
-  let result = decision.evaluate(request) catch {
+  let result = decision.evaluate(
+    request,
+    context=@posoco.DecisionCallContext::make(purpose="auto_permission"),
+  ) catch {
     _ =>
       return @posoco.ToolDecision::Reject(
         reason="permission: auto judge failed for '" + name + "'; denied",
@@ -1245,7 +1252,10 @@ pub impl @posoco.Lifecycle for PermissionPolicy with fn on_shutdown(
 pub extend PermissionPolicy with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
+/// MoonBit no longer implicitly promotes the sync trait methods of a
+/// `pub impl` as regular methods (warning implicit_impl_as_method). This
+/// trait-default method has no direct callers — the kernel consumes it via
+/// the trait — so declare the required explicit promotion and mark it
+/// deprecated to keep it out of the advertised API.
+#deprecated
 pub extend PermissionPolicy with @posoco.PipelineHook::{tool_exposure}

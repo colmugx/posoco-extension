@@ -87,8 +87,7 @@ pub fn AcpBridge::extension_id(Self) -> String
 pub async fn AcpBridge::flush(Self) -> Int32 noraise
 pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
 pub fn AcpBridge::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn AcpBridge::on_event(Self, @types.TurnEvent) -> Unit
-pub fn AcpBridge::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn AcpBridge::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn AcpBridge::on_shutdown(Self) -> Unit
 pub async fn AcpBridge::on_start(Self) -> Unit
 pub async fn AcpBridge::push_agent_thought_chunk(Self, session_id~ : String, text~ : String) -> Unit noraise

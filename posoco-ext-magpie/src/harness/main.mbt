@@ -769,6 +769,7 @@ async fn main {
           }),
           owner: @posoco.OwnerId::unchecked("posoco-live"),
           policy: @posoco.ExecutionPolicy::Sequential,
+          exposure: @posoco.ToolExposure::Direct,
           provenance: None,
         }
         // Full round trip: definition → tool_use → identity/args validation
@@ -918,6 +919,7 @@ async fn main {
           input_schema: Json::object({ "type": Json::string("object") }),
           owner: @posoco.OwnerId::unchecked("posoco-live"),
           policy: @posoco.ExecutionPolicy::Sequential,
+          exposure: @posoco.ToolExposure::Direct,
           provenance: None,
         }
         let wire_tool = @messages.tool_to_wire(

@@ -73,7 +73,7 @@ async test "hook events mutate only actor-owned recovery state" {
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
-    hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(50000L)))
+    hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
     let pending = guard_ext.snapshot()
     assert_eq(pending.length(), 1)
     assert_eq(pending[0].session_id, "s1")
@@ -107,7 +107,7 @@ async test "cancel_pending invalidates actor schedule" {
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
-    hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(50000L)))
+    hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
     assert_eq(guard_ext.snapshot().length(), 1)
     guard_ext.cancel_pending()
     // snapshot() is an actor ask and therefore also serves as the FIFO barrier.
@@ -246,8 +246,8 @@ async test "simultaneous due sessions serialize resume execution" {
     let hook : &@posoco.PipelineHook = guard_ext
     let observer : &@posoco.Observer = guard_ext
     for id in ["s1", "s2"] {
-      hook.on_post_event_at(Some(test_scope(id)), quota_failure(Some(1000L)))
-      observer.on_event_at(
+      hook.on_post_event(Some(test_scope(id)), quota_failure(Some(1000L)))
+      observer.on_event(
         Some(test_scope(id)),
         @posoco.TurnEvent::TurnFailed("quota"),
       )

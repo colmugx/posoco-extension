@@ -5,13 +5,13 @@
 ///|
 /// Effect context for a plan-tool call (no-op registrar).
 fn test_ctx(name : String, arguments : Json) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: @posoco.CallId::unchecked("c1"),
-    name: @posoco.ToolName::unchecked(name),
-    arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=@posoco.CallId::unchecked("c1"),
+    name=@posoco.ToolName::unchecked(name),
+    arguments~,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|
@@ -30,7 +30,7 @@ test "observer_accumulates_usage" {
   assert_eq(goal.usage.total_tokens, 0)
   assert_eq(goal.usage.turns, 0)
 
-  goal.on_event(
+  goal.apply_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=@posoco.Message::AssistantMessage(
         content=[@posoco.Content::Text("hi")],
@@ -49,7 +49,7 @@ test "observer_accumulates_usage" {
   )
   assert_eq(goal.usage.total_tokens, 150)
 
-  goal.on_event(@posoco.TurnEvent::TurnCompleted)
+  goal.apply_event(@posoco.TurnEvent::TurnCompleted)
   assert_eq(goal.usage.turns, 1)
 }
 
@@ -59,10 +59,10 @@ test "observer_tracks_tool_repetition" {
   assert_eq(goal.repeat_count, 0)
 
   let call = plan_call(Json::null())
-  goal.on_event(@posoco.TurnEvent::ToolCallPending(call))
+  goal.apply_event(@posoco.TurnEvent::ToolCallPending(call))
   assert_eq(goal.repeat_count, 1)
 
-  goal.on_event(@posoco.TurnEvent::ToolCallPending(call))
+  goal.apply_event(@posoco.TurnEvent::ToolCallPending(call))
   assert_eq(goal.repeat_count, 2)
 }
 
@@ -233,24 +233,24 @@ test "scoped observer rejects foreign sessions and out-of-turn events" {
     run_id: @kernel.RunId::unchecked("r1"),
     turn_id: @kernel.TurnId::unchecked("t1"),
   }
-  goal.on_event_at(Some(local_scope), event)
+  goal.on_event(Some(local_scope), event)
   assert_eq(goal.usage.total_tokens, 0)
   goal.executing_turn = true
-  goal.on_event_at(Some(foreign), event)
-  goal.on_event_at(None, event)
+  goal.on_event(Some(foreign), event)
+  goal.on_event(None, event)
   assert_eq(goal.usage.total_tokens, 0)
-  goal.on_event_at(Some(local_scope), event)
+  goal.on_event(Some(local_scope), event)
   assert_eq(goal.usage.total_tokens, 10)
   let foreign_run : @posoco.EventScope = {
     session_id: @kernel.SessionId::unchecked("s1"),
     run_id: @kernel.RunId::unchecked("different_run"),
     turn_id: @kernel.TurnId::unchecked("t2"),
   }
-  goal.on_event_at(Some(foreign_run), event)
+  goal.on_event(Some(foreign_run), event)
   assert_eq(goal.usage.total_tokens, 10)
-  goal.on_event_at(Some(foreign), @posoco.TurnEvent::TurnCompleted)
+  goal.on_event(Some(foreign), @posoco.TurnEvent::TurnCompleted)
   assert_eq(goal.usage.turns, 0)
-  goal.on_event_at(Some(local_scope), @posoco.TurnEvent::TurnCompleted)
+  goal.on_event(Some(local_scope), @posoco.TurnEvent::TurnCompleted)
   assert_eq(goal.usage.turns, 1)
 }
 
@@ -289,7 +289,7 @@ test "unknown output usage remains unknown" {
     run_id: @kernel.RunId::unchecked("r1"),
     turn_id: @kernel.TurnId::unchecked("t1"),
   }
-  goal.on_event_at(
+  goal.on_event(
     Some(scope),
     @posoco.TurnEvent::ModelResponseReceived(
       message=@posoco.Message::AssistantMessage(

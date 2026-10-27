@@ -177,21 +177,6 @@ fn PiRuntime::flush_parked_followups(
 }
 
 ///|
-/// Versioned catalog source combining static Posoco tools with dynamic Pi tools.
-pub(all) struct PiCatalogSource {
-  adaptor : PiAdaptor
-  base_tools : Array[@kernel.ToolDef]
-}
-
-///|
-pub fn PiCatalogSource::PiCatalogSource(
-  adaptor~ : PiAdaptor,
-  base_tools~ : Array[@kernel.ToolDef] = [],
-) -> PiCatalogSource {
-  { adaptor, base_tools, }
-}
-
-///|
 fn normalized_result_to_outcome(text : String) -> @kernel.ToolOutcome {
   let json = @json.parse(text) catch {
     _ =>
@@ -288,6 +273,11 @@ pub impl @runtime.Runtime for PiRuntime with fn call_model(
   call_options : Json,
   on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
+  // Republish the live pi tool set when the JS host flagged a change; the
+  // kernel adopts the new group at the next operation boundary.
+  if self.adaptor.catalog_dirty {
+    pi_adaptor_publish(self.adaptor)
+  }
   match self.flush_parked_followups() {
     Ok(_) =>
       self.fallback.call_model(
@@ -312,6 +302,7 @@ pub impl @runtime.Runtime for PiRuntime with fn execute_tool(
 ///|
 pub impl @runtime.Runtime for PiRuntime with fn cancel_effects(
   self,
+  run_id~ : @kernel.RunId,
   effect_ids : Array[@kernel.EffectId],
   reason : @kernel.CancelReason,
 ) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)] {
@@ -331,7 +322,7 @@ pub impl @runtime.Runtime for PiRuntime with fn cancel_effects(
   }
   let delegated : Map[Int32, @kernel.CancelDisposition] = Map::from_array([])
   if !needs_fallback.is_empty() {
-    for pair in self.fallback.cancel_effects(needs_fallback, reason) {
+    for pair in self.fallback.cancel_effects(run_id~, needs_fallback, reason) {
       let (effect_id, disposition) = pair
       delegated[effect_id.to_int()] = disposition
     }
@@ -364,36 +355,6 @@ pub impl @runtime.Runtime for PiRuntime with fn compact(
 }
 
 ///|
-pub impl @runtime.CatalogSource for PiCatalogSource with fn revision(self) -> Int32 {
-  js_catalog_revision(self.adaptor.host)
-}
-
-///|
-pub impl @runtime.CatalogSource for PiCatalogSource with fn tools(self) -> Array[
-  @kernel.ToolDef,
-] {
-  let snapshot : Array[@kernel.ToolDef] = []
-  for tool in self.base_tools {
-    snapshot.push(tool)
-  }
-  for tool in self.adaptor.list_tools() {
-    snapshot.push(tool)
-  }
-  snapshot
-}
-
-///|
-pub extend PiRuntime with @runtime.Runtime::{
-  call_model,
-  execute_tool,
-  cancel_effects,
-  compact,
-}
-
-///|
-pub extend PiCatalogSource with @runtime.CatalogSource::{revision, tools}
-
-///|
 /// Execute through the same MoonBit Promise bridge used by PiRuntime.
 /// Node/Bun tests use this export to prove the coroutine resumes after a real
 /// Pi Promise resolves.
@@ -408,11 +369,23 @@ pub fn pi_adaptor_execute_effect_via_runtime(
   let task : async () -> Unit noraise = async fn() noraise {
     let arguments = @json.parse(arguments_json) catch { _ => Json::null() }
     let context : @runtime.EffectContext = @runtime.EffectContext(
+      run_id=@kernel.RunId::unchecked("pi_async"),
       effect_id=@kernel.EffectId::{ value: effect_id, },
       owner=@kernel.OwnerId::unchecked(pi_owner_id),
       call_id=@kernel.CallId::unchecked(call_id),
       tool_name=@kernel.ToolName::unchecked(name),
       arguments~,
+      // Fixed binding: the adaptor itself is the executor for pi tools.
+      bound_tool=adaptor as &@posoco.ToolProvider,
+      tool_context=fn(register_cancel : (&@posoco.ToolCancellable) -> Unit) {
+        @posoco.ToolCallContext(
+          effect_id=@kernel.EffectId::{ value: effect_id, },
+          call_id=@kernel.CallId::unchecked(call_id),
+          name=@kernel.ToolName::unchecked(name),
+          arguments~,
+          register_cancel~,
+        )
+      },
     )
     let outcome = execute_pi_effect(adaptor, context)
     let output = match outcome {
@@ -487,7 +460,11 @@ pub fn pi_adaptor_execute_effect_via_runtime(
 }
 
 ///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend PiRuntime with @runtime.Runtime::{supports_bound_tools}
+/// Keep the trait-default promotions out of the advertised method surface
+#deprecated
+pub extend PiRuntime with @runtime.Runtime::{
+  call_model,
+  execute_tool,
+  cancel_effects,
+  compact,
+}

@@ -315,13 +315,13 @@ async test "unknown_tool_name_reported" {
   }
   cw_assert_rejected_without_pending(observer, "c2")
 
-  let ctx : @posoco.ToolCallContext = {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: @posoco.CallId::unchecked("c3"),
-    name: @posoco.ToolName::unchecked("goal_update_plan_typo"),
-    arguments: Json::null(),
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  let ctx : @posoco.ToolCallContext = @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=@posoco.CallId::unchecked("c3"),
+    name=@posoco.ToolName::unchecked("goal_update_plan_typo"),
+    arguments=Json::null(),
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
   match @posoco.ToolProvider::execute(goal, ctx) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_eq(content, "unknown tool")

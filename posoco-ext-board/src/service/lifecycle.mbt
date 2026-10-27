@@ -25,7 +25,10 @@ pub impl @posoco.Lifecycle for BoardWorkflows with fn on_compose(self, view) {
   }
   self.ui = view.ui()
   if self.ui is None {
-    raise @posoco.CompositionError::EmptyPort("posoco_ext_board.ui")
+    raise @posoco.CompositionError::ExtensionComposeFailed(
+      manifest_id="posoco_ext_board",
+      detail="composition view provides no UI port",
+    )
   }
 }
 

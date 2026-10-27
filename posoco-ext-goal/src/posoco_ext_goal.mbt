@@ -430,8 +430,10 @@ pub impl @posoco.ToolProvider for GoalRunner with fn execute(
 }
 
 ///|
-pub impl @posoco.Observer for GoalRunner with fn on_event(
-  self,
+/// Unscoped budget accounting, applied only to events that passed the
+/// scoped guard in `on_event`.
+fn GoalRunner::apply_event(
+  self : GoalRunner,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
@@ -478,7 +480,7 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
 /// Core dispatches the scoped observer only. A GoalRunner must never
 /// charge another session's turns or tool calls to its own budget.
 /// The turn flag also rejects telemetry produced before or after execute.
-pub impl @posoco.Observer for GoalRunner with fn on_event_at(
+pub impl @posoco.Observer for GoalRunner with fn on_event(
   self : GoalRunner,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -494,7 +496,7 @@ pub impl @posoco.Observer for GoalRunner with fn on_event_at(
         None => self.active_run_id = Some(run)
         _ => ()
       }
-      self.on_event(event)
+      self.apply_event(event)
       match event {
         @posoco.TurnEvent::SessionRedirect(to~, ..) =>
           self.active_session_id = Some(to)
@@ -504,9 +506,6 @@ pub impl @posoco.Observer for GoalRunner with fn on_event_at(
     _ => ()
   }
 }
-
-///|
-pub extend GoalRunner with @posoco.Observer::{on_event_at}
 
 ///|
 fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {

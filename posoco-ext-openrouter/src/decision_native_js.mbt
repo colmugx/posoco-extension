@@ -52,7 +52,7 @@ async fn OpenRouterDecisionPort::post_systemone(
 
 ///|
 #cfg(any(target="native", target="wasm", target="js"))
-pub impl @posoco.DecisionPort for OpenRouterDecisionPort with fn evaluate_with_context(
+pub impl @posoco.DecisionPort for OpenRouterDecisionPort with fn evaluate(
   self : OpenRouterDecisionPort,
   request : @posoco.DecisionRequest,
   context~ : @posoco.DecisionCallContext,
@@ -63,18 +63,4 @@ pub impl @posoco.DecisionPort for OpenRouterDecisionPort with fn evaluate_with_c
 
 ///|
 #cfg(any(target="native", target="wasm", target="js"))
-pub impl @posoco.DecisionPort for OpenRouterDecisionPort with fn evaluate(
-  self : OpenRouterDecisionPort,
-  request : @posoco.DecisionRequest,
-) -> @posoco.DecisionResult raise @posoco.DecisionError {
-  let context = @posoco.DecisionCallContext::make(purpose="openrouter_decision")
-  let payload = self.post_systemone(request, self.timeout_ms(context~))
-  openrouter_decision_response_json(payload, request)
-}
-
-///|
-#cfg(any(target="native", target="wasm", target="js"))
-pub extend OpenRouterDecisionPort with @posoco.DecisionPort::{
-  evaluate,
-  evaluate_with_context,
-}
+pub extend OpenRouterDecisionPort with @posoco.DecisionPort::{evaluate}

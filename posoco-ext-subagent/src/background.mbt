@@ -157,19 +157,11 @@ impl @posoco.Lifecycle for SubagentTools with fn on_shutdown(
 }
 
 ///|
-impl @posoco.Observer for SubagentTools with fn on_event(
-  _self : SubagentTools,
-  _event : @posoco.TurnEvent,
-) -> Unit {
-  ()
-}
-
-///|
 /// Track the parent session from scoped events: a background task's result
 /// is addressed to the session whose turn spawned it. Out-of-run events
 /// (scope `None`) go to the wakeup policy — core's ready projection carries
 /// no scope, session attribution travels in the event data.
-impl @posoco.Observer for SubagentTools with fn on_event_at(
+impl @posoco.Observer for SubagentTools with fn on_event(
   self : SubagentTools,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,

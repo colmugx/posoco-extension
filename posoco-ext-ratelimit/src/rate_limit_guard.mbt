@@ -242,7 +242,7 @@ fn RateLimitGuard::send(
 }
 
 ///|
-pub impl @posoco.PipelineHook for RateLimitGuard with fn on_post_event_at(
+impl @posoco.PipelineHook for RateLimitGuard with fn on_post_event(
   self : RateLimitGuard,
   scope : @posoco.EventScope?,
   stage : @posoco.HookStage,
@@ -269,14 +269,13 @@ pub impl @posoco.PipelineHook for RateLimitGuard with fn on_post_event_at(
 pub extend RateLimitGuard with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   before_tool,
   on_turn_end,
 }
 
 ///|
-pub impl @posoco.Observer for RateLimitGuard with fn on_event_at(
+pub impl @posoco.Observer for RateLimitGuard with fn on_event(
   self : RateLimitGuard,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -291,7 +290,7 @@ pub impl @posoco.Observer for RateLimitGuard with fn on_event_at(
 }
 
 ///|
-pub extend RateLimitGuard with @posoco.Observer::{on_event, on_event_at}
+pub extend RateLimitGuard with @posoco.Observer::{on_event}
 
 ///|
 pub impl @posoco.Lifecycle for RateLimitGuard with fn on_shutdown(
@@ -328,9 +327,3 @@ pub impl @posoco.Extension for RateLimitGuard with fn manifest(
 
 ///|
 pub extend RateLimitGuard with @posoco.Extension::{extension_id, manifest}
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend RateLimitGuard with @posoco.PipelineHook::{tool_exposure}

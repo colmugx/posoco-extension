@@ -178,8 +178,7 @@ pub fn GoalRunner::extension_id(Self) -> String
 pub fn GoalRunner::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GoalRunner::manifest(Self) -> @port.ExtensionManifest
 pub fn GoalRunner::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn GoalRunner::on_event(Self, @types.TurnEvent) -> Unit
-pub fn GoalRunner::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn GoalRunner::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn GoalRunner::on_shutdown(Self) -> Unit
 pub async fn GoalRunner::on_start(Self) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit

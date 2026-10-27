@@ -8,13 +8,13 @@
 ///|
 /// Effect context for provider calls (no-op registrar).
 fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: call.call_id,
-    name: call.name,
-    arguments: call.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|
@@ -310,6 +310,7 @@ test "ps1_model_output_caps_long_output_and_keeps_head_tail" {
 async test "cancel_without_in_flight_child_reports_not_propagated" {
   let tools = PowerShellTools(exe="pwsh")
   let disposition = tools.cancel(
+    run_id=@kernel.RunId::unchecked("run_ps1"),
     @kernel.EffectId::{ value: 404, },
     @kernel.CancelReason::DeadlineReached,
   )
@@ -341,6 +342,7 @@ async test "never_exiting_command_is_rescued_by_cancel" {
     })
     @async.sleep(1500)
     let disposition = tools.cancel(
+      run_id=@kernel.RunId::unchecked("run_ps1"),
       @kernel.EffectId::{ value: 1, },
       @kernel.CancelReason::HostRequested(detail=Some("test")),
     )

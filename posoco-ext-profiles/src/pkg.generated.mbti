@@ -48,23 +48,19 @@ pub async fn Profiles::invoke(Self, String, Json) -> @port.CommandOutcome raise 
 pub fn Profiles::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn Profiles::manifest(Self) -> @port.ExtensionManifest
 pub fn Profiles::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn Profiles::on_event(Self, @types.TurnEvent) -> Unit
-pub fn Profiles::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
-pub async fn Profiles::on_post_event(Self, @port.HookStage) -> Unit noraise
-pub async fn Profiles::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub fn Profiles::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn Profiles::on_post_event(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
 pub async fn Profiles::on_shutdown(Self) -> Unit
 pub async fn Profiles::on_start(Self) -> Unit
 pub async fn Profiles::on_turn_begin(Self) -> Unit
 pub async fn Profiles::on_turn_end(Self) -> Unit
 pub fn Profiles::session_usage(Self, String) -> Array[(String, Int32)]
 pub fn Profiles::system_prompt(Self) -> String
-pub fn Profiles::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub fn Profiles::warnings(Self) -> Array[String]
 pub impl @port.CommandPort for Profiles
 pub impl @port.Extension for Profiles
 pub impl @port.Lifecycle for Profiles
 pub impl @port.Observer for Profiles
-pub impl @port.PipelineHook for Profiles
 pub impl @port.SystemPromptContributor for Profiles
 pub impl @port.ToolProvider for Profiles
 

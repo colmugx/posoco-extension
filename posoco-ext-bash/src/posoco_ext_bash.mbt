@@ -198,9 +198,11 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
 /// pruned first. Reports `Propagated` when a live child was handled.
 pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
   self,
+  run_id~ : @kernel.RunId,
   effect_id : @kernel.EffectId,
   _reason : @kernel.CancelReason,
 ) -> @kernel.CancelDisposition {
+  ignore(run_id)
   let stale : Array[Int32] = []
   for key, handle in self.in_flight {
     if handle.exited {

@@ -150,6 +150,7 @@ pub fn HerdrReporter::release(self : HerdrReporter) -> Unit {
 ///|
 pub impl @posoco.Observer for HerdrReporter with fn on_event(
   self,
+  _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
@@ -167,9 +168,6 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
     _ => ()
   }
 }
-
-///|
-pub extend HerdrReporter with @posoco.Observer::{on_event_at}
 
 ///|
 /// The spawn seam never raises, so shutdown stays failure-free for the

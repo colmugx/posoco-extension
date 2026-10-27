@@ -1,15 +1,15 @@
 ///|
 test "cache reporting distinguishes unknown from explicit zero" {
   let stats = Stats(clock=fn() { 0L })
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(100), None))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(200), Some(0)))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(300), Some(120)))),
   )
@@ -30,7 +30,7 @@ test "cache reporting distinguishes unknown from explicit zero" {
 async test "cache doctor never diagnoses unreported telemetry as misses" {
   let stats = Stats()
   for _i in 0..<5 {
-    stats.on_event_at(
+    stats.on_event(
       Some(tk_scope("s")),
       tk_response(Some(tk_usage_cache(Some(100), None))),
     )
@@ -71,13 +71,13 @@ async test "cache doctor never diagnoses unreported telemetry as misses" {
 ///|
 async test "cache doctor token ratio uses only cache-reporting input" {
   let stats = Stats()
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(100), Some(50)))),
   )
   // A large usage round with no cache telemetry must not dilute the 50/100
   // reported cache-token ratio or its request denominator.
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(900), None))),
   )

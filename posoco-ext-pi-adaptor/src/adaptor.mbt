@@ -12,18 +12,33 @@ pub(all) struct PiAdaptor {
   /// Tool names the host declared as already owned; matching pi tools are
   /// hidden from every Posoco-facing catalog view (base wins).
   mut hidden_tools : Map[String, Bool]
+  /// ToolContribution handle claimed at on_compose; the live pi tool set
+  /// publishes through it as the adaptor's own dynamic group.
+  mut contributions : @posoco.ToolContributions?
+  /// Set by the JS host whenever its tool registration changes. The next
+  /// model call (PiRuntime::call_model) observes it and re-publishes; the
+  /// kernel adopts the new group at the next operation boundary.
+  mut catalog_dirty : Bool
+  /// Name snapshot of the last accepted publication; suppresses identical
+  /// re-publications.
+  mut published_names : Array[String]
 }
 
 ///|
 pub fn PiAdaptor::PiAdaptor() -> PiAdaptor {
   let host = js_host_new()
-  {
+  let adaptor = {
     host,
     events: PiEventObserver::PiEventObserver(host~),
     commands: PiCommandPort::PiCommandPort(host~),
     hook: PiHook::PiHook(host~),
     hidden_tools: Map::from_array([]),
+    contributions: None,
+    catalog_dirty: true,
+    published_names: [],
   }
+  js_host_set_on_catalog_change(host, fn() { adaptor.catalog_dirty = true })
+  adaptor
 }
 
 ///|
@@ -450,11 +465,74 @@ pub impl @posoco.Extension for PiAdaptor with fn manifest(adaptor : PiAdaptor) -
     observers=[adaptor.events as &@posoco.Observer],
     hooks=[adaptor.hook as &@posoco.PipelineHook],
     commands=[adaptor.commands as &@posoco.CommandPort],
+    requires=[@posoco.Capability::ToolContribution],
   )
 }
 
 ///|
+pub impl @posoco.Lifecycle for PiAdaptor with fn on_compose(
+  adaptor : PiAdaptor,
+  view : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  adaptor.contributions = view.tool_contributions()
+}
+
+///|
+/// One fixed snapshot of the live pi tools (already hidden-filtered by
+/// `list_tools`). Publishing pins the group; the JS host bumps the dirty
+/// flag on the next registration change and `PiRuntime::call_model`
+/// re-publishes there.
+priv struct PiLiveTools {
+  defs : Array[@posoco.ToolDef]
+  adaptor : PiAdaptor
+}
+
+///|
+impl @posoco.ToolProvider for PiLiveTools with fn list_tools(self : PiLiveTools) -> Array[
+  @posoco.ToolDef,
+] {
+  self.defs.copy()
+}
+
+///|
+impl @posoco.ToolProvider for PiLiveTools with fn execute(
+  self : PiLiveTools,
+  ctx : @posoco.ToolCallContext,
+) -> @kernel.ToolOutcome raise @posoco.RuntimeError {
+  @posoco.ToolProvider::execute(self.adaptor, ctx)
+}
+
+///|
+/// Publish the current live pi tool set as the adaptor's contribution
+/// group (owner posoco_ext_pi_adaptor). Call from an async context — the
+/// model-call seam in PiRuntime. A rejected group keeps the previous
+/// snapshot; the failure is recorded in the dirty state so a later
+/// registration change retries.
+pub async fn pi_adaptor_publish(adaptor : PiAdaptor) -> Unit {
+  adaptor.catalog_dirty = false
+  let handle = match adaptor.contributions {
+    Some(handle) => handle
+    None => return
+  }
+  let defs = @posoco.ToolProvider::list_tools(adaptor)
+  let names = defs.map(fn(def) { def.name.to_string() })
+  if names == adaptor.published_names {
+    return
+  }
+  let provider = PiLiveTools::{ defs, adaptor, } as &@posoco.ToolProvider
+  let ack = handle.replace(provider~)
+  match ack {
+    Ok(_) => adaptor.published_names = names
+    Err(_) => adaptor.catalog_dirty = true
+  }
+}
+
+///|
 pub extend PiAdaptor with @posoco.Extension::{extension_id, manifest}
+
+///|
+#deprecated
+pub extend PiAdaptor with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
 
 ///|
 pub extend PiAdaptor with @posoco.ToolProvider::{list_tools, execute}

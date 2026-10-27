@@ -86,7 +86,10 @@ pub fn RouterModelPort::RouterModelPort(
   extra_quota_sources~ : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
 ) -> RouterModelPort raise @posoco.CompositionError {
   if slots.is_empty() {
-    raise @posoco.CompositionError::EmptyPort("posoco_ext_llm.slots")
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_llm",
+      detail="router requires at least one model slot",
+    )
   }
   let slot_map : Map[String, ModelSlot] = Map::from_array([])
   let slot_order : Array[String] = []
@@ -693,7 +696,12 @@ async fn RouterModelPort::decision_slot_for_chat(
       ),
     ],
   }
-  let result = decision.evaluate(request) catch { _ => return None }
+  let result = decision.evaluate(
+    request,
+    context=@posoco.DecisionCallContext::make(purpose="llm.reasoning_effort"),
+  ) catch {
+    _ => return None
+  }
   result.validate_for(request) catch {
     _ => return None
   }

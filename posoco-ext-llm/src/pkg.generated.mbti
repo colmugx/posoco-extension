@@ -85,8 +85,7 @@ pub fn RouterModelPort::manager_id(Self) -> String
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn RouterModelPort::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn RouterModelPort::on_event(Self, @types.TurnEvent) -> Unit
-pub fn RouterModelPort::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn RouterModelPort::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn RouterModelPort::on_shutdown(Self) -> Unit
 pub async fn RouterModelPort::on_start(Self) -> Unit
 pub fn RouterModelPort::picker_catalog_json(Self) -> Array[Json]

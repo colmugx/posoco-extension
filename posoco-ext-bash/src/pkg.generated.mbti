@@ -44,7 +44,7 @@ pub struct ShellTools {
 }
 pub fn ShellTools::ShellTools(anchor? : @devkit.WorkspaceAnchor?, bus? : @devkit.EventBus?) -> Self
 pub fn ShellTools::attach(Self, @async.TaskGroup[Unit]) -> Unit
-pub async fn ShellTools::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
+pub async fn ShellTools::cancel(Self, run_id~ : @kernel.RunId, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn ShellTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ShellTools::extension_id(Self) -> String
 pub fn ShellTools::list_tools(Self) -> Array[@kernel.ToolDef]

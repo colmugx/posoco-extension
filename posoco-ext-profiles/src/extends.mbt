@@ -15,7 +15,7 @@ pub extend Profiles with @posoco.ToolProvider::{execute, list_tools}
 pub extend Profiles with @posoco.PipelineHook::{before_model}
 
 ///|
-pub extend Profiles with @posoco.Observer::{on_event_at}
+pub extend Profiles with @posoco.Observer::{on_event}
 
 ///|
 pub extend Profiles with @posoco.SystemPromptContributor::{system_prompt}

@@ -282,9 +282,9 @@ test "usage_counts_wrapped_gateway_calls_by_inner_name" {
     ]),
   )
   let wrapped = usage_call(name="tool_execute", inner="mcp_search")
-  profiles.on_event_at(Some(scope_for("s1")), result_event(wrapped))
-  profiles.on_event_at(Some(scope_for("s1")), result_event(wrapped))
-  profiles.on_event_at(
+  profiles.on_event(Some(scope_for("s1")), result_event(wrapped))
+  profiles.on_event(Some(scope_for("s1")), result_event(wrapped))
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="tool_execute", inner="mcp_send")),
   )
@@ -304,20 +304,20 @@ test "usage_counts_direct_calls_skips_errors_unattributed_unscoped" {
     ]),
   )
   // Direct (non-gateway) calls attribute by their own name.
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="direct_tool")),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="direct_tool")),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="mcp_search")),
   )
   // Failed executions never count.
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     @posoco.TurnEvent::ToolCallFailed(
       call=usage_call(name="mcp_search"),
@@ -328,12 +328,12 @@ test "usage_counts_direct_calls_skips_errors_unattributed_unscoped" {
     ),
   )
   // Unattributed tool names are dropped.
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="mystery")),
   )
   // Out-of-run diagnostics carry no scope — nothing to attribute to.
-  profiles.on_event_at(None, result_event(usage_call(name="mcp_search")))
+  profiles.on_event(None, result_event(usage_call(name="mcp_search")))
   // Count descending, deterministic tie-break by ext id.
   assert_eq(profiles.session_usage("s1"), [("ext_b", 2), ("ext_a", 1)])
 }
@@ -346,11 +346,11 @@ test "usage_isolates_sessions" {
     captured_prompts=Map::from_array([]),
     attribution=Map::from_array([("mcp_search", "ext_mcp")]),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="mcp_search")),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s2")),
     result_event(usage_call(name="mcp_search")),
   )
@@ -520,7 +520,7 @@ async test "profile_save_writes_store_and_catalog_visible" {
     attribution=Map::from_array([("mcp_search", "ext_mcp")]),
     store=Some(store),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="tool_execute", inner="mcp_search")),
   )
@@ -591,7 +591,7 @@ async test "profile_save_summarizer_overrides_derivation" {
     store=Some(store),
     summarizer=Some(fn(_usage) { ("moonbit-dev", "MoonBit work mode") }),
   )
-  profiles.on_event_at(
+  profiles.on_event(
     Some(scope_for("s1")),
     result_event(usage_call(name="mcp_search")),
   )

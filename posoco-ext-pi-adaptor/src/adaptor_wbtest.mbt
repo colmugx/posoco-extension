@@ -14,11 +14,3 @@ test "empty Pi host has an empty catalog" {
   inspect(pi_adaptor_tool_count(adaptor), content="0")
   inspect(pi_adaptor_catalog_json(adaptor), content="[]")
 }
-
-///|
-test "PiCatalogSource exposes the adaptor revision and tools" {
-  let adaptor = pi_adaptor_new()
-  let source = PiCatalogSource(adaptor~)
-  inspect(source.revision(), content="0")
-  inspect(source.tools().length(), content="0")
-}

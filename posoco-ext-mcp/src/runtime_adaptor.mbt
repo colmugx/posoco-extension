@@ -33,22 +33,6 @@ pub fn McpRuntime::McpRuntime(
 }
 
 ///|
-/// Versioned catalog source combining static Posoco tools with the bridge's
-/// live MCP tools.
-pub(all) struct McpCatalogSource {
-  bridge : MCPToolBridge
-  base_tools : Array[@kernel.ToolDef]
-}
-
-///|
-pub fn McpCatalogSource::McpCatalogSource(
-  bridge~ : MCPToolBridge,
-  base_tools~ : Array[@kernel.ToolDef] = [],
-) -> McpCatalogSource {
-  { bridge, base_tools, }
-}
-
-///|
 /// Does the bridge currently route this tool name? Execution routing keys
 /// on the live map, so the check stays honest across refreshes.
 fn McpRuntime::handles(self : McpRuntime, name : String) -> Bool {
@@ -112,10 +96,11 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
 /// ports-only agent has.
 pub impl @runtime.Runtime for McpRuntime with fn cancel_effects(
   self,
+  run_id~ : @kernel.RunId,
   effect_ids : Array[@kernel.EffectId],
   reason : @kernel.CancelReason,
 ) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)] {
-  self.fallback.cancel_effects(effect_ids, reason)
+  self.fallback.cancel_effects(run_id~, effect_ids, reason)
 }
 
 ///|
@@ -131,39 +116,9 @@ pub impl @runtime.Runtime for McpRuntime with fn compact(
 }
 
 ///|
-pub impl @runtime.CatalogSource for McpCatalogSource with fn revision(
-  self : McpCatalogSource,
-) -> Int32 {
-  self.bridge.catalog_revision
-}
-
-///|
-pub impl @runtime.CatalogSource for McpCatalogSource with fn tools(
-  self : McpCatalogSource,
-) -> Array[@kernel.ToolDef] {
-  let defs : Array[@kernel.ToolDef] = []
-  for tool in self.base_tools {
-    defs.push(tool)
-  }
-  for tool in @posoco.ToolProvider::list_tools(self.bridge) {
-    defs.push(tool)
-  }
-  defs
-}
-
-///|
 pub extend McpRuntime with @runtime.Runtime::{
   call_model,
   execute_tool,
   cancel_effects,
   compact,
 }
-
-///|
-pub extend McpCatalogSource with @runtime.CatalogSource::{revision, tools}
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend McpRuntime with @runtime.Runtime::{supports_bound_tools}

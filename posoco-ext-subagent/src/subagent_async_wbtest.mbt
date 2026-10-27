@@ -221,7 +221,7 @@ async test "spawn_budget_resets_at_each_parent_run" {
     run_id: @posoco.RunId::unchecked("run-1"),
     turn_id: @posoco.TurnId::unchecked("turn-1"),
   }
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     tools,
     Some(scope1),
     @posoco.TurnEvent::TurnStarted,
@@ -236,7 +236,7 @@ async test "spawn_budget_resets_at_each_parent_run" {
   assert_eq(tools.ledger.remaining(), 0)
 
   // Ordinary events in the same run do not replenish the budget.
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     tools,
     Some(scope1),
     @posoco.TurnEvent::TurnCompleted,
@@ -248,7 +248,7 @@ async test "spawn_budget_resets_at_each_parent_run" {
     run_id: @posoco.RunId::unchecked("run-2"),
     turn_id: @posoco.TurnId::unchecked("turn-2"),
   }
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     tools,
     Some(scope2),
     @posoco.TurnEvent::TurnStarted,
@@ -992,13 +992,7 @@ fn build_parent_agent(
       tools as &@posoco.Extension,
     ],
     config=@posoco.tk_config(),
-    runtime=@runtime.PortRuntime(
-      model~,
-      tools=Map::from_array([
-        ("subagent", tools as &@posoco.ToolProvider),
-        ("answer_question", tools as &@posoco.ToolProvider),
-      ]),
-    ),
+    runtime=@runtime.PortRuntime(model~),
   )
 }
 
@@ -2124,11 +2118,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
     run_id: @posoco.RunId::unchecked("run-1"),
     turn_id: @posoco.TurnId::unchecked("turn-1"),
   }
-  @posoco.Observer::on_event_at(
-    tools,
-    Some(scope),
-    @posoco.TurnEvent::TurnStarted,
-  )
+  @posoco.Observer::on_event(tools, Some(scope), @posoco.TurnEvent::TurnStarted)
   parent.run_scoped(async fn(agent) {
     // Part 1: wave cancellation reaches the race while it is still armed
     // (the child's ask has not registered yet). The spawn coroutine must

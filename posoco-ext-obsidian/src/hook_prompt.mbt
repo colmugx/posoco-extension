@@ -3,7 +3,7 @@
 /// UI before execution. Headless hosts (no UiPort) get Reject — never a
 /// silent pass-through. Ordinary calls (all reads, append/prepend, property
 /// set/remove, trash deletes) approve with zero UI interaction.
-pub impl @posoco.PipelineHook for ObsidianTools with fn before_tool(
+impl @posoco.PipelineHook for ObsidianTools with fn before_tool(
   self : ObsidianTools,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
@@ -50,7 +50,6 @@ pub impl @posoco.PipelineHook for ObsidianTools with fn before_tool(
 pub extend ObsidianTools with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   before_tool,
   on_turn_end,
@@ -108,9 +107,3 @@ pub impl @posoco.SystemPromptContributor for ObsidianTools with fn system_prompt
   "- obsidian_move_note updates internal links automatically; prefer it over rewriting links by hand.\n" +
   "- Deletions go to the vault trash; permanent deletion and overwrites ask the user for consent."
 }
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend ObsidianTools with @posoco.PipelineHook::{tool_exposure}

@@ -89,7 +89,7 @@ fn OpenCodeZenDecisionPort::session_for(
 
 ///|
 #cfg(any(target="native", target="wasm", target="js"))
-pub impl @posoco.DecisionPort for OpenCodeZenDecisionPort with fn evaluate_with_context(
+pub impl @posoco.DecisionPort for OpenCodeZenDecisionPort with fn evaluate(
   self : OpenCodeZenDecisionPort,
   request : @posoco.DecisionRequest,
   context~ : @posoco.DecisionCallContext,
@@ -104,24 +104,4 @@ pub impl @posoco.DecisionPort for OpenCodeZenDecisionPort with fn evaluate_with_
 
 ///|
 #cfg(any(target="native", target="wasm", target="js"))
-pub impl @posoco.DecisionPort for OpenCodeZenDecisionPort with fn evaluate(
-  self : OpenCodeZenDecisionPort,
-  request : @posoco.DecisionRequest,
-) -> @posoco.DecisionResult raise @posoco.DecisionError {
-  let context = @posoco.DecisionCallContext::make(
-    purpose="opencode_zen_decision",
-  )
-  let payload = self.post_systemone(
-    request,
-    self.timeout_ms(context~),
-    self.session_for(context~),
-  )
-  systemone_parse_response(payload, request)
-}
-
-///|
-#cfg(any(target="native", target="wasm", target="js"))
-pub extend OpenCodeZenDecisionPort with @posoco.DecisionPort::{
-  evaluate,
-  evaluate_with_context,
-}
+pub extend OpenCodeZenDecisionPort with @posoco.DecisionPort::{evaluate}

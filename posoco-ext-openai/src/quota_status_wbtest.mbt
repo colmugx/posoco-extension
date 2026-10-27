@@ -44,6 +44,7 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   // Before any capture, a model response publishes nothing.
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -72,6 +73,7 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   ])
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -105,6 +107,7 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   // An unchanged snapshot stays silent even across unrelated providers.
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -125,6 +128,7 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   ])
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -170,6 +174,7 @@ test "codex quota status colors exhausted windows as errors" {
   let status = tk_quota_status(bus, tracker)
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -334,6 +339,7 @@ test "codex quota status hides windows when another provider activates" {
   // The suppression gate: the other provider's responses republish nothing.
   @posoco.Observer::on_event(
     status,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,
@@ -751,6 +757,7 @@ async test "stopped publisher ignores late provider and observer events" {
   // A late observer event cannot resurrect the stopped publisher.
   @posoco.Observer::on_event(
     status_a,
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_quota_assistant(),
       usage=None,

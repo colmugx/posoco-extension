@@ -14,6 +14,7 @@ fn latest_fixture_tools() -> Array[@posoco.ToolDef] {
       ),
       owner: @posoco.OwnerId::unchecked("test"),
       policy: @posoco.ExecutionPolicy::Parallel,
+      exposure: @posoco.ToolExposure::Direct,
       provenance: None,
     },
   ]

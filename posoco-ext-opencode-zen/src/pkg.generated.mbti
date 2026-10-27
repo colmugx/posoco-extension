@@ -99,8 +99,7 @@ pub(all) struct OpenCodeZenDecisionPort {
   config : OpenCodeZenConfig
 }
 pub fn OpenCodeZenDecisionPort::OpenCodeZenDecisionPort(OpenCodeZenConfig) -> Self
-pub async fn OpenCodeZenDecisionPort::evaluate(Self, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
-pub async fn OpenCodeZenDecisionPort::evaluate_with_context(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
+pub async fn OpenCodeZenDecisionPort::evaluate(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
 pub impl @port.DecisionPort for OpenCodeZenDecisionPort
 
 pub(all) struct OpenCodeZenModelPort {

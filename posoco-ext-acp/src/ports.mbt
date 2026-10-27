@@ -5,7 +5,7 @@
 /// Observer: project every scoped turn event onto queued ACP updates.
 /// Synchronous by contract — the queue, not this handler, carries the
 /// delivery concern.
-pub impl @posoco.Observer for AcpBridge with fn on_event_at(
+pub impl @posoco.Observer for AcpBridge with fn on_event(
   self,
   _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -14,7 +14,7 @@ pub impl @posoco.Observer for AcpBridge with fn on_event_at(
 }
 
 ///|
-pub extend AcpBridge with @posoco.Observer::{on_event, on_event_at}
+pub extend AcpBridge with @posoco.Observer::{on_event}
 
 ///|
 /// ApprovalSource: translate ext-permission's approval asks into ACP

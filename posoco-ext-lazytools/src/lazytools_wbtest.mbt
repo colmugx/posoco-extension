@@ -71,6 +71,7 @@ fn expect_success(outcome : @posoco.ToolOutcome) -> String raise {
 /// Feed one turn event to the gateway's observer view.
 fn observe(ext : LazyTools, call : @posoco.ToolCall) -> Unit {
   (ext as &@posoco.Observer).on_event(
+    None,
     @posoco.TurnEvent::ToolCallSucceeded(call~, content="ok", structured=None, attachments=[]),
   )
 }

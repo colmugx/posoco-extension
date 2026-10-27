@@ -38,6 +38,7 @@ async test "manifest recent-tool views stay stable after usage events" {
     ),
   }
   manifest.observers[0].on_event(
+    None,
     @posoco.TurnEvent::ToolCallSucceeded(call~, content="ok", structured=None, attachments=[]),
   )
 

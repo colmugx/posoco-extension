@@ -31,8 +31,7 @@ pub fn HerdrDelegate::extension_id(Self) -> String
 pub fn HerdrDelegate::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn HerdrDelegate::manifest(Self) -> @port.ExtensionManifest
 pub fn HerdrDelegate::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn HerdrDelegate::on_event(Self, @types.TurnEvent) -> Unit
-pub fn HerdrDelegate::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn HerdrDelegate::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn HerdrDelegate::on_shutdown(Self) -> Unit
 pub async fn HerdrDelegate::on_start(Self) -> Unit
 pub fn HerdrDelegate::shared_list_tools() -> Array[@kernel.ToolDef]
@@ -52,8 +51,7 @@ pub fn HerdrReporter::detect() -> Self?
 pub fn HerdrReporter::extension_id(Self) -> String
 pub fn HerdrReporter::manifest(Self) -> @port.ExtensionManifest
 pub fn HerdrReporter::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn HerdrReporter::on_event(Self, @types.TurnEvent) -> Unit
-pub fn HerdrReporter::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn HerdrReporter::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn HerdrReporter::on_shutdown(Self) -> Unit
 pub async fn HerdrReporter::on_start(Self) -> Unit
 pub fn HerdrReporter::release(Self) -> Unit

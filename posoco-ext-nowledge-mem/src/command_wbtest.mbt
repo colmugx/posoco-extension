@@ -86,22 +86,14 @@ async test "/nmem url: switches api base, re-derives mcp, flushes, persists" {
     run_id: @posoco.RunId::unchecked("r1"),
     turn_id: @posoco.TurnId::unchecked("t1"),
   }
-  @posoco.Observer::on_event_at(
-    ext,
-    Some(scope),
-    @posoco.TurnEvent::TurnStarted,
-  )
+  @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   ignore(
     @posoco.PipelineHook::before_model(ext, [
       @posoco.tk_user_msg("hi"),
       assistant_msg("hello"),
     ]),
   )
-  @posoco.Observer::on_event_at(
-    ext,
-    Some(scope),
-    @posoco.TurnEvent::TurnCompleted,
-  )
+  @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnCompleted)
   inspect(transport.requests.length(), content="0")
   let outcome = @posoco.CommandPort::invoke(
     ext,
@@ -317,11 +309,7 @@ async test "/memory status: connectivity, lanes, queue, and the session inbound"
     run_id: @posoco.RunId::unchecked("r1"),
     turn_id: @posoco.TurnId::unchecked("t1"),
   }
-  @posoco.Observer::on_event_at(
-    ext,
-    Some(scope),
-    @posoco.TurnEvent::TurnStarted,
-  )
+  @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   // The inbound read slot is attach-gated, so the test hands the extension
   // the host's task group (engine.stop() retires the flusher at the end).
   @async.with_task_group(group => {
@@ -340,7 +328,7 @@ async test "/memory status: connectivity, lanes, queue, and the session inbound"
         assistant_msg("hello"),
       ]),
     )
-    @posoco.Observer::on_event_at(
+    @posoco.Observer::on_event(
       ext,
       Some(scope),
       @posoco.TurnEvent::TurnCompleted,

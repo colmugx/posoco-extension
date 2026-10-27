@@ -29,6 +29,7 @@ priv struct StableLazyToolsObserver {}
 ///|
 impl @posoco.Observer for StableLazyToolsObserver with fn on_event(
   _self,
+  _scope : @posoco.EventScope?,
   _event : @posoco.TurnEvent,
 ) -> Unit {
   ()

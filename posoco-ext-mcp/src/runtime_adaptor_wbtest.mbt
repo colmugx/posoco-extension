@@ -1,5 +1,5 @@
 ///|
-/// Whitebox tests for the runtime-seam pieces (McpRuntime, McpCatalogSource).
+/// Whitebox tests for the runtime-seam pieces (McpRuntime).
 
 ///|
 /// Records execute_tool calls; model/cancel/compact are out of scope here.
@@ -41,10 +41,12 @@ pub impl @runtime.Runtime for RecordingRuntime with fn execute_tool(
 ///|
 pub impl @runtime.Runtime for RecordingRuntime with fn cancel_effects(
   self,
+  run_id~ : @kernel.RunId,
   effect_ids : Array[@kernel.EffectId],
   _reason : @kernel.CancelReason,
 ) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)] {
   ignore(self)
+  ignore(run_id)
   effect_ids.map(id => (id, @kernel.NotPropagated))
 }
 
@@ -64,13 +66,45 @@ pub impl @runtime.Runtime for RecordingRuntime with fn compact(
 
 ///|
 fn effect_for(name : String) -> @runtime.EffectContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    owner: @kernel.OwnerId::unchecked("posoco_ext_mcp"),
-    call_id: @kernel.CallId::unchecked("call_1"),
-    tool_name: @kernel.ToolName::unchecked(name),
-    arguments: Json::null(),
-  }
+  // A minimal fixed binding: the provider is a no-op recorder; the context
+  // factory builds an unbound ToolCallContext (no child pipeline needed).
+  let provider = NoopBoundProvider::{ }
+  @runtime.EffectContext::EffectContext(
+    run_id=@kernel.RunId::unchecked("run_test"),
+    effect_id=@kernel.EffectId::{ value: 1, },
+    owner=@kernel.OwnerId::unchecked("posoco_ext_mcp"),
+    call_id=@kernel.CallId::unchecked("call_1"),
+    tool_name=@kernel.ToolName::unchecked(name),
+    arguments=Json::null(),
+    bound_tool=provider as &@posoco.ToolProvider,
+    tool_context=fn(register_cancel : (&@posoco.ToolCancellable) -> Unit) {
+      @posoco.ToolCallContext(
+        effect_id=@kernel.EffectId::{ value: 1, },
+        call_id=@kernel.CallId::unchecked("call_1"),
+        name=@kernel.ToolName::unchecked(name),
+        arguments=Json::null(),
+        register_cancel~,
+      )
+    },
+  )
+}
+
+///|
+struct NoopBoundProvider {}
+
+///|
+impl @posoco.ToolProvider for NoopBoundProvider with fn list_tools(
+  _self : NoopBoundProvider,
+) -> Array[@kernel.ToolDef] {
+  []
+}
+
+///|
+impl @posoco.ToolProvider for NoopBoundProvider with fn execute(
+  _self : NoopBoundProvider,
+  _ctx : @posoco.ToolCallContext,
+) -> @kernel.ToolOutcome {
+  @kernel.Success(content="noop", structured=None)
 }
 
 ///|
@@ -92,33 +126,6 @@ test "mcp_runtime_routing_decision_follows_live_map" {
   assert_false(runtime.handles("srv__tool"))
   bridge.tool_to_conn["srv__tool"] = 0
   assert_true(runtime.handles("srv__tool"))
-}
-
-///|
-test "mcp_catalog_source_combines_base_and_bridge_tools" {
-  let bridge = MCPToolBridge()
-  let base_tool : @kernel.ToolDef = {
-    name: @kernel.ToolName::unchecked("read"),
-    description: "base",
-    input_schema: Json::object(Map::from_array([])),
-    owner: @kernel.OwnerId::unchecked("posoco_ext_read"),
-    policy: @kernel.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_read"),
-  }
-  let source = McpCatalogSource(bridge~, base_tools=[base_tool])
-  assert_eq(source.revision(), 0)
-  let tools = source.tools()
-  assert_eq(tools.length(), 1) // bridge not activated: no MCP tools yet
-  assert_eq(tools[0].name.to_string(), "read")
-}
-
-///|
-async test "mcp_catalog_source_revision_advances_on_activation" {
-  let bridge = MCPToolBridge()
-  let source = McpCatalogSource(bridge~)
-  let _ = bridge.activate() // empty pending: bump, no failures
-  assert_eq(source.revision(), 1)
-  assert_true(source.tools().is_empty())
 }
 
 ///|

@@ -86,7 +86,7 @@ async test "event bridge projects posoco turn events into pi handler payloads" {
     TurnCompleted,
   ]
   for event in events {
-    observer.on_event_at(None, event)
+    observer.on_event(None, event)
   }
   adaptor.events.emit_agent_boundary()
   ignore(wait_js_string(wbtest_settle_promise()))
@@ -147,17 +147,17 @@ async test "agent run spans follow-up turns until the host boundary" {
   }
   let observer : &@posoco.Observer = adaptor.events as &@posoco.Observer
   // Turn 1 of the run.
-  observer.on_event_at(None, TurnStarted)
-  observer.on_event_at(None, TurnCompleted)
+  observer.on_event(None, TurnStarted)
+  observer.on_event(None, TurnCompleted)
   // A drained follow-up turn continues the same agent run: no agent_start,
   // and pi's turnIndex advances.
-  observer.on_event_at(None, TurnStarted)
-  observer.on_event_at(None, TurnCompleted)
+  observer.on_event(None, TurnStarted)
+  observer.on_event(None, TurnCompleted)
   adaptor.events.emit_agent_boundary()
   // The next user prompt starts a fresh agent run.
-  observer.on_event_at(None, TurnStarted)
+  observer.on_event(None, TurnStarted)
   // A failed turn ends the run without turn_end and without agent_settled.
-  observer.on_event_at(None, TurnFailed("model exploded"))
+  observer.on_event(None, TurnFailed("model exploded"))
   ignore(wait_js_string(wbtest_settle_promise()))
   // Order: agent_start, turn_start(0), turn_end(0), turn_start(1), turn_end(1),
   // agent_end, agent_settled, agent_start, turn_start(0), agent_end.

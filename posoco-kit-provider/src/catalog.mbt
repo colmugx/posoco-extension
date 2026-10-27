@@ -25,8 +25,9 @@ pub fn ProviderModelCatalog::ProviderModelCatalog(
     )
   }
   if slots.is_empty() {
-    raise @posoco.CompositionError::EmptyPort(
-      "posoco_ext_llm.catalog." + provider_id,
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_llm",
+      detail="provider catalog '" + provider_id + "' declares no model slots",
     )
   }
   let seen : Map[String, Bool] = Map::from_array([])

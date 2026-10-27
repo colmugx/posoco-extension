@@ -51,6 +51,7 @@ fn LazyTools::recent_tools(self : LazyTools) -> Array[String] {
 /// tool feedback never pollutes the hint.
 pub impl @posoco.Observer for LazyTools with fn on_event(
   self : LazyTools,
+  _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
@@ -71,11 +72,11 @@ fn LazyTools::record_call(self : LazyTools, call : @posoco.ToolCall) -> Unit {
 }
 
 ///|
-pub extend LazyTools with @posoco.Observer::{on_event, on_event_at}
+pub extend LazyTools with @posoco.Observer::{on_event}
 
 ///|
 /// Inject (or refresh in place) the recent-tools hint as a user envelope.
-pub impl @posoco.PipelineHook for LazyTools with fn before_model(
+impl @posoco.PipelineHook for LazyTools with fn before_model(
   self : LazyTools,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
@@ -122,14 +123,7 @@ pub impl @posoco.PipelineHook for LazyTools with fn before_model(
 pub extend LazyTools with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   before_tool,
   on_turn_end,
 }
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend LazyTools with @posoco.PipelineHook::{tool_exposure}

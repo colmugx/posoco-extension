@@ -25,6 +25,7 @@ fn test_ptc_tools() -> Array[@posoco.ToolDef] {
       input_schema: { "type": "object" },
       owner: @posoco.OwnerId::unchecked("test"),
       policy: @posoco.ExecutionPolicy::Parallel,
+      exposure: @posoco.ToolExposure::Direct,
       provenance: Some("test"),
     },
   ]

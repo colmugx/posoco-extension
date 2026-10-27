@@ -26,7 +26,7 @@ fn MemohContext::system_message(self : MemohContext) -> @posoco.Message {
 ///
 /// A fresh array is returned so the hook never mutates a caller-owned message
 /// array. If no turn context is installed, the exact input array is returned.
-pub impl @posoco.PipelineHook for Memoh with fn before_model(
+impl @posoco.PipelineHook for Memoh with fn before_model(
   self : Memoh,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
@@ -49,7 +49,7 @@ pub impl @posoco.PipelineHook for Memoh with fn before_model(
 
 ///|
 /// Current-turn host context must never bleed into the next turn.
-pub impl @posoco.PipelineHook for Memoh with fn on_turn_end(self : Memoh) -> Unit {
+impl @posoco.PipelineHook for Memoh with fn on_turn_end(self : Memoh) -> Unit {
   self.clear_turn_context()
 }
 
@@ -58,13 +58,6 @@ pub extend Memoh with @posoco.PipelineHook::{
   before_model,
   before_tool,
   on_post_event,
-  on_post_event_at,
   on_turn_begin,
   on_turn_end,
 }
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend Memoh with @posoco.PipelineHook::{tool_exposure}

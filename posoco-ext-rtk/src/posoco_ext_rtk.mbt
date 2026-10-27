@@ -155,7 +155,7 @@ async fn before_tool_impl(
 
 ///|
 /// Production dispatch: the backend's real spawn-backed rewriter.
-pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
+impl @posoco.PipelineHook for RTKHook with fn before_tool(
   self : RTKHook,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
@@ -166,13 +166,6 @@ pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
 pub extend RTKHook with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   on_turn_end,
 }
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend RTKHook with @posoco.PipelineHook::{tool_exposure}

@@ -45,8 +45,7 @@ pub fn Stats::commands(Self) -> Array[@port.CommandDef]
 pub fn Stats::extension_id(Self) -> String
 pub async fn Stats::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Stats::manifest(Self) -> @port.ExtensionManifest
-pub fn Stats::on_event(Self, @types.TurnEvent) -> Unit
-pub fn Stats::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn Stats::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub impl @port.CommandPort for Stats
 pub impl @port.Extension for Stats
 pub impl @port.Observer for Stats

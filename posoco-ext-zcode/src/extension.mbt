@@ -59,20 +59,12 @@ pub impl @posoco.Lifecycle for ZcodeTools with fn on_shutdown(
 }
 
 ///|
-pub impl @posoco.Observer for ZcodeTools with fn on_event(
-  _self : ZcodeTools,
-  _event : @posoco.TurnEvent,
-) -> Unit {
-  ()
-}
-
-///|
-pub extend ZcodeTools with @posoco.Observer::{on_event, on_event_at}
+pub extend ZcodeTools with @posoco.Observer::{on_event}
 
 ///|
 /// Track the parent session from scoped events; a background call addresses
 /// its TaskSpec to this session so core delivers the outcome here.
-pub impl @posoco.Observer for ZcodeTools with fn on_event_at(
+pub impl @posoco.Observer for ZcodeTools with fn on_event(
   self : ZcodeTools,
   scope : @posoco.EventScope?,
   _event : @posoco.TurnEvent,

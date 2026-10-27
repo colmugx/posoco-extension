@@ -123,13 +123,13 @@ fn e2e_call(
 /// Pack an e2e ToolCall into the 0.21 ToolCallContext the provider now
 /// receives: no-op register_cancel keeps cancellation NotPropagated.
 fn e2e_test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: call.call_id,
-    name: call.name,
-    arguments: call.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|

@@ -59,9 +59,11 @@ let ps1_drain_grace_ms : Int32 = 1000
 /// are pruned first. Reports `Propagated` when a live child was handled.
 pub impl @posoco.ToolCancellable for PowerShellTools with fn cancel(
   self,
+  run_id~ : @kernel.RunId,
   effect_id : @kernel.EffectId,
   _reason : @kernel.CancelReason,
 ) -> @kernel.CancelDisposition {
+  ignore(run_id)
   let stale : Array[Int32] = []
   for key, handle in self.in_flight {
     if handle.exited {

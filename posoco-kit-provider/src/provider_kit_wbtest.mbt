@@ -133,7 +133,7 @@ test "catalog validation rejects malformed composition" {
       error => Err(error)
     }
     match result {
-      Err(ManifestSchemaError(..)) | Err(EmptyPort(_)) => ()
+      Err(ManifestSchemaError(..)) => ()
       Err(other) => fail("unexpected error kind: \{other}")
       Ok(_) => fail("expected catalog validation failure")
     }

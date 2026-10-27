@@ -119,7 +119,7 @@ pub async fn DecisionGoalAdviser::assess(
   )
   let input : @posoco.DecisionRequest = { state, questions: [question], }
   let answer : Result[@posoco.DecisionResult, String] = Ok(
-    self.decision.evaluate_with_context(
+    self.decision.evaluate(
       input,
       context=@posoco.DecisionCallContext::make(
         purpose="goal_semantic_advice",
@@ -186,7 +186,7 @@ pub async fn DecisionGoalAdviser::assess_progress(
   )
   let input : @posoco.DecisionRequest = { state, questions: [question], }
   let output : Result[@posoco.DecisionResult, String] = Ok(
-    self.decision.evaluate_with_context(
+    self.decision.evaluate(
       input,
       context=@posoco.DecisionCallContext::make(
         purpose="goal_stall_deferral",

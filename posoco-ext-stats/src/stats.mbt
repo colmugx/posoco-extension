@@ -105,7 +105,7 @@ pub fn Stats::Stats(
 }
 
 ///|
-pub impl @posoco.Observer for Stats with fn on_event_at(
+pub impl @posoco.Observer for Stats with fn on_event(
   self : Stats,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -133,14 +133,6 @@ pub impl @posoco.Observer for Stats with fn on_event_at(
     TurnFailed(_) | TurnCompleted => self.reset_round()
     _ => ()
   }
-}
-
-///|
-pub impl @posoco.Observer for Stats with fn on_event(
-  self : Stats,
-  event : @posoco.TurnEvent,
-) -> Unit {
-  self.on_event_at(None, event)
 }
 
 ///|
@@ -826,7 +818,7 @@ fn Stats::usage_report(self : Stats) -> @posoco.CommandOutcome {
 pub extend Stats with @posoco.Extension::{extension_id, manifest}
 
 ///|
-pub extend Stats with @posoco.Observer::{on_event, on_event_at}
+pub extend Stats with @posoco.Observer::{on_event}
 
 ///|
 pub extend Stats with @posoco.CommandPort::{commands, invoke}

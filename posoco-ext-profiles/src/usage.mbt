@@ -30,7 +30,7 @@ fn inner_tool_name(name : String, arguments : Json) -> String {
 /// session: a long-lived Agent serves many sessions, and an unscoped bucket
 /// would corrupt every save — out-of-run diagnostics carrying no scope are
 /// skipped.
-pub impl @posoco.Observer for Profiles with fn on_event_at(
+pub impl @posoco.Observer for Profiles with fn on_event(
   self : Profiles,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -60,9 +60,6 @@ pub impl @posoco.Observer for Profiles with fn on_event_at(
     _ => ()
   }
 }
-
-///|
-pub extend Profiles with @posoco.Observer::{on_event}
 
 ///|
 /// Aggregated ext usage for one session — the summarizer input for

@@ -33,8 +33,7 @@ pub(all) struct TypesafeDecisionPort {
   credential_id : String
 }
 pub fn TypesafeDecisionPort::TypesafeDecisionPort(TypesafeConfig, credential_store? : &@ext-oauth.ProviderCredentialStore?, credential_id? : String) -> Self
-pub async fn TypesafeDecisionPort::evaluate(Self, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
-pub async fn TypesafeDecisionPort::evaluate_with_context(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
+pub async fn TypesafeDecisionPort::evaluate(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
 pub fn TypesafeDecisionPort::extension_id(Self) -> String
 pub fn TypesafeDecisionPort::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.DecisionPort for TypesafeDecisionPort

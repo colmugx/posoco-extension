@@ -253,7 +253,7 @@ async fn NowledgeMem::drain_silent(self : NowledgeMem) -> Unit noraise {
 /// crash window narrows to the turn in progress. The observer slot already
 /// staged the snapshot (`TurnCompleted`/`TurnFailed` fire first), so this is
 /// drain-only.
-pub impl @posoco.PipelineHook for NowledgeMem with fn on_turn_end(
+impl @posoco.PipelineHook for NowledgeMem with fn on_turn_end(
   self : NowledgeMem,
 ) -> Unit {
   self.drain_silent()
@@ -263,7 +263,6 @@ pub impl @posoco.PipelineHook for NowledgeMem with fn on_turn_end(
 pub extend NowledgeMem with @posoco.PipelineHook::{
   on_post_event,
   on_turn_begin,
-  on_post_event_at,
   before_model,
   before_tool,
   on_turn_end,
@@ -276,7 +275,7 @@ pub extend NowledgeMem with @posoco.PipelineHook::{
 /// before approving. Long tool-heavy turns shed staged state mid-flight
 /// instead of accumulating it until turn end, without paying a round trip on
 /// every call.
-pub impl @posoco.PipelineHook for NowledgeMem with fn before_tool(
+impl @posoco.PipelineHook for NowledgeMem with fn before_tool(
   self : NowledgeMem,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
@@ -298,7 +297,7 @@ pub impl @posoco.PipelineHook for NowledgeMem with fn before_tool(
 /// reply of a turn is never model-visible — the pump terminates after it —
 /// so `record_assistant` completes the snapshot from `ModelResponseReceived`
 /// events; without it every sync would lag one assistant message behind.
-pub impl @posoco.PipelineHook for NowledgeMem with fn before_model(
+impl @posoco.PipelineHook for NowledgeMem with fn before_model(
   self : NowledgeMem,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
@@ -368,7 +367,7 @@ fn NowledgeMem::stage_session_sync(
 }
 
 ///|
-pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
+pub impl @posoco.Observer for NowledgeMem with fn on_event(
   self : NowledgeMem,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -405,7 +404,7 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
 }
 
 ///|
-pub extend NowledgeMem with @posoco.Observer::{on_event, on_event_at}
+pub extend NowledgeMem with @posoco.Observer::{on_event}
 
 ///|
 /// The plugin's instructions, and nothing else: what Nowledge Mem is, when
@@ -459,9 +458,3 @@ pub extend NowledgeMem with @posoco.Extension::{extension_id, manifest}
 
 ///|
 pub extend NowledgeMem with @posoco.SystemPromptContributor::{system_prompt}
-
-///|
-/// Explicit promotion for the method the trait impl above exposes as a
-/// regular method (implicit impl-as-method promotion is deprecated in
-/// current MoonBit; see compiler warning implicit_impl_as_method).
-pub extend NowledgeMem with @posoco.PipelineHook::{tool_exposure}

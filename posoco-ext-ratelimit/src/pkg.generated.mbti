@@ -28,10 +28,8 @@ pub fn RateLimitGuard::cancel_pending(Self) -> Unit
 pub fn RateLimitGuard::extension_id(Self) -> String
 pub fn RateLimitGuard::manifest(Self) -> @port.ExtensionManifest
 pub fn RateLimitGuard::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn RateLimitGuard::on_event(Self, @types.TurnEvent) -> Unit
-pub fn RateLimitGuard::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
-pub async fn RateLimitGuard::on_post_event(Self, @port.HookStage) -> Unit noraise
-pub async fn RateLimitGuard::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub fn RateLimitGuard::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn RateLimitGuard::on_post_event(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
 pub async fn RateLimitGuard::on_shutdown(Self) -> Unit
 pub async fn RateLimitGuard::on_start(Self) -> Unit
 pub async fn RateLimitGuard::on_turn_begin(Self) -> Unit
@@ -42,11 +40,9 @@ pub async fn RateLimitGuard::snapshot(Self) -> Array[RateLimitPending]
 pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[Unit]) -> Unit
 pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup[Unit], agent~ : @posoco.Agent) -> Unit
 pub fn RateLimitGuard::stop(Self) -> Unit
-pub fn RateLimitGuard::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard
 pub impl @port.Observer for RateLimitGuard
-pub impl @port.PipelineHook for RateLimitGuard
 
 pub(all) struct RateLimitPending {
   session_id : String

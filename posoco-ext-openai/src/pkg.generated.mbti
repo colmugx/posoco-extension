@@ -82,8 +82,7 @@ pub fn CodexQuotaStatus::extension_id(Self) -> String
 pub fn CodexQuotaStatus::manifest(Self) -> @port.ExtensionManifest
 pub fn CodexQuotaStatus::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn CodexQuotaStatus::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn CodexQuotaStatus::on_event(Self, @types.TurnEvent) -> Unit
-pub fn CodexQuotaStatus::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn CodexQuotaStatus::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn CodexQuotaStatus::on_shutdown(Self) -> Unit
 pub async fn CodexQuotaStatus::on_start(Self) -> Unit
 pub impl @port.Extension for CodexQuotaStatus

@@ -568,6 +568,16 @@ pub(all) struct MCPToolBridge {
   /// Every server config the bridge has seen (discovered or connected);
   /// the lookup table for `reconnect_server`.
   configs : Map[String, MCPServerConfig]
+  /// ToolContribution handle claimed at on_compose; live tools publish
+  /// through it as the bridge's own dynamic group (owner posoco_ext_mcp).
+  mut contributions : @posoco.ToolContributions?
+  /// Host-set reserved names (static base tools): a live MCP tool that
+  /// collides with one is dropped from the published group instead of
+  /// rejecting the whole group. Mirrors the pi hidden-tools pattern.
+  mut reserved_names : Array[String]
+  /// Name snapshot of the last accepted publication; suppresses identical
+  /// re-publications (a rejected group must not retry-loop on bumps).
+  mut published_names : Array[String]
 }
 
 ///|
@@ -585,6 +595,9 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),
     configs: Map::from_array([]),
+    contributions: None,
+    reserved_names: [],
+    published_names: [],
   }
 }
 
@@ -615,6 +628,9 @@ pub async fn MCPToolBridge::discover(
         mode,
         pending,
         group: None,
+        contributions: None,
+        reserved_names: [],
+        published_names: [],
         activated: false,
         catalog_revision: 0,
         closing: false,
@@ -673,7 +689,7 @@ pub fn MCPToolBridge::start_probes(
           // The duplicate-name guard in connect_with_group keeps a probe
           // from double-connecting against any concurrent explicit connect.
           match self.connect_with_group(config, group) {
-            Ok(_) => self.catalog_revision = self.catalog_revision + 1
+            Ok(_) => self.bump_catalog_revision()
             Err(message) =>
               self.retry_startup_probe(config, message, backoff_ms)
           }
@@ -735,7 +751,7 @@ async fn MCPToolBridge::retry_startup_probe(
       Some(group) =>
         match self.connect_with_group(config, group) {
           Ok(_) => {
-            self.catalog_revision = self.catalog_revision + 1
+            self.bump_catalog_revision()
             self.scrub_startup_failures(config.name)
             return
           }
@@ -800,7 +816,7 @@ pub async fn MCPToolBridge::activate(
   }
   // One bump per activation attempt: the catalog source re-reads at the
   // next prompt boundary even when every server failed (empty = honest).
-  self.catalog_revision = self.catalog_revision + 1
+  self.bump_catalog_revision()
   self.startup_failures
 }
 
@@ -823,7 +839,7 @@ pub async fn MCPToolBridge::connect(
 ) -> Result[Unit, String] {
   match self.connect_with_group(config, group) {
     Ok(_) => {
-      self.catalog_revision = self.catalog_revision + 1
+      self.bump_catalog_revision()
       Ok(())
     }
     Err(message) => Err(message)
@@ -1238,7 +1254,7 @@ pub async fn MCPToolBridge::refresh_tools(
     Ok(_) => {
       // A committed refresh changes the advertised tool set; bump the
       // revision so a wired McpCatalogSource is re-read at the next turn.
-      self.catalog_revision = self.catalog_revision + 1
+      self.bump_catalog_revision()
       Ok(())
     }
     Err(message) => Err(message)
@@ -1394,7 +1410,7 @@ pub async fn MCPToolBridge::reconnect_server(
   }
   match self.connect_with_group(config, group) {
     Ok(_) => {
-      self.catalog_revision = self.catalog_revision + 1
+      self.bump_catalog_revision()
       Ok(())
     }
     Err(message) => Err(message)
@@ -1780,6 +1796,14 @@ pub impl @posoco.Lifecycle for MCPToolBridge with fn on_start(self) -> Unit {
 }
 
 ///|
+pub impl @posoco.Lifecycle for MCPToolBridge with fn on_compose(
+  self : MCPToolBridge,
+  view : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.contributions = view.tool_contributions()
+}
+
+///|
 pub extend MCPToolBridge with @posoco.Lifecycle::{on_compose}
 
 ///|
@@ -1813,6 +1837,7 @@ pub impl @posoco.Extension for MCPToolBridge with fn manifest(
     tools=[self],
     lifecycle=[self],
     commands=[self],
+    requires=[@posoco.Capability::ToolContribution],
   )
 }
 

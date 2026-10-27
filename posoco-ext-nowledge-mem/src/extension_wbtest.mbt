@@ -468,7 +468,7 @@ async test "on_shutdown stops the flusher, drains pending lanes, closes mcp" {
 }
 
 ///|
-async test "on_event_at: TurnFailed stages a turn_failed sync request" {
+async test "on_event: TurnFailed stages a turn_failed sync request" {
   let ext = nmem_ext()
   ext.config = Some(lane_config())
   let scope : @posoco.EventScope = {
@@ -476,17 +476,13 @@ async test "on_event_at: TurnFailed stages a turn_failed sync request" {
     run_id: @posoco.RunId::unchecked("r1"),
     turn_id: @posoco.TurnId::unchecked("t1"),
   }
-  @posoco.Observer::on_event_at(
-    ext,
-    Some(scope),
-    @posoco.TurnEvent::TurnStarted,
-  )
+  @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   let snapshot : Array[@posoco.Message] = [
     @posoco.tk_user_msg("hello"),
     assistant_msg("hi"),
   ]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     Some(scope),
     @posoco.TurnEvent::TurnFailed("model down"),
@@ -503,12 +499,12 @@ async test "on_event_at: TurnFailed stages a turn_failed sync request" {
 }
 
 ///|
-async test "on_event_at: ModelResponseReceived completes the snapshot deduplicated" {
+async test "on_event: ModelResponseReceived completes the snapshot deduplicated" {
   let ext = nmem_ext()
   ext.config = Some(lane_config())
   let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("hello")]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ModelResponseReceived(
@@ -516,7 +512,7 @@ async test "on_event_at: ModelResponseReceived completes the snapshot deduplicat
       usage=None,
     ),
   )
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ModelResponseReceived(
@@ -531,7 +527,7 @@ async test "on_event_at: ModelResponseReceived completes the snapshot deduplicat
 }
 
 ///|
-async test "on_event_at: SessionRedirect stages the old lane and switches the session" {
+async test "on_event: SessionRedirect stages the old lane and switches the session" {
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~)
   let model = @posoco.ScriptedModel([
@@ -546,7 +542,7 @@ async test "on_event_at: SessionRedirect stages the old lane and switches the se
     // A manual redirect: the snapshot is staged under the OLD session id with
     // the redirect reason (best effort — the observer slot cannot flush), and
     // current_session follows the target.
-    @posoco.Observer::on_event_at(
+    @posoco.Observer::on_event(
       ext,
       None,
       @posoco.TurnEvent::SessionRedirect(
@@ -633,12 +629,12 @@ fn observer_tool_call() -> @posoco.ToolCall {
 /// The before_model snapshot only carries earlier rounds' ToolMessages; the
 /// Observer completes the current round from the terminal tool-call events.
 /// Abandoned calls have no model-visible outcome and append nothing.
-async test "on_event_at: terminal tool events complete the snapshot with current-round outcomes" {
+async test "on_event: terminal tool events complete the snapshot with current-round outcomes" {
   let ext = nmem_ext()
   ext.config = Some(lane_config())
   let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("run the check")]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ModelResponseReceived(
@@ -646,7 +642,7 @@ async test "on_event_at: terminal tool events complete the snapshot with current
       usage=None,
     ),
   )
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ToolCallSucceeded(
@@ -656,7 +652,7 @@ async test "on_event_at: terminal tool events complete the snapshot with current
       attachments=[],
     ),
   )
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ToolCallRejected(
@@ -664,7 +660,7 @@ async test "on_event_at: terminal tool events complete the snapshot with current
       reason=UnknownTool,
     ),
   )
-  @posoco.Observer::on_event_at(
+  @posoco.Observer::on_event(
     ext,
     None,
     @posoco.TurnEvent::ToolCallAbandoned(

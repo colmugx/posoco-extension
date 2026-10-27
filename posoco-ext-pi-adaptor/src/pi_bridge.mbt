@@ -720,11 +720,6 @@ extern "js" fn JsToolResult::details_json(self : JsToolResult) -> String =
   #| (result) => result.detailsJson ?? "null"
 
 ///|
-/// Current monotonic Pi tool catalog revision.
-extern "js" fn js_catalog_revision(host : JsPiHost) -> Int32 =
-  #| (host) => host.state.catalogVersion
-
-///|
 /// Cancel one effect and encode its canonical disposition as 0/1/2.
 extern "js" fn js_cancel_effect_code(
   host : JsPiHost,
@@ -776,6 +771,16 @@ extern "js" fn js_host_set_custom_entry_callback(
   callback : (String, String) -> Unit,
 ) -> Unit =
   #| (host, callback) => { host.state.customEmit = callback }
+
+///|
+/// Install the callback fired whenever the JS host's tool registration
+/// changes (registerTool). The MoonBit side only flips a dirty flag; the
+/// actual re-publication runs at the next model call.
+extern "js" fn js_host_set_on_catalog_change(
+  host : JsPiHost,
+  callback : () -> Unit,
+) -> Unit =
+  #| (host, callback) => { host.state.onCatalogChange = callback }
 
 ///|
 /// Mirror the hidden-tools set into the JS host so host-side live-state

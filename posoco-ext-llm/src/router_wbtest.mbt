@@ -81,8 +81,8 @@ fn router_effort_slot(
 test "router rejects an empty slot list" {
   let result = Ok(RouterModelPort(slots=[])) catch { error => Err(error) }
   match result {
-    Err(@posoco.CompositionError::EmptyPort(name)) =>
-      assert_eq(name, "posoco_ext_llm.slots")
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~)) =>
+      assert_true(detail.contains("at least one model slot"))
     _ => fail("expected empty slot composition failure")
   }
 }
@@ -388,7 +388,7 @@ test "model response publishes cache and model segments" {
   }
   // Effort selection publishes model status itself; isolate the response.
   capture.events.clear()
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
@@ -516,7 +516,7 @@ test "turn start republishes the session context instead of resetting it" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -528,14 +528,8 @@ test "turn start republishes the session context instead of resetting it" {
       ),
     ),
   )
-  router.on_event_at(
-    Some(router_test_scope("s1")),
-    @posoco.TurnEvent::TurnStarted,
-  )
-  router.on_event_at(
-    Some(router_test_scope("s2")),
-    @posoco.TurnEvent::TurnStarted,
-  )
+  router.on_event(Some(router_test_scope("s1")), @posoco.TurnEvent::TurnStarted)
+  router.on_event(Some(router_test_scope("s2")), @posoco.TurnEvent::TurnStarted)
   assert_eq(router_ctx_values(capture), [
     "ctx: 200.0K/1.0M · 20%", "ctx: 200.0K/1.0M · 20%", "ctx: ?",
   ])
@@ -550,7 +544,7 @@ test "unscoped turn start leaves the ctx segment untouched" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -562,7 +556,7 @@ test "unscoped turn start leaves the ctx segment untouched" {
       ),
     ),
   )
-  router.on_event_at(None, @posoco.TurnEvent::TurnStarted)
+  router.on_event(None, @posoco.TurnEvent::TurnStarted)
   assert_eq(router_ctx_values(capture), ["ctx: 200.0K/1.0M · 20%"])
 }
 
@@ -576,7 +570,7 @@ test "awaiting measurement and missing windows render unknown" {
     bus=Some(bus),
   )
   // Post-compact shape from core: window known, reading pending.
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -589,7 +583,7 @@ test "awaiting measurement and missing windows render unknown" {
     ),
   )
   // Occupancy known but window unknown: no percent is invented.
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s2")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -602,7 +596,7 @@ test "awaiting measurement and missing windows render unknown" {
     ),
   )
   // Nothing known at all.
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s3")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -626,7 +620,7 @@ test "estimated context readings are marked and never shown as measured" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -638,7 +632,7 @@ test "estimated context readings are marked and never shown as measured" {
       ),
     ),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -664,7 +658,7 @@ test "compact lifecycle events never change the ctx segment" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -676,11 +670,11 @@ test "compact lifecycle events never change the ctx segment" {
       ),
     ),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::CompactStarted(trigger="manual"),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::CompactFinished(
       trigger="manual",
@@ -689,7 +683,7 @@ test "compact lifecycle events never change the ctx segment" {
       messages_after=3,
     ),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::OperationFinalized(
       operation="compact",
@@ -697,7 +691,7 @@ test "compact lifecycle events never change the ctx segment" {
       detail="",
     ),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s1")),
     @posoco.TurnEvent::ContextStateUpdated(
       state=router_test_ctx_state(
@@ -724,7 +718,7 @@ test "missing cached or absent usage unregisters the cache segment" {
     bus=Some(bus),
   )
   assert_eq(router_visible_events(capture).length(), 0)
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
@@ -738,7 +732,7 @@ test "missing cached or absent usage unregisters the cache segment" {
     @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(@devkit.StatusOp::Unregister(segment="cache")),
   )
-  router.on_event_at(
+  router.on_event(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
@@ -830,11 +824,8 @@ test "router without a bus keeps observing and mutating silently" {
   let router = RouterModelPort(slots=[
     router_effort_slot("slot-a", "one", "slot-a"),
   ])
-  router.on_event_at(
-    Some(router_test_scope("s")),
-    @posoco.TurnEvent::TurnStarted,
-  )
-  router.on_event_at(
+  router.on_event(Some(router_test_scope("s")), @posoco.TurnEvent::TurnStarted)
+  router.on_event(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),

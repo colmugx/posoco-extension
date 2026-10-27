@@ -124,6 +124,10 @@ pub impl @posoco.Extension for BunrakuExtension with fn manifest(
     prompt_contributors=[self],
     lifecycle=[self],
     requires=[@posoco.Capability::Tasks],
+    // Nested invocation face, owner-level and default-deny: a guest ctx.call
+    // may only reach these owners' tools, through the kernel child pipeline.
+    // Same single source as bunraku_tool_call_owners().
+    tool_call_owners=bunraku_nested_source_owners(),
   )
 }
 
@@ -256,6 +260,8 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn execute(
           input,
           invocation_id,
           parent_call=ctx.call_id.to_string(),
+          on_call=None,
+          face=self.tool_names,
         )
         let content = match outcome {
           @kernel.ToolOutcome::Success(content~, structured=_) => content
@@ -283,11 +289,36 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn execute(
   }
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
+  // Kernel-wired nested face: when the executor supplied the child-pipeline
+  // context, derive both the invoker and the guest-visible tool list from
+  // it (ToolCallContext::tools is the kernel-computed face — non-Disabled
+  // definitions owned by an allowed owner). An injected scoped_invoker or an
+  // empty kernel face keeps the previous behavior: the exposed list plus
+  // the injected bridge, or a hard fail-closed ToolInvocationUnavailable.
+  let kernel_face = ctx.tools()
+  let on_call : (async (String, Json) -> @mbtx.Outcome)? = match
+    self.scoped_invoker {
+    Some(invoker) => Some((name, args) => invoker.invoke(name, args))
+    None =>
+      if kernel_face.is_empty() {
+        None
+      } else {
+        let kernel_invoker = KernelScopedInvoker(ctx~) as &ToolInvoker
+        Some((name, args) => kernel_invoker.invoke(name, args))
+      }
+  }
+  let guest_face : Array[String] = if kernel_face.is_empty() {
+    self.tool_names
+  } else {
+    kernel_face.map(fn(def) { def.name.to_string() })
+  }
   self.execute_source(
     source,
     input,
     invocation_id,
     parent_call=ctx.call_id.to_string(),
+    on_call~,
+    face=guest_face,
   ) catch {
     error =>
       @posoco.ToolOutcome::ToolReportedError(
@@ -306,20 +337,28 @@ async fn BunrakuExtension::execute_source(
   input : Json,
   invocation_id : String,
   parent_call~ : String,
+  on_call~ : (async (String, Json) -> @mbtx.Outcome)?,
+  face~ : Array[String],
 ) -> @posoco.ToolOutcome {
   // The tool-agnostic runtime forwards the guest's call frames to this
-  // handler; governance stays on this side of the seam.
-  let on_call : (async (String, Json) -> @mbtx.Outcome)? = match
-    self.scoped_invoker {
-    Some(invoker) => Some((name, args) => invoker.invoke(name, args))
-    None => None
+  // handler; governance stays on this side of the seam. `on_call` is either
+  // the host-injected bridge or the kernel child pipeline derived from the
+  // enclosing ToolCallContext; `face` is the guest-visible tool list.
+  let effective_on_call : (async (String, Json) -> @mbtx.Outcome)? = match
+    on_call {
+    Some(injected) => Some(injected)
+    None =>
+      match self.scoped_invoker {
+        Some(invoker) => Some((name, args) => invoker.invoke(name, args))
+        None => None
+      }
   }
   let result = self.runtime.run(
     source,
     input,
     invocation_id~,
-    tools=self.tool_names,
-    on_call?,
+    tools=face,
+    on_call?=effective_on_call,
     max_output_bytes=self.max_output_bytes,
   ) catch {
     // Error payloads (build diagnostics, stderr, reasons) are the model's
@@ -402,9 +441,11 @@ async fn BunrakuExtension::execute_source(
 ///|
 pub impl @posoco.ToolCancellable for BunrakuExtension with fn cancel(
   self : BunrakuExtension,
+  run_id~ : @kernel.RunId,
   effect_id : @kernel.EffectId,
   _reason : @kernel.CancelReason,
 ) -> @kernel.CancelDisposition {
+  ignore(run_id)
   if self.runtime.cancel(effect_id.to_string()) {
     @kernel.CancelDisposition::Propagated
   } else {

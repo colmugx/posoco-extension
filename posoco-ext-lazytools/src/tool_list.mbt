@@ -195,7 +195,14 @@ async fn LazyTools::semantic_group_match(
         ),
       ],
     }
-    let result = decision.evaluate(request) catch { _ => return None }
+    let result = decision.evaluate(
+      request,
+      context=@posoco.DecisionCallContext::make(
+        purpose="lazytools.semantic_discovery",
+      ),
+    ) catch {
+      _ => return None
+    }
     result.validate_for(request) catch {
       _ => return None
     }
@@ -226,7 +233,14 @@ async fn LazyTools::semantic_group_match(
       ),
     ],
   }
-  let result = decision.evaluate(request) catch { _ => return None }
+  let result = decision.evaluate(
+    request,
+    context=@posoco.DecisionCallContext::make(
+      purpose="lazytools.semantic_discovery",
+    ),
+  ) catch {
+    _ => return None
+  }
   result.validate_for(request) catch {
     _ => return None
   }

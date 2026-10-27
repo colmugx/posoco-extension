@@ -142,7 +142,7 @@ test "board projection all mappings preserve order seq and zero revision without
   let scope = projection_scope("α")
   let observer = board.manifest().observers[0]
   for entry in cases {
-    observer.on_event_at(Some(scope), entry.0)
+    observer.on_event(Some(scope), entry.0)
   }
   let history = runtime.event_history()
   assert_eq(history.length(), cases.length())
@@ -163,7 +163,7 @@ test "board projection all mappings preserve order seq and zero revision without
   }
   // Unattributed versions of every mapping stay unattributed even after a run.
   for entry in cases {
-    observer.on_event_at(None, entry.0)
+    observer.on_event(None, entry.0)
   }
   let unscoped = runtime.event_history()
   for i in 0..<cases.length() {
@@ -185,15 +185,15 @@ test "board projection never guesses scope and unscoped observer delegates" {
   let board = BoardExtension::BoardExtension()
   let a = projection_scope("a")
   let b = projection_scope("b")
-  board.on_event_at(Some(a), TurnStarted)
-  board.on_event_at(
+  board.on_event(Some(a), TurnStarted)
+  board.on_event(
     None,
     StreamChunkReceived(chunk=TextDelta(token="unattributed")),
   )
-  board.on_event_at(Some(b), TurnStarted)
-  board.on_event_at(Some(a), TurnCompleted)
-  board.on_event(TurnFailed("opaque"))
-  board.on_event_at(None, ConfigWarning(field="x", value="y", reason="z"))
+  board.on_event(Some(b), TurnStarted)
+  board.on_event(Some(a), TurnCompleted)
+  board.on_event(None, TurnFailed("opaque"))
+  board.on_event(None, ConfigWarning(field="x", value="y", reason="z"))
   let events = board.runtime().event_history()
   assert_eq(events.length(), 6)
   assert_eq(events[0].scope, board_scope(Some(a)))
@@ -215,9 +215,11 @@ test "board projection usage preserves unknown zero and provider totals" {
     uncached_input_tokens: Some(0),
   }
   board.on_event(
+    None,
     ModelResponseReceived(message=projection_message(), usage=Some(usage)),
   )
   board.on_event(
+    None,
     ModelResponseReceived(
       message=projection_message(),
       usage=Some({
@@ -230,6 +232,7 @@ test "board projection usage preserves unknown zero and provider totals" {
     ),
   )
   board.on_event(
+    None,
     ModelResponseReceived(
       message=projection_message(),
       usage=Some({
@@ -309,13 +312,18 @@ test "board projection sanitizes every display surface and bounds previews" {
     name: @posoco.ToolName::unchecked(sensitive),
   }
   board.on_event(
+    None,
     ToolCallSucceeded(call~, content=long, structured=None, attachments=[]),
   )
-  board.on_event(StreamChunkReceived(chunk=TextDelta(token=sensitive)))
-  board.on_event(StreamChunkReceived(chunk=ReasoningDelta(token=sensitive)))
-  board.on_event(UserRequestStarted(kind=sensitive, prompt=sensitive))
-  board.on_event(UserRequestFinished(kind=sensitive, outcome=sensitive))
+  board.on_event(None, StreamChunkReceived(chunk=TextDelta(token=sensitive)))
   board.on_event(
+    None,
+    StreamChunkReceived(chunk=ReasoningDelta(token=sensitive)),
+  )
+  board.on_event(None, UserRequestStarted(kind=sensitive, prompt=sensitive))
+  board.on_event(None, UserRequestFinished(kind=sensitive, outcome=sensitive))
+  board.on_event(
+    None,
     ToolCallSucceeded(call~, content=sensitive, structured=None, attachments=[]),
   )
   let events = board.runtime().event_history()
@@ -339,7 +347,7 @@ test "board projection sanitizes every display surface and bounds previews" {
 test "board projection ignored events do not mint seq or duplicate tool success" {
   let board = BoardExtension::BoardExtension()
   let call = projection_call()
-  board.on_event(TurnStarted)
+  board.on_event(None, TurnStarted)
   let ignored : Array[@posoco.TurnEvent] = [
     ToolCallApproved(call~, consent_scope=Some("private")),
     ToolCallStarted(call~),
@@ -365,13 +373,14 @@ test "board projection ignored events do not mint seq or duplicate tool success"
     ConfigChanged(field="private", old_value="private", new_value="private"),
   ]
   for event in ignored {
-    board.on_event(event)
+    board.on_event(None, event)
   }
   assert_eq(board.runtime().current_seq(), 1L)
   board.on_event(
+    None,
     ToolCallSucceeded(call~, content="done", structured=None, attachments=[]),
   )
-  board.on_event(TurnCompleted)
+  board.on_event(None, TurnCompleted)
   let events = board.runtime().event_history()
   assert_eq(events.length(), 3)
   assert_eq(events[1].kind, "tool.completed")
@@ -413,7 +422,7 @@ test "board projection input budget omits oversized text without leaking a prefi
     "[truncated]",
   )
   let board = BoardExtension::BoardExtension()
-  board.on_event(StreamChunkReceived(chunk=TextDelta(token=multiline)))
+  board.on_event(None, StreamChunkReceived(chunk=TextDelta(token=multiline)))
   assert_eq(board.runtime().event_history()[0].payload, {
     "text": "[truncated]",
   })
@@ -447,6 +456,6 @@ test "board projection strips unsafe controls before redaction without damaging 
   assert_eq(board_display(input), expected)
   assert_eq(board_display(" \t\n~\u00A0界🙂"), " \t\n~\u00A0界🙂")
   let board = BoardExtension::BoardExtension()
-  board.on_event(StreamChunkReceived(chunk=ReasoningDelta(token=input)))
+  board.on_event(None, StreamChunkReceived(chunk=ReasoningDelta(token=input)))
   assert_eq(board.runtime().event_history()[0].payload, { "text": expected })
 }

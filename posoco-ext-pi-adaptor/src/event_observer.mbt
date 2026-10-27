@@ -302,7 +302,7 @@ fn PiEventObserver::emit_message_update(
 }
 
 ///|
-pub impl @posoco.Observer for PiEventObserver with fn on_event_at(
+pub impl @posoco.Observer for PiEventObserver with fn on_event(
   self : PiEventObserver,
   _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -445,14 +445,6 @@ pub impl @posoco.Observer for PiEventObserver with fn on_event_at(
 }
 
 ///|
-pub impl @posoco.Observer for PiEventObserver with fn on_event(
-  self : PiEventObserver,
-  event : @posoco.TurnEvent,
-) -> Unit {
-  @posoco.Observer::on_event_at(self, None, event)
-}
-
-///|
 /// Host-owned agent-run boundary: emits `agent_end` (messages accumulated
 /// during the run) then `agent_settled`, matching pi's loop-drain semantics.
 /// No-op when no run is active.
@@ -480,4 +472,4 @@ pub fn PiEventObserver::reset_agent_run(self : PiEventObserver) -> Unit {
 }
 
 ///|
-pub extend PiEventObserver with @posoco.Observer::{on_event, on_event_at}
+pub extend PiEventObserver with @posoco.Observer::{on_event}

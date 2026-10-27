@@ -240,7 +240,7 @@ fn RouterModelPort::publish_cache_status(
 /// (post-compact it carries a char-based estimate until the next real
 /// measurement). `TurnStarted` re-publishes the scoped session's own state;
 /// it never resets occupancy.
-pub impl @posoco.Observer for RouterModelPort with fn on_event_at(
+pub impl @posoco.Observer for RouterModelPort with fn on_event(
   self : RouterModelPort,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -268,6 +268,3 @@ pub impl @posoco.Observer for RouterModelPort with fn on_event_at(
 
 ///|
 pub extend RouterModelPort with @posoco.Observer::{on_event}
-
-///|
-pub extend RouterModelPort with @posoco.Observer::{on_event_at}

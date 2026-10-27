@@ -68,17 +68,9 @@ fn BridgeObserver::handle(
 }
 
 ///|
+/// The kernel dispatches only the scoped variant; both entry points route
+/// through the same handler.
 impl @posoco.Observer for BridgeObserver with fn on_event(
-  self : BridgeObserver,
-  event : @posoco.TurnEvent,
-) -> Unit {
-  self.handle(event)
-}
-
-///|
-/// The kernel dispatches only the scoped variant; the unscoped override is
-/// kept explicit so both entry points route through the same handler.
-impl @posoco.Observer for BridgeObserver with fn on_event_at(
   self : BridgeObserver,
   _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,

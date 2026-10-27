@@ -44,16 +44,15 @@ fn jev_http_error(status : Int32, body_bytes : Int32) -> @posoco.DecisionError {
 }
 
 ///|
-pub extend TypesafeDecisionPort with @posoco.DecisionPort::{
-  evaluate,
-  evaluate_with_context,
-}
+pub extend TypesafeDecisionPort with @posoco.DecisionPort::{evaluate}
 
 ///|
 pub impl @posoco.DecisionPort for TypesafeDecisionPort with fn evaluate(
   self : TypesafeDecisionPort,
   request : @posoco.DecisionRequest,
+  context~ : @posoco.DecisionCallContext,
 ) -> @posoco.DecisionResult raise @posoco.DecisionError {
+  ignore(context)
   let api_key = self.resolve_api_key()
   let body = build_jev_request(request, self.config.model)
   let (response, body_data) = @async.with_timeout(self.config.timeout_ms, () => {

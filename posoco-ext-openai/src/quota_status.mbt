@@ -173,6 +173,7 @@ fn CodexQuotaStatus::publish_if_changed(self : CodexQuotaStatus) -> Unit {
 ///|
 pub impl @posoco.Observer for CodexQuotaStatus with fn on_event(
   self : CodexQuotaStatus,
+  _scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
@@ -182,7 +183,7 @@ pub impl @posoco.Observer for CodexQuotaStatus with fn on_event(
 }
 
 ///|
-pub extend CodexQuotaStatus with @posoco.Observer::{on_event, on_event_at}
+pub extend CodexQuotaStatus with @posoco.Observer::{on_event}
 
 ///|
 /// Provider visibility over the bus: the router announces the active

@@ -24,7 +24,7 @@ pub struct PowerShellTools {
   in_flight : Map[Int32, Ps1ChildHandle]
 }
 pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @devkit.WorkspaceAnchor?) -> Self
-pub async fn PowerShellTools::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
+pub async fn PowerShellTools::cancel(Self, run_id~ : @kernel.RunId, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn PowerShellTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn PowerShellTools::extension_id(Self) -> String
 pub fn PowerShellTools::list_tools(Self) -> Array[@kernel.ToolDef]

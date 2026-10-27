@@ -145,9 +145,9 @@ test "full round publishes ttft at first token then tps avg and cache at close" 
     clock=stepped_clock([1000, 1300, 2200, 2500]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
   // First token at 1300: ttft publishes immediately, before the round ends.
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, tk_delta("Hel"))
   assert_eq(capture.events.length(), 1)
   assert_segment(
     capture.events,
@@ -156,9 +156,10 @@ test "full round publishes ttft at first token then tps avg and cache at close" 
     priority=50,
     value="300ms",
   )
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("lo"))
   // Close at 2500: decode span 2200-1300=900ms, 24 tokens -> 26.7/s.
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -199,10 +200,11 @@ test "second round re-anchors and avg aggregates tokens over decode time" {
     live_interval_ms=suppress_live,
   )
   // Round one: ttft 300ms, decode 900ms, 24 tokens -> 26.7/s.
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -212,12 +214,14 @@ test "second round re-anchors and avg aggregates tokens over decode time" {
   // 2700 makes ttft 500ms; decode 4000-3200=800ms -> 30.0/s. avg is the
   // aggregate: 48 tokens over 900+800=1700ms -> 28.2/s.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ReasoningDelta(token="hmm"),
     ),
   )
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -271,16 +275,18 @@ test "chunk events publish ttft immediately and non-delta chunks stay silent" {
     clock=stepped_clock([1000, 1300, 1400, 1500]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
   // Later delta: first token already recorded, live publish suppressed.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ReasoningDelta(token="hmm"),
     ),
   )
   // Argument-less tool-call delta: no clock read, no publish.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ToolCallDelta(
         index=0,
@@ -292,6 +298,7 @@ test "chunk events publish ttft immediately and non-delta chunks stay silent" {
   )
   // Usage and Finish chunks carry no first-token signal.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::Usage(
         input_tokens=100,
@@ -303,11 +310,12 @@ test "chunk events publish ttft immediately and non-delta chunks stay silent" {
     ),
   )
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::Finish(reason="stop"),
     ),
   )
-  stats.on_event(@posoco.TurnEvent::TurnCompleted)
+  stats.on_event(None, @posoco.TurnEvent::TurnCompleted)
   assert_eq(capture.events.length(), 1)
   assert_segment(
     capture.events,
@@ -328,18 +336,20 @@ test "missing usage settles on the calibrated estimate and still re-anchors" {
     clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 3900, 4000]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   // No usage at close: settle on the char estimate (5 chars / 3.5) over
   // the 900ms decode span -> ~1.6/s, marked as an estimate.
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(message=tk_assistant(), usage=None),
   )
   // The re-anchor at 2700 is proven by round two's ttft of 300ms.
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -400,21 +410,23 @@ test "zero decode span produces no tps but the round still re-anchors" {
     clock=stepped_clock([1000, 1300, 1300, 2000, 3000, 4000, 4100]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
   // Second delta lands in the same millisecond: the zero decode span
   // suppresses tps at close, while ttft still published at the first token.
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
     ),
   )
   // Re-anchor proven: round two decodes 4000-3000=1000ms -> 12.0 tokens/s.
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(12)),
@@ -471,18 +483,20 @@ test "stats with no bus is a silent no-op that still tracks rounds" {
     clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 4000, 4100]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
     ),
   )
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -514,21 +528,23 @@ test "live tps throttles to the interval and tracks the estimate" {
     live_interval_ms=250,
   )
   // Round one: calibrates 14 chars -> 4 tokens (ratio stays 3.5).
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hello w"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hello w"))
   // 100ms after the first token: within the 250ms interval, no publish.
-  stats.on_event(tk_delta("orld hi"))
+  stats.on_event(None, tk_delta("orld hi"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(4)),
     ),
   )
   // Round two: live estimates every >=250ms; settles to the exact rate.
-  stats.on_event(tk_delta("Hello w"))
-  stats.on_event(tk_delta("orld hi"))
-  stats.on_event(tk_delta("More text follows here!!"))
+  stats.on_event(None, tk_delta("Hello w"))
+  stats.on_event(None, tk_delta("orld hi"))
+  stats.on_event(None, tk_delta("More text follows here!!"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(10)),
@@ -586,14 +602,15 @@ test "decode span excludes prefill and the commit tail" {
     clock=stepped_clock([1000, 5000, 5100, 7000]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
   // Four seconds of prefill before the first token...
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, tk_delta("Hel"))
   // ...100ms of decoding, then almost two seconds of commit tail before
   // the response event. The round-span formula would report 3.3/s; the
   // decode span reports 200.0/s.
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(20)),
@@ -625,10 +642,11 @@ test "model request started re-anchors the pending round over tool time" {
     clock=stepped_clock([1000, 1300, 1400, 1500, 5000, 5300, 5400, 5500]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -636,11 +654,12 @@ test "model request started re-anchors the pending round over tool time" {
   )
   // A tool runs for 3.5s after the round closed at 1500. Tool events no
   // longer move the anchor; the next request's declaration does, at 5000.
-  stats.on_event(tk_tool_success("c1"))
-  stats.on_event(@posoco.TurnEvent::ModelRequestStarted)
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_tool_success("c1"))
+  stats.on_event(None, @posoco.TurnEvent::ModelRequestStarted)
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -665,12 +684,13 @@ test "mid-stream usage chunk makes the live rate exact" {
     clock=stepped_clock([1000, 1300, 1700, 1800, 1900]),
     live_interval_ms=100,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hello world, how are you doing ri"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hello world, how are you doing ri"))
   // 61 chars streamed over 400ms: estimated 17.4 tokens -> ≈43.6/s.
-  stats.on_event(tk_delta("ght now? Indeed, quite well."))
+  stats.on_event(None, tk_delta("ght now? Indeed, quite well."))
   // The provider's usage chunk arrives: 18 exact tokens over 500ms -> 36.0/s.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::Usage(
         input_tokens=100,
@@ -683,6 +703,7 @@ test "mid-stream usage chunk makes the live rate exact" {
   )
   // Settlement still uses the last delta chunk (400ms decode span): 45.0/s.
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(18)),
@@ -722,8 +743,8 @@ test "non-streamed round publishes no speed segments but still counts cache" {
     clock=stepped_clock([1000, 2000]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_response(Some(tk_usage_cache(Some(100), Some(50)))))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_response(Some(tk_usage_cache(Some(100), Some(50)))))
   assert_eq(capture.events.length(), 1)
   assert_segment(
     capture.events,
@@ -745,20 +766,20 @@ test "cache buckets split by session scope and the segment aggregates them" {
   )
   let scope_a = tk_scope("session_a")
   let scope_b = tk_scope("session_b")
-  stats.on_event_at(
+  stats.on_event(
     Some(scope_a),
     tk_response(Some(tk_usage_cache(Some(100), Some(50)))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(scope_a),
     tk_response(Some(tk_usage_cache(Some(100), None))),
   )
   // A reported zero is not a hit.
-  stats.on_event_at(
+  stats.on_event(
     Some(scope_b),
     tk_response(Some(tk_usage_cache(Some(200), Some(0)))),
   )
-  stats.on_event_at(None, tk_response(Some(tk_usage_cache(Some(50), Some(40)))))
+  stats.on_event(None, tk_response(Some(tk_usage_cache(Some(50), Some(40)))))
   assert_eq(capture.events.length(), 4)
   let expected = [
     "1/1·50.0%", "1/1·50.0%", "1/2·16.7%",
@@ -803,17 +824,17 @@ test "cache buckets split by session scope and the segment aggregates them" {
 test "cache accounting never coerces absent fields to zero" {
   let stats = Stats(clock=fn() { 0L })
   // Usage present but empty: the round counts, nothing else moves.
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(None, None))),
   )
   // Zero cached tokens is reported but is not a hit.
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(100), Some(0)))),
   )
   // No usage at all: not a request.
-  stats.on_event_at(Some(tk_scope("s")), tk_response(None))
+  stats.on_event(Some(tk_scope("s")), tk_response(None))
   match stats.cache_buckets.get("s") {
     Some(bucket) => {
       assert_eq(bucket.requests, 2)
@@ -831,8 +852,8 @@ test "cache segment marks unreported metrics as n/a" {
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
   let stats = Stats(bus=Some(bus), clock=stepped_clock([1000, 2000, 3000]))
-  stats.on_event(tk_response(Some(tk_usage_cache(None, None))))
-  stats.on_event(tk_response(None))
+  stats.on_event(None, tk_response(Some(tk_usage_cache(None, None))))
+  stats.on_event(None, tk_response(None))
   assert_eq(capture.events.length(), 1)
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
@@ -846,7 +867,7 @@ test "cache segment marks unreported metrics as n/a" {
       ),
     ),
   )
-  stats.on_event(tk_response(Some(tk_usage_cache(Some(100), Some(10)))))
+  stats.on_event(None, tk_response(Some(tk_usage_cache(Some(100), Some(10)))))
   assert_eq(capture.events.length(), 2)
   assert_eq(
     @devkit.decode_status_op(capture.events[1]),
@@ -898,7 +919,7 @@ test "manifest contributes the stats observer and the cache doctor command" {
 ///|
 async test "cache_doctor reports bucket aggregate and structured summary" {
   let stats = Stats()
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s1")),
     tk_response(Some(tk_usage_cache(Some(840000), Some(660000)))),
   )
@@ -948,11 +969,11 @@ async test "cache_doctor reports bucket aggregate and structured summary" {
 ///|
 async test "cache_doctor sorts sessions and sums the aggregate" {
   let stats = Stats()
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s2")),
     tk_response(Some(tk_usage_cache(Some(1000), Some(100)))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s1")),
     tk_response(Some(tk_usage_cache(Some(1000), Some(300)))),
   )
@@ -971,7 +992,7 @@ async test "cache_doctor sorts sessions and sums the aggregate" {
 async test "cache_doctor warns only after five requests with a near-zero hit rate" {
   let stats = Stats()
   for _i in 0..<4 {
-    stats.on_event_at(
+    stats.on_event(
       Some(tk_scope("s")),
       tk_response(Some(tk_usage_cache(Some(100), Some(0)))),
     )
@@ -990,7 +1011,7 @@ async test "cache_doctor warns only after five requests with a near-zero hit rat
     }
     _ => fail("expected success outcome")
   }
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s")),
     tk_response(Some(tk_usage_cache(Some(100), Some(0)))),
   )
@@ -1040,25 +1061,25 @@ fn tk_usage_full(
 ///|
 async test "usage reports cumulative labeled accounting per session and aggregate" {
   let stats = Stats()
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s1")),
     tk_response(Some(tk_usage_full(Some(1000), Some(100), Some(24)))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s1")),
     tk_response(Some(tk_usage_full(Some(500), None, Some(12)))),
   )
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s2")),
     tk_response(Some(tk_usage_full(Some(2000), Some(0), Some(10)))),
   )
   // Usage with every field absent still counts its request, contributing
   // nothing to the sums; a response without usage counts nothing at all.
-  stats.on_event_at(
+  stats.on_event(
     Some(tk_scope("s3")),
     tk_response(Some(tk_usage_full(None, None, None))),
   )
-  stats.on_event_at(Some(tk_scope("s1")), tk_response(None))
+  stats.on_event(Some(tk_scope("s1")), tk_response(None))
   match stats.invoke("usage", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_eq(
@@ -1106,13 +1127,14 @@ test "burst round above the plausibility bound stays out of tps and avg" {
     clock=stepped_clock([1000, 1300, 1303, 1305, 1605, 2505, 2605]),
     live_interval_ms=suppress_live,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("Hel"))
   // Bulk-delivered round: the whole payload lands 3ms after the first
   // token, so the arrival span (3ms for 3000 tokens) measures transfer,
   // not decode time — no tps, no avg sample.
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(3000)),
@@ -1136,9 +1158,10 @@ test "burst round above the plausibility bound stays out of tps and avg" {
   )
   // A normal round afterwards proves avg was not poisoned: decode
   // 2505-1605=900ms with 24 tokens -> 26.7/s, and avg holds at 26.7/s.
-  stats.on_event(tk_delta("Hel"))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("Hel"))
+  stats.on_event(None, tk_delta("lo"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
@@ -1187,10 +1210,11 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
     live_interval_ms=suppress_live,
   )
   // Round one: a 100ms decode span delivering 20 tokens -> 200.0/s.
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(tk_delta("a"))
-  stats.on_event(tk_delta("b"))
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, tk_delta("a"))
+  stats.on_event(None, tk_delta("b"))
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(20)),
@@ -1201,6 +1225,7 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
   // answer above; under the aggregate it carries 1/11 the tokens and 1/6
   // the decode time, so it barely moves the result.
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ToolCallDelta(
         index=0,
@@ -1211,6 +1236,7 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
     ),
   )
   stats.on_event(
+    None,
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ToolCallDelta(
         index=0,
@@ -1221,6 +1247,7 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
     ),
   )
   stats.on_event(
+    None,
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(2)),
@@ -1247,19 +1274,19 @@ test "live burst estimate above the plausibility bound is not published" {
     clock=stepped_clock([1000, 1300, 1500, 1600, 8800]),
     live_interval_ms=200,
   )
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(None, @posoco.TurnEvent::TurnStarted)
   // First token publishes ttft only; the live estimate needs elapsed time
   // since that token.
-  stats.on_event(tk_delta("Hel"))
+  stats.on_event(None, tk_delta("Hel"))
   // A 60000-char bulk delivery 200ms after the first token is
   // arrival-limited: the live rate would be ≈85718/s, so nothing publishes
   // and no throttle slot is consumed.
-  stats.on_event(tk_delta("0123456789".repeat(6000)))
-  stats.on_event(tk_delta("lo"))
+  stats.on_event(None, tk_delta("0123456789".repeat(6000)))
+  stats.on_event(None, tk_delta("lo"))
   assert_eq(stats.last_live_ms, None)
   // Once enough time dilutes the cumulative estimate below the bound,
   // live publishing resumes (60006 chars ≈ 17144.6 tokens over 7.5s).
-  stats.on_event(tk_delta("x"))
+  stats.on_event(None, tk_delta("x"))
   assert_eq(stats.last_live_ms, Some(8800L))
   assert_eq(capture.events.length(), 2)
   assert_segment(

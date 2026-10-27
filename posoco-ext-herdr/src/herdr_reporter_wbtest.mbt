@@ -11,9 +11,9 @@ fn recorder() -> (Array[String], (String, Array[String]) -> Unit) {
 test "observer maps turn lifecycle onto herdr states" {
   let (calls, record) = recorder()
   let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record, }
-  reporter.on_event(@posoco.TurnEvent::TurnStarted)
-  reporter.on_event(@posoco.TurnEvent::TurnCompleted)
-  reporter.on_event(@posoco.TurnEvent::TurnFailed("boom"))
+  reporter.on_event(None, @posoco.TurnEvent::TurnStarted)
+  reporter.on_event(None, @posoco.TurnEvent::TurnCompleted)
+  reporter.on_event(None, @posoco.TurnEvent::TurnFailed("boom"))
   inspect(
     calls.join("\n"),
     content=(
@@ -29,12 +29,14 @@ test "observer maps user requests onto blocked and back to working" {
   let (calls, record) = recorder()
   let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record, }
   reporter.on_event(
+    None,
     @posoco.TurnEvent::UserRequestStarted(
       kind="confirm",
       prompt="Allow tool 'write'?",
     ),
   )
   reporter.on_event(
+    None,
     @posoco.TurnEvent::UserRequestFinished(kind="confirm", outcome="answered"),
   )
   inspect(

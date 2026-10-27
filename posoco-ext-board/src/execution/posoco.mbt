@@ -42,13 +42,7 @@ priv struct ExecutionGate {
 }
 
 ///|
-impl @posoco.Observer for ExecutionGate with fn on_event(_self, _event) {
-  // Unscoped events cannot establish attribution.
-  ()
-}
-
-///|
-impl @posoco.Observer for ExecutionGate with fn on_event_at(self, scope, event) {
+impl @posoco.Observer for ExecutionGate with fn on_event(self, scope, event) {
   match (scope, event) {
     (Some(scope), TurnStarted) => {
       let run : BoardExecutionRun = {

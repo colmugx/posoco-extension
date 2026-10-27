@@ -60,8 +60,7 @@ pub(all) struct OpenRouterDecisionPort {
   config : OpenRouterConfig
 }
 pub fn OpenRouterDecisionPort::OpenRouterDecisionPort(OpenRouterConfig) -> Self
-pub async fn OpenRouterDecisionPort::evaluate(Self, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
-pub async fn OpenRouterDecisionPort::evaluate_with_context(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
+pub async fn OpenRouterDecisionPort::evaluate(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
 pub impl @port.DecisionPort for OpenRouterDecisionPort
 
 pub(all) struct OpenRouterModelInfo {

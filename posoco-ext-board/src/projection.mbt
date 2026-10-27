@@ -126,7 +126,7 @@ fn board_projection(event : @posoco.TurnEvent) -> (String, Json)? {
 }
 
 ///|
-pub impl @posoco.Observer for BoardExtension with fn on_event_at(
+pub impl @posoco.Observer for BoardExtension with fn on_event(
   self,
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
@@ -147,9 +147,4 @@ pub impl @posoco.Observer for BoardExtension with fn on_event_at(
 }
 
 ///|
-pub impl @posoco.Observer for BoardExtension with fn on_event(self, event) -> Unit {
-  self.on_event_at(None, event)
-}
-
-///|
-pub extend BoardExtension with @posoco.Observer::{on_event, on_event_at}
+pub extend BoardExtension with @posoco.Observer::{on_event}

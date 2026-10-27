@@ -1910,6 +1910,7 @@ test "repetition guard injects convergence hint only on repeated tool calls" {
       input_schema: Json::empty_object(),
       owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
       policy: @posoco.ExecutionPolicy::Sequential,
+      exposure: @posoco.ToolExposure::Direct,
       provenance: Some("posoco_ext_deepseek"),
     },
   ]
@@ -1959,6 +1960,7 @@ test "request with tools replays reasoning from plain assistant history" {
       input_schema: Json::empty_object(),
       owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
       policy: @posoco.ExecutionPolicy::Sequential,
+      exposure: @posoco.ToolExposure::Direct,
       provenance: Some("posoco_ext_deepseek"),
     },
   ]
@@ -2179,6 +2181,7 @@ test "summary wire request keeps tool schemas and reasoning in prefix" {
       input_schema: Json::empty_object(),
       owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
       policy: @posoco.ExecutionPolicy::Sequential,
+      exposure: @posoco.ToolExposure::Direct,
       provenance: Some("posoco_ext_deepseek"),
     },
   ]
@@ -2214,6 +2217,7 @@ test "compaction summary body keeps identical tool and message prefix" {
     input_schema: Json::empty_object(),
     owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
     policy: @posoco.ExecutionPolicy::Sequential,
+    exposure: @posoco.ToolExposure::Direct,
     provenance: Some("posoco_ext_deepseek"),
   }
   let tools = [tool]
@@ -2258,6 +2262,7 @@ test "tool schema serialization is deterministic across caller permutations" {
     input_schema: Json::empty_object(),
     owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
     policy: @posoco.ExecutionPolicy::Sequential,
+    exposure: @posoco.ToolExposure::Direct,
     provenance: Some("posoco_ext_deepseek"),
   }
   let write : @posoco.ToolDef = {
@@ -2266,6 +2271,7 @@ test "tool schema serialization is deterministic across caller permutations" {
     input_schema: Json::empty_object(),
     owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
     policy: @posoco.ExecutionPolicy::Sequential,
+    exposure: @posoco.ToolExposure::Direct,
     provenance: Some("posoco_ext_deepseek"),
   }
   let first = encode_tools([read, write])
