@@ -51,6 +51,13 @@ pub fn ShellTools::ShellTools(
 let shell_cancel_grace_ms : Int32 = 2000
 
 ///|
+/// Bounded confirmation window after the hard kill. SIGKILL delivery is
+/// kernel-immediate; the wait only needs one scheduler turn. A missed
+/// confirmation honestly degrades to `Propagated` instead of claiming
+/// termination the provider did not observe.
+let shell_kill_confirm_ms : Int32 = 1000
+
+///|
 /// Host-owned background sessions. This is deliberately separate from effect
 /// cancellation: tool calls may settle while their commands keep running.
 pub struct ShellSession {
@@ -195,7 +202,10 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
 ///|
 /// Terminate a registered shell child: signal, wait out the grace period,
 /// then hard-kill. Stale exited entries left by unwind-only cleanup are
-/// pruned first. Reports `Propagated` when a live child was handled.
+/// pruned first. Reports `Stopped` once the child's exit was observed
+/// (the runtime's unconfirmed-execution gate needs a confirmed terminal
+/// disposition to release the admission slot); `Propagated` stays reserved
+/// for children whose termination could not be confirmed in time.
 pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
   self,
   run_id~ : @kernel.RunId,
@@ -219,9 +229,16 @@ pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
       let exited = shell_child_await_exit(handle, shell_cancel_grace_ms + 500)
       if !exited {
         shell_child_hard_kill(handle)
+        // SIGKILL is kernel-immediate; the bounded wait only confirms the
+        // death so the disposition can be a verified `Stopped`.
+        ignore(shell_child_await_exit(handle, shell_kill_confirm_ms))
       }
       self.in_flight.remove(key)
-      @kernel.CancelDisposition::Propagated
+      if handle.exited {
+        @kernel.CancelDisposition::Stopped
+      } else {
+        @kernel.CancelDisposition::Propagated
+      }
     }
     None => @kernel.CancelDisposition::NotPropagated
   }

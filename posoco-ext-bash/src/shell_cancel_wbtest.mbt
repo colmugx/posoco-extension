@@ -104,7 +104,7 @@ async test "cancellable shell: normal completion returns output and unregisters"
 }
 
 ///|
-async test "cancellable shell: cancel kills a live child and reports Propagated" {
+async test "cancellable shell: cancel kills a live child and reports Stopped" {
   let shell = ShellTools()
   let runtime = shell_port_runtime()
   let marker = probe_marker("t1")
@@ -131,10 +131,11 @@ async test "cancellable shell: cancel kills a live child and reports Propagated"
     let elapsed_ms = (@async.now() - started).to_int()
     assert_eq(dispositions.length(), 1)
     match dispositions[0] {
-      (_, @kernel.Propagated) => ()
-      _ => fail("expected Propagated disposition")
+      (_, @kernel.Stopped) => ()
+      _ => fail("expected Stopped disposition for a confirmed child exit")
     }
-    // The escalation arms without blocking out the grace window here.
+    // The graceful signal kills `sleep` quickly, so the exit confirmation
+    // never blocks out the grace window here.
     assert_true(elapsed_ms < shell_cancel_grace_ms)
   })
   // The graceful signal kills `sleep` well inside the grace window, so the
@@ -172,6 +173,12 @@ async test "cancellable shell: signal-immune child is hard-killed after the grac
       @kernel.CancelReason::HostRequested(detail=None),
     )
     assert_eq(dispositions.length(), 1)
+    // The TERM-immune child is hard-killed and the death is confirmed inside
+    // the kill window, so the gate sees a verified `Stopped`.
+    match dispositions[0] {
+      (_, @kernel.Stopped) => ()
+      _ => fail("expected Stopped disposition after the hard kill")
+    }
   })
   // Grace window + margin: the hard kill must have landed by now, so the
   // post-sleep marker never appears.

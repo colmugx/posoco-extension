@@ -346,7 +346,7 @@ async test "never_exiting_command_is_rescued_by_cancel" {
       @kernel.EffectId::{ value: 1, },
       @kernel.CancelReason::HostRequested(detail=Some("test")),
     )
-    assert_true(disposition is @kernel.CancelDisposition::Propagated)
+    assert_true(disposition is @kernel.CancelDisposition::Stopped)
     match execution.wait() {
       Ok(@posoco.ToolOutcome::ToolReportedError(..)) => ()
       _ => fail("expected the cancelled hang to settle as ToolReportedError")
