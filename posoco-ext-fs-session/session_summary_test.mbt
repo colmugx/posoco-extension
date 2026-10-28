@@ -171,6 +171,7 @@ test "display_title cuts metadata title at char boundaries, not bytes" {
     title: Some(repeat_decade(6)),
     model: None,
     effort: None,
+    cwd: None,
   }
   assert_eq(@posoco-ext-fs-session.display_title(s), repeat_decade(6))
 }

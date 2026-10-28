@@ -16,6 +16,10 @@ pub(all) struct SessionSummary {
   model : String?
   /// Explicit reasoning effort recorded with `model`; `None` = slot default.
   effort : String?
+  /// Normalized project directory the session was persisted in
+  /// (`SESSION_CWD_METADATA_KEY`); `None` for journals written before the
+  /// contract existed or by stores not bound to a project.
+  cwd : String?
 } derive(Eq, Debug)
 
 ///|
@@ -47,7 +51,14 @@ pub async fn JsonlSessionStore::summary(
     Some((slot, effort)) => (Some(slot), effort)
     None => (None, None)
   }
-  { id, name, title, model, effort, }
+  {
+    id,
+    name,
+    title,
+    model,
+    effort,
+    cwd: session_cwd_from_metadata(session.metadata),
+  }
 }
 
 ///|

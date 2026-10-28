@@ -25,6 +25,7 @@ options(
     "list_ids.js.mbt": [ "js" ],
     "project_dir_test.mbt": [ "native" ],
     "session_summary_test.mbt": [ "native" ],
+    "session_cwd_test.mbt": [ "native" ],
     "name_command_test.mbt": [ "native" ],
     "jsonl_session_test.mbt": [ "native" ],
     "compact_replay_wbtest.mbt": [ "native" ],

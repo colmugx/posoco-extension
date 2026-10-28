@@ -21,6 +21,11 @@ pub(all) struct JsonlSessionStore {
   /// The active manager is read through its neutral control contract.
   selection_control : &@modelmgmt.ModelManagerControl?
   mut selection_revision : Int64
+  /// Directory this bucket belongs to, when the store was bound through
+  /// `of_project`. Persisted into each session's metadata line so a host can
+  /// recover the owning project from the transcript alone (the bucket name
+  /// only carries a one-way hash).
+  cwd : String?
 }
 
 ///|
@@ -28,6 +33,7 @@ pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
   bus~ : @devkit.EventBus? = None,
   selection_control~ : &@modelmgmt.ModelManagerControl? = None,
+  cwd~ : String? = None,
 ) -> JsonlSessionStore {
   let store : JsonlSessionStore = {
     root_dir,
@@ -40,6 +46,7 @@ pub fn JsonlSessionStore::JsonlSessionStore(
     written_session_id: None,
     selection_control,
     selection_revision: 0L,
+    cwd,
   }
   store.subscribe_model_selection(bus)
   store
@@ -185,7 +192,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   let jsonl = session_to_jsonl({
     ..session,
     metadata: metadata_with_observed_selection_v2(
-      metadata_with_selection(session.metadata, self.observed_selection),
+      metadata_with_selection(
+        metadata_with_cwd(session.metadata, self.cwd),
+        self.observed_selection,
+      ),
       self.observed_selection_v2,
     ),
   })
@@ -220,7 +230,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     let session : @posoco.Session = {
       messages: messages.to_owned(),
       metadata: metadata_with_observed_selection_v2(
-        metadata_with_selection(Map::from_array([]), self.observed_selection),
+        metadata_with_selection(
+          metadata_with_cwd(Map::from_array([]), self.cwd),
+          self.observed_selection,
+        ),
         self.observed_selection_v2,
       ),
     }

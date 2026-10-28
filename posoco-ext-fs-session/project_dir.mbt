@@ -76,26 +76,89 @@ fn cwd_fingerprint(normalized : String) -> String {
 }
 
 ///|
+/// Prefix every per-project bucket directory name carries. Hosts that browse
+/// across projects (`/sessions` "All") filter on this instead of re-deriving
+/// the formula.
+pub const PROJECT_DIR_PREFIX : String = "session_"
+
+///|
+/// Length of the sha256 fingerprint suffix in a bucket name, excluding the
+/// separating `_`.
+const PROJECT_DIR_FINGERPRINT_LEN : Int32 = 12
+
+///|
 /// Bucket directory name for a cwd: `session_<slug(basename)>_<sha256[0..12]>`.
 pub fn project_dir_name(cwd : String) -> String {
   let normalized = normalize_cwd(cwd)
-  "session_" +
+  PROJECT_DIR_PREFIX +
   project_slug(path_basename(normalized)) +
   "_" +
   cwd_fingerprint(normalized)
 }
 
 ///|
-/// Session root for one project: `<home>/.cetas/sessions/<project_dir_name>`.
-pub fn project_sessions_dir(home : String, cwd : String) -> String {
-  home + "/.cetas/sessions/" + project_dir_name(cwd)
+/// Directory holding every project bucket: `<home>/.cetas/sessions`.
+pub fn project_sessions_root(home : String) -> String {
+  home + "/.cetas/sessions"
 }
 
 ///|
-/// Store bound to one project's bucket directory.
+/// Session root for one project: `<home>/.cetas/sessions/<project_dir_name>`.
+pub fn project_sessions_dir(home : String, cwd : String) -> String {
+  project_sessions_root(home) + "/" + project_dir_name(cwd)
+}
+
+///|
+/// Whether `name` is one of this layout's project bucket directory names.
+/// Deliberately a prefix test: buckets written by older releases (or by a
+/// future formula change) still belong to the user's history, and a
+/// merely-prefixed directory simply yields no sessions when opened.
+pub fn is_project_dir_name(name : String) -> Bool {
+  name.has_prefix(PROJECT_DIR_PREFIX)
+}
+
+///|
+/// Display name recovered from a bucket directory name: the slug part
+/// between `PROJECT_DIR_PREFIX` and the `_<12 hex>` fingerprint. Buckets whose
+/// cwd was never recorded fall back to this label, which is why it must never
+/// fail: an unmatched name comes back unchanged.
+pub fn bucket_slug(name : String) -> String {
+  if !is_project_dir_name(name) {
+    return name
+  }
+  let rest = name[PROJECT_DIR_PREFIX.length():].to_owned()
+  let suffix_len = PROJECT_DIR_FINGERPRINT_LEN + 1
+  if rest.length() <= suffix_len {
+    return rest
+  }
+  let head_len = rest.length() - suffix_len
+  if rest[head_len] != '_' {
+    return rest
+  }
+  let hex = rest[head_len + 1:]
+  for ch in hex {
+    let code = ch.to_int()
+    let digit = code >= 0x30 && code <= 0x39
+    let lower = code >= 0x61 && code <= 0x66
+    let upper = code >= 0x41 && code <= 0x46
+    if !digit && !lower && !upper {
+      return rest
+    }
+  }
+  rest[:head_len].to_owned()
+}
+
+///|
+/// Store bound to one project's bucket directory. The cwd is remembered on
+/// the store so every persisted session records the directory it belongs to:
+/// bucket names hash the cwd irreversibly, so the transcript itself is the
+/// only place a later host (the `/sessions` "All" view) can recover it.
 pub fn JsonlSessionStore::of_project(
   home~ : String,
   cwd~ : String,
 ) -> JsonlSessionStore {
-  JsonlSessionStore::JsonlSessionStore(project_sessions_dir(home, cwd))
+  JsonlSessionStore::JsonlSessionStore(
+    project_sessions_dir(home, cwd),
+    cwd=Some(normalize_cwd(cwd)),
+  )
 }
