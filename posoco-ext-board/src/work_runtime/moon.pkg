@@ -1,0 +1,11 @@
+// Work runtime boundary: work item and run orchestration state owned by the
+// Board extension. The host (cetas-js) adapts this state to its process and
+// composes child agents; the Board stage stays the authority for the ticket.
+import {
+  "colmugx/posoco-ext-board/protocol" @board_protocol,
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native +js"

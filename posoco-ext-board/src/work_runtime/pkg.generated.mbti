@@ -1,0 +1,133 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/work_runtime"
+
+import {
+  "colmugx/posoco-ext-board/protocol",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn append_tail(String, String, Int32) -> String
+
+pub fn extract_json_object(String) -> Json?
+
+pub fn minimal_review_report(String) -> Json
+
+pub fn model_pin_json(ModelPin?) -> Json
+
+pub fn one_line_preview(String, Int32) -> String
+
+pub fn parse_shape_children(Json?, String) -> Result[Array[ShapeChild], String]
+
+pub fn parse_shape_story(Map[String, Json], String, title_fallback? : String) -> Result[ShapeChild, String]
+
+pub fn shape_priority(String) -> String?
+
+pub fn shape_session_id(String) -> String
+
+pub fn task_definition_of_done(Json) -> Array[String]
+
+pub fn task_field(Json, String) -> String
+
+pub fn task_model(Json) -> ModelPin?
+
+pub fn task_review_feedback(Json) -> String?
+
+pub fn validate_work_report(Json) -> Result[Unit, String]
+
+pub let work_progress_max_per_ticket : Int32
+
+pub fn work_session_id(String, String) -> String
+
+// Errors
+
+// Types and methods
+pub struct BoardState {
+  tasks : Array[Json]
+  attempts : Array[Json]
+  revision : Int64
+}
+pub fn BoardState::from_snapshot(@protocol.BoardSnapshot) -> Result[Self, String]
+pub fn BoardState::has_dependents(Self, String) -> Bool
+pub fn BoardState::latest_running_review_attempt(Self, String) -> String?
+pub fn BoardState::stage(Self, String) -> String
+pub fn BoardState::task(Self, String) -> Json?
+pub fn BoardState::tasks_from_snapshot(@protocol.BoardSnapshot) -> Result[Self, String]
+
+pub(all) struct ModelPin {
+  slot : String
+  effort : String?
+}
+
+pub(all) struct ShapeChild {
+  title : String
+  user_story : String
+  description : String
+  implementation_suggestions : String
+  definition_of_done : Array[String]
+  priority : String
+} derive(Eq, @debug.Debug)
+pub fn ShapeChild::equal(Self, Self) -> Bool
+pub fn ShapeChild::not_equal(Self, Self) -> Bool
+pub fn ShapeChild::to_repr(Self) -> @debug.Repr
+
+pub(all) struct WorkActivity {
+  at_ms : Int64
+  kind : String
+  text : String
+}
+pub fn WorkActivity::to_json(Self) -> Json
+
+pub(all) struct WorkProgress {
+  task_id : String
+  kind : String
+  message : String
+  at_ms : Int64
+}
+pub fn WorkProgress::to_json(Self) -> Json
+
+pub struct WorkProgressLog {
+  map : Map[String, Array[WorkProgress]]
+}
+pub fn WorkProgressLog::WorkProgressLog() -> Self
+pub fn WorkProgressLog::all(Self) -> Array[WorkProgress]
+pub fn WorkProgressLog::attention_tasks(Self) -> Int32
+pub fn WorkProgressLog::dismiss(Self, String?) -> Unit
+pub fn WorkProgressLog::record(Self, String, String, String) -> Unit
+
+pub(all) struct WorkRun {
+  task_id : String
+  session_id : String
+  phase : String
+  role : String
+  mut status : String
+  mut error : String?
+  mut result : String?
+  mut report : Json?
+  mut steps : Int32
+  mut current_tool : String?
+  mut preview : String
+  mut reasoning : String
+  activities : Array[WorkActivity]
+}
+pub fn WorkRun::activity(Self, String, String) -> Unit
+pub fn WorkRun::to_json(Self) -> Json
+
+pub struct WorkRunStore {
+  map : Map[String, Array[WorkRun]]
+}
+pub fn WorkRunStore::WorkRunStore() -> Self
+pub fn WorkRunStore::add(Self, String, String, String, String) -> WorkRun
+pub fn WorkRunStore::all(Self) -> Array[WorkRun]
+pub fn WorkRunStore::count_running(Self) -> Int32
+pub fn WorkRunStore::dismiss(Self, String) -> Unit
+pub fn WorkRunStore::park(Self, String, String, String, String) -> Unit
+pub fn WorkRunStore::roles_completed(Self, String, Array[String]) -> Bool
+pub fn WorkRunStore::run_for(Self, String) -> WorkRun?
+pub fn WorkRunStore::run_role(Self, String, String) -> WorkRun?
+pub fn WorkRunStore::runs_for(Self, String) -> Array[WorkRun]
+pub fn WorkRunStore::set_status(Self, String, String, String, String?) -> Unit
+
+// Type aliases
+
+// Traits
