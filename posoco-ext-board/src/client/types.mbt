@@ -256,6 +256,7 @@ pub struct ClientBoardTask {
   user_story : String
   implementation_suggestions : String
   assignments : Array[ClientTeamAssignment]
+  required_roles : Array[ClientTeamRole]
   model : ClientModelSelection?
   review : ClientReviewReport?
   /// Durable reviewer feedback of the latest request-changes decision;
@@ -339,6 +340,7 @@ fn ClientBoardTask::copy_detached(self : ClientBoardTask) -> ClientBoardTask {
     definition_of_done: self.definition_of_done.copy(),
     dependencies: self.dependencies.copy(),
     assignments: self.assignments.copy(),
+    required_roles: self.required_roles.copy(),
     review: match self.review {
       Some(report) => Some(report.copy_detached())
       None => None

@@ -109,6 +109,11 @@ fn team_role(value : Json) -> ClientTeamRole raise DecodeFailure {
 }
 
 ///|
+fn team_roles(value : Json) -> Array[ClientTeamRole] raise DecodeFailure {
+  items(value).map(item => team_role(item))
+}
+
+///|
 fn team_assignments(
   value : Json,
 ) -> Array[ClientTeamAssignment] raise DecodeFailure {
@@ -279,6 +284,10 @@ fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
     assignments: match obj.get("assignments") {
       None => []
       Some(value) => team_assignments(value)
+    },
+    required_roles: match obj.get("required_roles") {
+      None => [RD, SET, TE]
+      Some(value) => team_roles(value)
     },
     model: match obj.get("model") {
       Some(value) => model(value)

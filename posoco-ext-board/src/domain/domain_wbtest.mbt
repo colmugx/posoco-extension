@@ -1010,6 +1010,7 @@ test "queries return deep copies that never alias committed state" {
         user_story: "",
         implementation_suggestions: "",
         assignments: [],
+        required_roles: [RD, SET, TE],
         model: None,
         review: None,
         review_feedback: None,
@@ -1937,6 +1938,36 @@ test "assign role stores unique stable slots and replaces one role" {
         member_id=" ",
         at_ms=4000L,
         expected_revision=3L,
+      ),
+    )
+    is InvalidInput(_),
+  )
+}
+
+///|
+test "required roles keep RD and deduplicate optional roles" {
+  let created = accept(BoardState::BoardState(), create_cmd("t1", 0L)).next_state
+  let research = accept(
+    created,
+    SetRequiredRoles(
+      id=tid("t1"),
+      roles=[RD, RD, SET],
+      at_ms=2000L,
+      expected_revision=1L,
+    ),
+  )
+  assert_eq(research.next_state.task(tid("t1")).unwrap().required_roles, [
+    RD,
+    SET,
+  ])
+  assert_true(
+    rejection_of(
+      research.next_state,
+      SetRequiredRoles(
+        id=tid("t1"),
+        roles=[SET, TE],
+        at_ms=3000L,
+        expected_revision=2L,
       ),
     )
     is InvalidInput(_),

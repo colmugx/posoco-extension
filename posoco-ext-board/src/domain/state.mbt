@@ -134,6 +134,7 @@ pub fn BoardTask::copy_detached(self : BoardTask) -> BoardTask {
     definition_of_done: self.definition_of_done.copy(),
     dependencies: self.dependencies.copy(),
     assignments: self.assignments.copy(),
+    required_roles: self.required_roles.copy(),
     review: match self.review {
       Some(report) => Some(report.copy_detached())
       None => None

@@ -63,6 +63,7 @@ pub fn BoardTask::from_record(
   user_story~ : String = "",
   implementation_suggestions~ : String = "",
   assignments~ : Array[TeamAssignment] = [],
+  required_roles~ : Array[TeamRole] = [RD, SET, TE],
   model~ : ModelSelection? = None,
   review~ : ReviewReport? = None,
   review_feedback~ : String? = None,
@@ -81,6 +82,7 @@ pub fn BoardTask::from_record(
     user_story,
     implementation_suggestions,
     assignments: assignments.copy(),
+    required_roles: required_roles.copy(),
     model,
     review: match review {
       Some(report) => Some(report.copy_detached())

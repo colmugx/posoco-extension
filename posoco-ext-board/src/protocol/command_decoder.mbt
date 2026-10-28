@@ -169,6 +169,28 @@ fn decode_assign_role(
 }
 
 ///|
+fn decode_set_required_roles(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id", "roles"])
+  let id = args_task_id(fields, "id")
+  let roles : Array[@domain.TeamRole] = []
+  for value in args_string_array(fields, "roles") {
+    roles.push(
+      match value {
+        "rd" => RD
+        "set" => SET
+        "te" => TE
+        _ => raise Schema("roles may contain only rd, set, te")
+      },
+    )
+  }
+  @domain.SetRequiredRoles(id~, roles~, at_ms~, expected_revision~)
+}
+
+///|
 fn args_optional_priority(
   fields : Map[String, Json],
   key : String,
@@ -607,6 +629,7 @@ fn command_parser(
     "board.task.move" => Some(decode_move_task)
     "board.task.delete" => Some(decode_delete_task)
     "board.task.assign_role" => Some(decode_assign_role)
+    "board.task.set_required_roles" => Some(decode_set_required_roles)
     "board.attempt.queue" => Some(decode_queue_attempt)
     "board.attempt.start" => Some(decode_start_attempt)
     "board.attempt.finish" => Some(decode_finish_attempt)

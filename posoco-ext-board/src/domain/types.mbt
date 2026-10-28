@@ -289,6 +289,9 @@ pub struct BoardTask {
   implementation_suggestions : String
   /// Durable accountability slots for this work item. Empty until assigned.
   assignments : Array[TeamAssignment]
+  /// Roles that actually run for this ticket. RD is mandatory; SET and TE
+  /// are optional so research-only tickets do not spend their tokens.
+  required_roles : Array[TeamRole]
   /// `None` inherits the current Cetas model at execution time; `Some`
   /// pins the slot/effort for this work item.
   model : ModelSelection?

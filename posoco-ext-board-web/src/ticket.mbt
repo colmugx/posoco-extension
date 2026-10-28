@@ -776,6 +776,22 @@ fn team_skills_json(skills : Map[String, TeamSkills]) -> Json {
 }
 
 ///|
+fn ticket_set_required_roles(
+  task_id : String,
+  roles : Array[String],
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.set_required_roles",
+    {
+      "id": Json::string(task_id),
+      "roles": Json::array(roles.map(Json::string)),
+    },
+    emit,
+  )
+}
+
+///|
 fn ticket_set_team(
   names : TeamNames,
   profile : WorkProfile,
@@ -1497,6 +1513,7 @@ fn ticket_question_card(
     None => question.task_id
   }
   let draft = model.ticket_drafts.get(question.id).unwrap_or("")
+  let refiner_name = team_member_label(model, "refiner")
   let answer_controls = match question.kind {
     "confirm" =>
       @html.div(class="ticket-answers", [
@@ -1556,7 +1573,7 @@ fn ticket_question_card(
               class="btn btn-sm",
               disabled=model.ticket_sending || draft.trim().is_empty(),
               on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
-              "Answer as Refiner",
+              "Answer as " + refiner_name,
             ),
           ]),
         ]),
@@ -1587,7 +1604,7 @@ fn ticket_question_card(
           class="btn btn-sm",
           disabled=model.ticket_sending || draft.trim().is_empty(),
           on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
-          "Answer as Refiner",
+          "Answer as " + refiner_name,
         ),
       ])
   }
@@ -1608,7 +1625,7 @@ fn ticket_question_card(
         class="btn btn-sm",
         disabled=model.ticket_sending,
         on_click=emit(TicketRefinerRequested(question.id)),
-        "Ask Refiner",
+        "Ask " + refiner_name,
       ),
     ]),
   ])

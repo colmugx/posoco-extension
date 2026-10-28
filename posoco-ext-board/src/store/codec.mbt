@@ -522,6 +522,16 @@ fn role(value : Json) -> @domain.TeamRole raise CodecError {
 }
 
 ///|
+fn roles_json(values : Array[@domain.TeamRole]) -> Json {
+  Json::array(values.map(role_json))
+}
+
+///|
+fn required_roles(value : Json) -> Array[@domain.TeamRole] raise CodecError {
+  array(value).map(item => role(item))
+}
+
+///|
 fn assignments_json(values : Array[@domain.TeamAssignment]) -> Json {
   Json::array(
     values.map(assignment => {
@@ -560,6 +570,7 @@ fn task_json(task : @domain.BoardTask) -> Json {
     "user_story": Json::string(task.user_story),
     "implementation_suggestions": Json::string(task.implementation_suggestions),
     "assignments": assignments_json(task.assignments),
+    "required_roles": roles_json(task.required_roles),
     "model": model_json(task.model),
     "review": review_json(task.review),
     "review_feedback": match task.review_feedback {
@@ -581,7 +592,7 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     ],
     [
       "model", "review", "review_feedback", "user_story", "implementation_suggestions",
-      "assignments",
+      "assignments", "required_roles",
     ],
   )
   @domain.BoardTask::from_record(
@@ -606,6 +617,10 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     assignments=match f.get("assignments") {
       Some(value) => assignments(value)
       None => []
+    },
+    required_roles=match f.get("required_roles") {
+      Some(value) => required_roles(value)
+      None => [RD, SET, TE]
     },
     model=match f.get("model") {
       Some(value) => model(value)

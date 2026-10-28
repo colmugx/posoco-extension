@@ -67,6 +67,7 @@ async test "headless backend serves commands snapshots and subscriptions without
             "user_story": "",
             "implementation_suggestions": "",
             "assignments": [],
+            "required_roles": ["rd", "set", "te"],
             "model": Json::null(),
             "review": Json::null(),
             "review_feedback": Json::null(),

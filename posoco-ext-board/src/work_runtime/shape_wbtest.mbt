@@ -128,3 +128,19 @@ test "a valid split parses every child" {
   assert_eq(children[0].title, "One")
   assert_eq(children[1].title, "Two")
 }
+
+///|
+test "shaped story accepts an RD-only role plan and defaults to all roles" {
+  let research = shape_story_fields()
+  research["required_roles"] = Json::array([Json::string("rd")])
+  let story = match parse_shape_story(research, "normal") {
+    Ok(story) => story
+    Err(reason) => fail("RD-only plan must parse: " + reason)
+  }
+  assert_eq(story.required_roles, ["rd"])
+  let full = match parse_shape_story(shape_story_fields(), "normal") {
+    Ok(story) => story
+    Err(reason) => fail("complete story must parse: " + reason)
+  }
+  assert_eq(full.required_roles, ["rd", "set", "te"])
+}

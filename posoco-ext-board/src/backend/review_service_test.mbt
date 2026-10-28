@@ -408,6 +408,7 @@ async test "request changes commits the decision and returns the ticket to ready
         "user_story": "",
         "implementation_suggestions": "",
         "assignments": [],
+        "required_roles": ["rd", "set", "te"],
         "model": Json::null(),
         "review": Json::null(),
         "review_feedback": "Add the missing regression test.",

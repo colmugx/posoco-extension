@@ -9,6 +9,7 @@ pub(all) struct ShapeChild {
   implementation_suggestions : String
   definition_of_done : Array[String]
   priority : String
+  required_roles : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -111,6 +112,26 @@ pub fn parse_shape_story(
   if definition_of_done.is_empty() {
     return Err("every shaped story needs at least one definition_of_done item")
   }
+  let required_roles = match fields.get("required_roles") {
+    Some(Array(values)) => {
+      let roles : Array[String] = []
+      for value in values {
+        match value {
+          String("rd" | "set" | "te" as role) =>
+            if !roles.contains(role) {
+              roles.push(role)
+            }
+          _ => ()
+        }
+      }
+      if roles.contains("rd") {
+        roles
+      } else {
+        ["rd", "set", "te"]
+      }
+    }
+    _ => ["rd", "set", "te"]
+  }
   let priority = match fields.get("priority") {
     Some(String(value)) =>
       match shape_priority(value) {
@@ -127,6 +148,7 @@ pub fn parse_shape_story(
     implementation_suggestions,
     definition_of_done,
     priority,
+    required_roles,
   })
 }
 

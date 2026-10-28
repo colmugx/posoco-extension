@@ -854,6 +854,7 @@ test "from domain snapshot converts every field and detaches arrays" {
       "user_story": "",
       "implementation_suggestions": "",
       "assignments": [],
+      "required_roles": ["RD", "SET", "TE"],
       "model": Json::null(),
       "review": Json::null(),
       "review_feedback": Json::null(),

@@ -141,6 +141,8 @@ pub fn BoardDomain::propose(
     DeleteTask(id~, at_ms~, ..) => propose_delete(state, id, at_ms)
     AssignRole(id~, role~, member_id~, at_ms~, ..) =>
       propose_assign_role(state, id, role, member_id, at_ms)
+    SetRequiredRoles(id~, roles~, at_ms~, ..) =>
+      propose_set_required_roles(state, id, roles, at_ms)
     QueueAttempt(id~, task~, kind~, at_ms~, ..) =>
       propose_queue_attempt(state, id, task, kind, at_ms)
     StartAttempt(id~, at_ms~, ..) => propose_start_attempt(state, id, at_ms)
@@ -213,6 +215,7 @@ fn propose_create(
     user_story,
     implementation_suggestions,
     assignments: [],
+    required_roles: [RD, SET, TE],
     model: None,
     review: None,
     review_feedback: None,
@@ -585,6 +588,54 @@ fn propose_assign_role(
   }
   let next = state.clone_detached()
   next.put_task({ ..task, assignments, updated_at_ms: at_ms, })
+  next.bump_revision()
+  Ok({ next_state: next, events: [TaskUpdated(id~, at_ms~)], })
+}
+
+///|
+fn role_rank(role : TeamRole) -> Int32 {
+  match role {
+    PO => 0
+    Refiner => 1
+    RD => 2
+    SET => 3
+    TE => 4
+  }
+}
+
+///|
+fn propose_set_required_roles(
+  state : BoardState,
+  id : BoardTaskId,
+  roles : Array[TeamRole],
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  if id.value == "" {
+    return Err(InvalidInput(reason="task id must not be empty"))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  let task = match state.task(id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=id))
+  }
+  let selected : Array[TeamRole] = []
+  for role in roles {
+    match role {
+      RD | SET | TE => if !selected.contains(role) { selected.push(role) }
+      _ =>
+        return Err(
+          InvalidInput(reason="required roles may only contain RD, SET and TE"),
+        )
+    }
+  }
+  if !selected.contains(RD) {
+    return Err(InvalidInput(reason="RD is required for every runnable ticket"))
+  }
+  selected.sort_by(fn(a, b) { role_rank(a).compare(role_rank(b)) })
+  let next = state.clone_detached()
+  next.put_task({ ..task, required_roles: selected, updated_at_ms: at_ms, })
   next.bump_revision()
   Ok({ next_state: next, events: [TaskUpdated(id~, at_ms~)], })
 }
@@ -969,6 +1020,7 @@ fn propose_expand_graph(
       user_story: "",
       implementation_suggestions: "",
       assignments: [],
+      required_roles: [RD, SET, TE],
       model: None,
       review: None,
       review_feedback: None,

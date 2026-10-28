@@ -662,6 +662,25 @@ fn update(
           ),
         )
       }
+    RolePlanToggled(task_id, role, enabled) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available ||
+        role == "rd" {
+        (model, @rabbita.none)
+      } else {
+        let roles = match task_by_id(model.replica, task_id) {
+          Some(task) => task.required_roles.map(team_role_id)
+          None => ["rd", "set", "te"]
+        }
+        let next = if enabled {
+          if roles.contains(role) { roles } else { roles + [role] }
+        } else {
+          roles.filter(item => item != role)
+        }
+        (
+          { ..model, ticket_sending: true, },
+          ticket_set_required_roles(task_id, next, emit),
+        )
+      }
     TicketRefinerRequested(question_id) =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)

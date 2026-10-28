@@ -265,6 +265,7 @@ pub fn task_to_json(task : @domain.BoardTask) -> Json {
     "user_story": Json::string(task.user_story),
     "implementation_suggestions": Json::string(task.implementation_suggestions),
     "assignments": wire_assignments(task.assignments),
+    "required_roles": Json::array(task.required_roles.map(wire_role)),
     "model": wire_optional_model(task.model),
     "review": wire_optional_review(task.review),
     "review_feedback": wire_optional_text(task.review_feedback),

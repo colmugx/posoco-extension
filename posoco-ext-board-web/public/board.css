@@ -674,6 +674,34 @@ button {
   gap: 8px;
 }
 
+.team-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.team-slot.is-active {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.team-slot-name {
+  font-weight: 550;
+}
+
+.team-slot-role {
+  color: var(--faint);
+  font: 10px/1 var(--font-mono);
+  text-transform: uppercase;
+}
+
 .user-story-lines {
   display: grid;
   gap: 6px;

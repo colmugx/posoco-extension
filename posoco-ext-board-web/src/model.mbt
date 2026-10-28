@@ -532,6 +532,7 @@ priv enum Msg {
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
   TicketAnsweredAsRefiner(String, String)
+  RolePlanToggled(String, String, Bool)
   TicketRefinerRequested(String)
   TicketShape(String)
   TicketRun(String)

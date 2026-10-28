@@ -631,23 +631,52 @@ fn review_block(
 fn task_assignments(
   model : Model,
   task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  if task.assignments.is_empty() {
-    return @html.p(class="empty-line", "No team slots assigned yet.")
-  }
-  @html.div(
-    class="team-slots",
-    task.assignments.map(assignment => {
-      let role_id = team_role_id(assignment.role)
-      let label = if assignment.member_id == "" ||
-        assignment.member_id == role_id {
-        team_member_label(model, role_id)
-      } else {
-        assignment.member_id
-      }
-      @html.span(class="chip team-slot", label)
-    }),
-  )
+  let editable = task.stage is @client.Ready
+  let roles = [@client.RD, @client.SET, @client.TE]
+  @html.fragment([
+    @html.div(
+      class="team-slots",
+      roles.map(role => {
+        let role_id = team_role_id(role)
+        let enabled = task.required_roles.contains(role)
+        let label = task.assignments
+          .filter(assignment => assignment.role == role)
+          .map(assignment => {
+            if assignment.member_id == "" || assignment.member_id == role_id {
+              team_member_label(model, role_id)
+            } else {
+              assignment.member_id
+            }
+          })
+          .join(", ")
+        @html.label(
+          class=if enabled { "team-slot is-active" } else { "team-slot" },
+          [
+            @html.input(
+              input_type=Checkbox,
+              name="required_role",
+              value=role_id,
+              checked=enabled,
+              attrs=@html.Attrs::build().disabled(!editable || role_id == "rd"),
+              on_change=_ =>
+                emit(RolePlanToggled(task.id, role_id, !enabled)),
+            ),
+            @html.span(
+              class="team-slot-name",
+              if label == "" { team_member_label(model, role_id) } else { label },
+            ),
+            @html.span(class="team-slot-role", role_id),
+          ],
+        )
+      }),
+    ),
+    @html.p(
+      class="section-note",
+      if editable { "Choose who runs this ticket. RD is required; SET and TE are optional." } else { "Role plan is editable while the ticket is Ready." },
+    ),
+  ])
 }
 
 ///|
@@ -752,7 +781,7 @@ fn task_details(
       ]),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Team"),
-        task_assignments(model, task),
+        task_assignments(model, task, emit),
       ]),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),

@@ -66,6 +66,14 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  /// Select which delivery roles actually execute this ticket. RD is
+  /// mandatory; SET and TE may be skipped for research/report work.
+  SetRequiredRoles(
+    id~ : BoardTaskId,
+    roles~ : Array[TeamRole],
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
   QueueAttempt(
     id~ : AttemptId,
     task~ : BoardTaskId,
@@ -125,6 +133,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | MoveTask(expected_revision~, ..)
     | DeleteTask(expected_revision~, ..)
     | AssignRole(expected_revision~, ..)
+    | SetRequiredRoles(expected_revision~, ..)
     | QueueAttempt(expected_revision~, ..)
     | StartAttempt(expected_revision~, ..)
     | FinishAttempt(expected_revision~, ..)
@@ -211,6 +220,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       )
     AssignRole(id~, role~, member_id~, at_ms~, expected_revision~) =>
       AssignRole(id~, role~, member_id~, at_ms~, expected_revision~)
+    SetRequiredRoles(id~, roles~, at_ms~, expected_revision~) =>
+      SetRequiredRoles(id~, roles~, at_ms~, expected_revision~)
     ExpandGraph(
       expansion~,
       candidates~,

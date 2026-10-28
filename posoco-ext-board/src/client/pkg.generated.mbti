@@ -146,6 +146,7 @@ pub struct ClientBoardTask {
   user_story : String
   implementation_suggestions : String
   assignments : Array[ClientTeamAssignment]
+  required_roles : Array[ClientTeamRole]
   model : ClientModelSelection?
   review : ClientReviewReport?
   review_feedback : String?
