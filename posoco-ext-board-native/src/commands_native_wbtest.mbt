@@ -57,6 +57,31 @@ fn board_native_create_args(id : String) -> Json {
 }
 
 ///|
+/// The full committed task is identical in the create event and replayed
+/// snapshot. Keep a literal wire expectation independent of the serializer.
+fn board_native_expected_task(id : String) -> Json {
+  {
+    "id": id,
+    "title": "task \{id}",
+    "description": "",
+    "stage": "created",
+    "priority": "normal",
+    "definition_of_done": [],
+    "dependencies": [],
+    "created_at_ms": Json::number(1234),
+    "updated_at_ms": Json::number(1234),
+    "ready_since_ms": Json::null(),
+    "user_story": "",
+    "implementation_suggestions": "",
+    "assignments": [],
+    "required_roles": ["rd", "set", "te"],
+    "model": Json::null(),
+    "review": Json::null(),
+    "review_feedback": Json::null(),
+  }
+}
+
+///|
 fn board_native_section(payload : Json, key : String) -> Json raise {
   guard payload is Json::Object(fields) else {
     fail("expected an object payload")
@@ -137,23 +162,7 @@ async test "native create stamps deterministic server time and answers event the
       assert_eq(event.scope, None)
       assert_eq(event.payload, {
         "task_id": "t1",
-        "task": {
-          "id": "t1",
-          "title": "task t1",
-          "description": "",
-          "stage": "created",
-          "priority": "normal",
-          "definition_of_done": [],
-          "dependencies": [],
-          "created_at_ms": Json::number(1234),
-          "updated_at_ms": Json::number(1234),
-          "ready_since_ms": Json::null(),
-          "user_story": "",
-          "implementation_suggestions": "",
-          "model": Json::null(),
-          "review": Json::null(),
-          "review_feedback": Json::null(),
-        },
+        "task": board_native_expected_task("t1"),
         "at_ms": Json::number(1234),
       })
       assert_eq(
@@ -181,23 +190,7 @@ async test "native create stamps deterministic server time and answers event the
       assert_eq(snapshot.payload, {
         "board": {
           "revision": Json::number(1),
-          "tasks": [
-            {
-              "id": "t1",
-              "title": "task t1",
-              "description": "",
-              "stage": "created",
-              "priority": "normal",
-              "definition_of_done": [],
-              "dependencies": [],
-              "created_at_ms": Json::number(1234),
-              "updated_at_ms": Json::number(1234),
-              "ready_since_ms": Json::null(),
-              "model": Json::null(),
-              "review": Json::null(),
-              "review_feedback": Json::null(),
-            },
-          ],
+          "tasks": [board_native_expected_task("t1")],
           "attempts": [],
         },
         "events": [event.to_json()],
