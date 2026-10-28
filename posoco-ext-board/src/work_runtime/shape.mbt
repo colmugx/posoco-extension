@@ -88,8 +88,7 @@ pub fn parse_shape_story(
     return Err("every shaped story needs a description")
   }
   let implementation_suggestions = shape_text(
-    fields,
-    "implementation_suggestions",
+    fields, "implementation_suggestions",
   )
   if implementation_suggestions == "" {
     return Err("every shaped story needs implementation_suggestions")

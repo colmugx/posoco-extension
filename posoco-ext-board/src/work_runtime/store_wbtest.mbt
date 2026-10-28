@@ -18,7 +18,12 @@ test "run_role returns the last run of a role" {
   assert_true(store.run_role("task-1", "rd") is None)
   let first = store.add("task-1", work_session_id("task-1", "rd"), "work", "rd")
   first.status = "failed"
-  let second = store.add("task-1", work_session_id("task-1", "rd"), "work", "rd")
+  let second = store.add(
+    "task-1",
+    work_session_id("task-1", "rd"),
+    "work",
+    "rd",
+  )
   match store.run_role("task-1", "rd") {
     Some(run) => assert_eq(run.status, "running")
     None => fail("the last run of the role must be found")

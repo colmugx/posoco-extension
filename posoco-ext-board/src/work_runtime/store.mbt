@@ -8,7 +8,7 @@ pub struct WorkRunStore {
 
 ///|
 pub fn WorkRunStore::WorkRunStore() -> WorkRunStore {
-  { map: Map([]) }
+  { map: Map([]), }
 }
 
 ///|
@@ -31,10 +31,7 @@ pub fn WorkRunStore::runs_for(
 ///|
 /// The run the task-level UI reads first: a live role wins, otherwise the most
 /// recently added role.
-pub fn WorkRunStore::run_for(
-  self : WorkRunStore,
-  task_id : String,
-) -> WorkRun? {
+pub fn WorkRunStore::run_for(self : WorkRunStore, task_id : String) -> WorkRun? {
   let runs = match self.map.get(task_id) {
     Some(runs) => runs
     None => return None

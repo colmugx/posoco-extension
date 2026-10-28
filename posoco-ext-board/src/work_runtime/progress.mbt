@@ -21,7 +21,7 @@ pub struct WorkProgressLog {
 
 ///|
 pub fn WorkProgressLog::WorkProgressLog() -> WorkProgressLog {
-  { map: Map([]) }
+  { map: Map([]), }
 }
 
 ///|

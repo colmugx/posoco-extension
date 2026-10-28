@@ -43,9 +43,9 @@ test "full snapshot state needs tasks and attempts arrays" {
     Err("board snapshot has no attempt array") => ()
     _ => fail("a snapshot without attempts must be rejected")
   }
-  let no_tasks = snapshot_test_state(Json::object({
-    "attempts": Json::array([]),
-  }))
+  let no_tasks = snapshot_test_state(
+    Json::object({ "attempts": Json::array([]) }),
+  )
   match BoardState::from_snapshot(no_tasks) {
     Err("board snapshot has no task array") => ()
     _ => fail("a snapshot without tasks must be rejected")
@@ -133,10 +133,7 @@ test "snapshot state finds tasks, stages and dependencies" {
   }
   assert_eq(
     model_pin_json(task_model(task)),
-    Json::object({
-      "slot": Json::string("test/slot"),
-      "effort": Json::null(),
-    }),
+    Json::object({ "slot": Json::string("test/slot"), "effort": Json::null() }),
   )
   assert_eq(model_pin_json(None), Json::null())
 }
@@ -180,7 +177,7 @@ test "latest running review attempt prefers the newest creation" {
     }),
   ])
   let state = match
-    BoardState::from_snapshot(snapshot_test_state(tasks, attempts=attempts)) {
+    BoardState::from_snapshot(snapshot_test_state(tasks, attempts~)) {
     Ok(state) => state
     Err(error) => fail("fixture snapshot must read: " + error)
   }

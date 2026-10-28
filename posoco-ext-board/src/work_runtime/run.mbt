@@ -9,7 +9,7 @@ pub(all) struct WorkActivity {
 ///|
 /// Per-run bound on the activity log: a long run reports many lines and only
 /// the recent ones are useful beside the run.
-let work_run_activity_max : Int = 20
+let work_run_activity_max : Int32 = 20
 
 ///|
 /// One background work run for one ticket role. The host keeps this
