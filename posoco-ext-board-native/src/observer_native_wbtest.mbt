@@ -21,6 +21,7 @@ async test "native observer projection stays sanitized through live and retained
       let ws = @websocket.connect(url)
       defer ws.close()
       board.on_event(
+        None,
         StreamChunkReceived(chunk=TextDelta(token="API_KEY=PRIVATE_SENTINEL")),
       )
       ws.send_text(
@@ -35,7 +36,7 @@ async test "native observer projection stays sanitized through live and retained
       let bootstrap = ws.recv().read_all().text()
       assert_false(bootstrap.contains("PRIVATE_SENTINEL"))
       assert_true(bootstrap.contains("[redacted]"))
-      board.on_event(TurnFailed("PROVIDER_SENTINEL"))
+      board.on_event(None, TurnFailed("PROVIDER_SENTINEL"))
       let live = ws.recv().read_all().text()
       assert_false(live.contains("PROVIDER_SENTINEL"))
       guard @protocol.decode_server_frame(live) is Ok(Event(event)) else {
@@ -46,9 +47,11 @@ async test "native observer projection stays sanitized through live and retained
       assert_eq(event.payload, { "preview": "Run failed" })
       ws.close()
       board.on_event(
+        None,
         StreamChunkReceived(chunk=TextDelta(token="secret=SECOND_SENTINEL")),
       )
       board.on_event(
+        None,
         StreamChunkReceived(
           chunk=ReasoningDelta(token="password=THIRD_SENTINEL"),
         ),
