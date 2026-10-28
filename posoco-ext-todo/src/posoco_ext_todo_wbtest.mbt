@@ -41,13 +41,13 @@ fn tk_call_with_args(
   name : String,
   arguments : Json,
 ) -> @posoco.ToolCallContext {
-  {
-    effect_id: { value: 1, },
-    call_id: @posoco.CallId::unchecked("call_1"),
-    name: @posoco.ToolName::unchecked(name),
-    arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext::ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=@posoco.CallId::unchecked("call_1"),
+    name=@posoco.ToolName::unchecked(name),
+    arguments~,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|

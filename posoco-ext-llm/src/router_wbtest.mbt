@@ -81,7 +81,7 @@ fn router_effort_slot(
 test "router rejects an empty slot list" {
   let result = Ok(RouterModelPort(slots=[])) catch { error => Err(error) }
   match result {
-    Err(@posoco.CompositionError::ManifestSchemaError(detail~)) =>
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
       assert_true(detail.contains("at least one model slot"))
     _ => fail("expected empty slot composition failure")
   }
