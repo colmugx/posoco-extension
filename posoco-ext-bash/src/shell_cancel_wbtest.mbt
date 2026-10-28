@@ -30,7 +30,15 @@ fn probe_effect_context(
   let effect_id = @kernel.EffectId::{ value: effect_value, }
   let call_id = @kernel.CallId::unchecked("call_probe")
   let tool_name = @kernel.ToolName::unchecked("bash")
-  let arguments = Json::object(Map::from_array([("cmd", Json::string(cmd))]))
+  // These probes exercise cancellation, not the five-minute production
+  // deadline. A leaked timeout must never keep the native test runner alive
+  // for 300 seconds after its assertions have finished.
+  let arguments = Json::object(
+    Map::from_array([
+      ("cmd", Json::string(cmd)),
+      ("timeout_ms", Json::number(10_000.0)),
+    ]),
+  )
   @runtime.EffectContext::EffectContext(
     run_id=@kernel.RunId::unchecked("run_probe"),
     effect_id~,
@@ -138,9 +146,9 @@ async test "cancellable shell: cancel kills a live child and reports Stopped" {
     // never blocks out the grace window here.
     assert_true(elapsed_ms < shell_cancel_grace_ms)
   })
-  // The graceful signal kills `sleep` well inside the grace window, so the
-  // marker written only after the full 30s sleep never appears.
-  @async.sleep(shell_cancel_grace_ms + 500)
+  // The graceful signal kills `sleep` well inside the grace window. A
+  // confirmed Stopped disposition already proves the process has exited;
+  // waiting another grace interval cannot strengthen that assertion.
   assert_false(marker_exists(marker))
   assert_false(shell.in_flight.contains(ctx.effect_id.to_int()))
   remove_marker(marker)
@@ -180,9 +188,8 @@ async test "cancellable shell: signal-immune child is hard-killed after the grac
       _ => fail("expected Stopped disposition after the hard kill")
     }
   })
-  // Grace window + margin: the hard kill must have landed by now, so the
-  // post-sleep marker never appears.
-  @async.sleep(shell_cancel_grace_ms + 1500)
+  // Stopped is returned only after exit confirmation. No extra wall-clock
+  // sleep is needed to establish that the marker could not be written later.
   assert_false(marker_exists(marker))
   remove_marker(marker)
 }
@@ -196,7 +203,10 @@ async test "cancellable shell: execute offers its facet through the context" {
     call_id=@kernel.CallId::unchecked("call_probe"),
     name=@kernel.ToolName::unchecked("bash"),
     arguments=Json::object(
-      Map::from_array([("cmd", Json::string("echo facet"))]),
+      Map::from_array([
+        ("cmd", Json::string("echo facet")),
+        ("timeout_ms", Json::number(10_000.0)),
+      ]),
     ),
     register_cancel=fn(_ : &@posoco.ToolCancellable) {
       registrations = registrations + 1
