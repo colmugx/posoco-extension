@@ -19,6 +19,8 @@ test "ticket state records questions without forcing the drawer" {
   let state : TicketState = {
     project: "",
     team: None,
+    mcp_servers: [],
+    skills: [],
     profile: WorkProfile::software(),
     questions: [
       {
@@ -65,6 +67,8 @@ test "failed runs belong to the ticket, not the question inbox" {
   let state : TicketState = {
     project: "",
     team: None,
+    mcp_servers: [],
+    skills: [],
     profile: WorkProfile::software(),
     questions: [],
     runs: [
@@ -128,4 +132,15 @@ test "already-running rejection points at the ticket activity dialog" {
     Some(notice) => assert_true(notice.text.contains("Activity"))
     None => fail("expected a rejection notice")
   }
+}
+
+///|
+test "three-line user stories render as three rows" {
+  let lines = user_story_lines(
+    "作为团队\n我希望看到活动\n以便确认工作在进行",
+  )
+  assert_eq(lines.length(), 3)
+  assert_eq(lines[0], "作为团队")
+  assert_eq(lines[1], "我希望看到活动")
+  assert_eq(lines[2], "以便确认工作在进行")
 }

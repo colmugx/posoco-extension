@@ -627,28 +627,76 @@ fn review_block(
 }
 
 ///|
-fn team_role_label(role : @client.ClientTeamRole) -> String {
-  match role {
-    PO => "PO"
-    Refiner => "Refiner"
-    RD => "RD"
-    SET => "SET"
-    TE => "TE"
-  }
-}
-
 ///|
-fn task_assignments(task : @client.ClientBoardTask) -> @html.Html {
+fn task_assignments(
+  model : Model,
+  task : @client.ClientBoardTask,
+) -> @html.Html {
   if task.assignments.is_empty() {
     return @html.p(class="empty-line", "No team slots assigned yet.")
   }
   @html.div(
     class="team-slots",
     task.assignments.map(assignment => {
-      @html.span(
-        class="chip team-slot",
-        team_role_label(assignment.role) + " · " + assignment.member_id,
-      )
+      let role_id = team_role_id(assignment.role)
+      let label = if assignment.member_id == "" ||
+        assignment.member_id == role_id {
+        team_member_label(model, role_id)
+      } else {
+        assignment.member_id
+      }
+      @html.span(class="chip team-slot", label)
+    }),
+  )
+}
+
+///|
+fn team_role_id(role : @client.ClientTeamRole) -> String {
+  match role {
+    PO => "po"
+    Refiner => "refiner"
+    RD => "rd"
+    SET => "set"
+    TE => "te"
+  }
+}
+
+///|
+fn user_story_lines(text : String) -> Array[String] {
+  let lines : Array[String] = []
+  for line in text.split("\n") {
+    let trimmed = line.trim().to_owned()
+    if trimmed != "" {
+      lines.push(trimmed)
+    }
+  }
+  if lines.length() >= 2 {
+    return lines
+  }
+  let parts = text.split(", I want").collect()
+  if parts.length() != 2 {
+    return [text]
+  }
+  let tail = parts[1].split(", so that").collect()
+  if tail.length() != 2 {
+    return [text]
+  }
+  [
+    parts[0].to_owned(),
+    "I want" + tail[0].to_owned(),
+    "So that" + tail[1].to_owned(),
+  ]
+}
+
+///|
+fn task_user_story(task : @client.ClientBoardTask) -> @html.Html {
+  if task.user_story == "" {
+    return @html.p(class="empty-line", "No user story yet.")
+  }
+  @html.div(
+    class="user-story-lines",
+    user_story_lines(task.user_story).map(line => {
+      @html.p(class="user-story-line", line)
     }),
   )
 }
@@ -699,8 +747,12 @@ fn task_details(
       review_report_block(task),
       review_block(model, task, emit),
       @html.section(class="detail-section", [
+        @html.h2(class="section-title", "User story"),
+        task_user_story(task),
+      ]),
+      @html.section(class="detail-section", [
         @html.h2(class="section-title", "Team"),
-        task_assignments(task),
+        task_assignments(model, task),
       ]),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),

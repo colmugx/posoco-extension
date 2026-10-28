@@ -15,6 +15,80 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(String(value)) => value
     _ => ""
   }
+  let team_mcp = match fields.get("team_mcp") {
+    Some(Object(mcp)) => {
+      let out = default_team_mcp()
+      for role in ["refiner", "rd", "set", "te"] {
+        match mcp.get(role) {
+          Some(Object(item)) => {
+            let enabled = match item.get("enabled") {
+              Some(Json::True) => true
+              Some(Json::False) => false
+              _ => false
+            }
+            let all = match item.get("all") {
+              Some(Json::True) => true
+              Some(Json::False) => false
+              _ => true
+            }
+            let servers : Array[String] = []
+            match item.get("servers") {
+              Some(Array(items)) =>
+                for value in items {
+                  match value {
+                    String(name) if name != "" && !servers.contains(name) =>
+                      servers.push(name)
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+            out[role] = { enabled, all, servers }
+          }
+          _ => ()
+        }
+      }
+      out
+    }
+    _ => default_team_mcp()
+  }
+  let team_skills = match fields.get("team_skills") {
+    Some(Object(skills)) => {
+      let out = default_team_skills()
+      for role in ["refiner", "rd", "set", "te"] {
+        match skills.get(role) {
+          Some(Object(item)) => {
+            let enabled = match item.get("enabled") {
+              Some(Json::True) => true
+              Some(Json::False) => false
+              _ => false
+            }
+            let all = match item.get("all") {
+              Some(Json::True) => true
+              Some(Json::False) => false
+              _ => true
+            }
+            let names : Array[String] = []
+            match item.get("skills") {
+              Some(Array(items)) =>
+                for value in items {
+                  match value {
+                    String(name) if name != "" && !names.contains(name) =>
+                      names.push(name)
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+            out[role] = { enabled, all, skills: names }
+          }
+          _ => ()
+        }
+      }
+      out
+    }
+    _ => default_team_skills()
+  }
   let team = match fields.get("team") {
     Some(Object(team)) => {
       let name = key => {
@@ -33,9 +107,73 @@ fn ticket_state_from_json(value : Json) -> TicketState {
         rd: if name("rd") == "" { defaults.rd } else { name("rd") },
         set: if name("set") == "" { defaults.set } else { name("set") },
         te: if name("te") == "" { defaults.te } else { name("te") },
+        mcp: team_mcp,
+        skills: team_skills,
       })
     }
     _ => None
+  }
+  let mcp_servers = match fields.get("mcp_servers") {
+    Some(Object(catalog)) =>
+      match catalog.get("servers") {
+        Some(Array(items)) =>
+          items.filter_map(item => {
+            match item {
+              Object(server) => {
+                let name = match server.get("name") {
+                  Some(String(value)) if value != "" => value
+                  _ => ""
+                }
+                if name == "" {
+                  return None
+                }
+                let connected = match server.get("connected") {
+                  Some(Json::True) => true
+                  Some(Json::False) => false
+                  _ => false
+                }
+                let tools : Array[String] = []
+                match server.get("tools") {
+                  Some(Array(items)) =>
+                    for tool in items {
+                      match tool {
+                        String(value) => tools.push(value)
+                        _ => ()
+                      }
+                    }
+                  _ => ()
+                }
+                Some({ name, connected, tools })
+              }
+              _ => None
+            }
+          })
+        _ => []
+      }
+    _ => []
+  }
+  let skills = match fields.get("skills") {
+    Some(Array(items)) =>
+      items.filter_map(item => {
+        match item {
+          Object(skill) => {
+            let name = match skill.get("name") {
+              Some(String(value)) if value != "" => value
+              _ => ""
+            }
+            if name == "" {
+              return None
+            }
+            let description = match skill.get("description") {
+              Some(String(value)) => value
+              _ => ""
+            }
+            Some({ name, description })
+          }
+          _ => None
+        }
+      })
+    _ => []
   }
   let profile = match fields.get("work_profile") {
     Some(Object(profile)) =>
@@ -70,7 +208,18 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(value) => decode_ticket_live(value)
     None => None
   }
-  { project, team, profile, questions, runs, progress, live, model_selection, }
+  {
+    project,
+    team,
+    mcp_servers,
+    skills,
+    profile,
+    questions,
+    runs,
+    progress,
+    live,
+    model_selection,
+  }
 }
 
 ///|
@@ -593,6 +742,40 @@ fn send_ticket_command(
 }
 
 ///|
+fn team_mcp_json(mcp : Map[String, TeamMcp]) -> Json {
+  let fields : Map[String, Json] = Map([])
+  for role in ["refiner", "rd", "set", "te"] {
+    let value = match mcp.get(role) {
+      Some(value) => value
+      None => TeamMcp::defaults()
+    }
+    fields[role] = Json::object({
+      "enabled": Json::boolean(value.enabled),
+      "all": Json::boolean(value.all),
+      "servers": Json::array(value.servers.map(Json::string)),
+    })
+  }
+  Json::object(fields)
+}
+
+///|
+fn team_skills_json(skills : Map[String, TeamSkills]) -> Json {
+  let fields : Map[String, Json] = Map([])
+  for role in ["refiner", "rd", "set", "te"] {
+    let value = match skills.get(role) {
+      Some(value) => value
+      None => TeamSkills::defaults()
+    }
+    fields[role] = Json::object({
+      "enabled": Json::boolean(value.enabled),
+      "all": Json::boolean(value.all),
+      "skills": Json::array(value.skills.map(Json::string)),
+    })
+  }
+  Json::object(fields)
+}
+
+///|
 fn ticket_set_team(
   names : TeamNames,
   profile : WorkProfile,
@@ -603,6 +786,8 @@ fn ticket_set_team(
     "rd": Json::string(names.rd.trim().to_owned()),
     "set": Json::string(names.set.trim().to_owned()),
     "te": Json::string(names.te.trim().to_owned()),
+    "mcp": team_mcp_json(names.mcp),
+    "skills": team_skills_json(names.skills),
     "work_profile": Json::string(profile.id),
   }
   send_ticket_command("board.ticket.set_team", args, emit)
@@ -1097,10 +1282,8 @@ fn ticket_run_card(model : Model, run : TicketRun) -> @html.Html {
   } else {
     match run.role {
       "" => "Working"
-      "rd" => "Working · RD"
-      "set" => "Working · SET"
-      "te" => "Verification · TE"
-      role => "Working · " + role
+      "te" => "Verification · " + team_member_label(model, run.role)
+      role => "Working · " + team_member_label(model, role)
     }
   }
   let tool = match run.current_tool {
@@ -1287,6 +1470,23 @@ fn ready_ticket_count(model : Model) -> Int32 {
 }
 
 ///|
+fn team_member_label(model : Model, role : String) -> String {
+  let team = match model.tickets.team {
+    Some(team) => team
+    None => TeamNames::defaults()
+  }
+  match role {
+    "product_owner" | "po" => "USER"
+    "refiner" => team.refiner
+    "rd" => team.rd
+    "set" => team.set
+    "te" => team.te
+    "development_group" | "worker" => "Development"
+    _ => role
+  }
+}
+
+///|
 fn ticket_question_card(
   model : Model,
   question : TicketQuestion,
@@ -1397,7 +1597,7 @@ fn ticket_question_card(
       @html.span(class="ticket-question-kind", question.kind),
       @html.span(
         class="ticket-question-route",
-        "\{question.asked_by} → \{question.audience}",
+        "\{team_member_label(model, question.asked_by)} → \{team_member_label(model, question.audience)}",
       ),
     ]),
     @html.div(class="ticket-question-text", question.question),

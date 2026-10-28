@@ -138,6 +138,65 @@ priv struct TicketLiveInfo {
 } derive(Eq)
 
 ///|
+/// One host-configured MCP server. `tools` is display metadata; execution
+/// still goes through the host bridge and its per-role allowlist.
+priv struct McpServer {
+  name : String
+  connected : Bool
+  tools : Array[String]
+} derive(Eq)
+
+///|
+priv struct TeamMcp {
+  enabled : Bool
+  all : Bool
+  servers : Array[String]
+} derive(Eq)
+
+///|
+fn TeamMcp::defaults() -> TeamMcp {
+  { enabled: false, all: true, servers: [] }
+}
+
+///|
+fn default_team_mcp() -> Map[String, TeamMcp] {
+  Map::from_array([
+    ("refiner", TeamMcp::defaults()),
+    ("rd", TeamMcp::defaults()),
+    ("set", TeamMcp::defaults()),
+    ("te", TeamMcp::defaults()),
+  ])
+}
+
+///|
+priv struct SkillInfo {
+  name : String
+  description : String
+} derive(Eq)
+
+///|
+priv struct TeamSkills {
+  enabled : Bool
+  all : Bool
+  skills : Array[String]
+} derive(Eq)
+
+///|
+fn TeamSkills::defaults() -> TeamSkills {
+  { enabled: false, all: true, skills: [] }
+}
+
+///|
+fn default_team_skills() -> Map[String, TeamSkills] {
+  Map::from_array([
+    ("refiner", TeamSkills::defaults()),
+    ("rd", TeamSkills::defaults()),
+    ("set", TeamSkills::defaults()),
+    ("te", TeamSkills::defaults()),
+  ])
+}
+
+///|
 /// Lightweight names shown in prompts and on the Board. Defaults are used
 /// when the host frame has no team field.
 priv struct TeamNames {
@@ -145,11 +204,20 @@ priv struct TeamNames {
   rd : String
   set : String
   te : String
+  mcp : Map[String, TeamMcp]
+  skills : Map[String, TeamSkills]
 } derive(Eq)
 
 ///|
 fn TeamNames::defaults() -> TeamNames {
-  { refiner: "Agile Coach", rd: "RD", set: "SET", te: "TE", }
+  {
+    refiner: "Agile Coach",
+    rd: "RD",
+    set: "SET",
+    te: "TE",
+    mcp: default_team_mcp(),
+    skills: default_team_skills(),
+  }
 }
 
 ///|
@@ -176,6 +244,10 @@ fn work_profiles() -> Array[WorkProfile] {
 priv struct TicketState {
   project : String
   team : TeamNames?
+  /// Host-configured MCP servers, including connected tools for the picker.
+  mcp_servers : Array[McpServer]
+  /// Host-discovered skills available to Board roles.
+  skills : Array[SkillInfo]
   profile : WorkProfile
   questions : Array[TicketQuestion]
   runs : Array[TicketRun]
@@ -193,6 +265,8 @@ fn TicketState::empty() -> TicketState {
   {
     project: "",
     team: None,
+    mcp_servers: [],
+    skills: [],
     profile: WorkProfile::software(),
     questions: [],
     runs: [],
@@ -402,6 +476,7 @@ priv struct Model {
   team_open : Bool
   team_draft : TeamNames
   team_profile_draft : WorkProfile
+  team_tab : String
 } derive(Eq)
 
 ///|
@@ -472,7 +547,14 @@ priv enum Msg {
   LiveClosed
   TeamOpened
   TeamClosed
+  TeamTabChanged(String)
   TeamNameChanged(String, String)
+  TeamMcpEnabledChanged(String, Bool)
+  TeamMcpAllChanged(String, Bool)
+  TeamMcpServerToggled(String, String)
+  TeamSkillsEnabledChanged(String, Bool)
+  TeamSkillsAllChanged(String, Bool)
+  TeamSkillToggled(String, String)
   TeamProfileChanged(String)
   TeamSaved
   DoneRequested(String)
@@ -532,6 +614,7 @@ fn Model::empty(available : Bool) -> Model {
     live_open: false,
     team_open: false,
     team_draft: TeamNames::defaults(),
+    team_tab: "refiner",
     team_profile_draft: WorkProfile::software(),
   }
 }

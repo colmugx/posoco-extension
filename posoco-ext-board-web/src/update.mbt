@@ -1,4 +1,40 @@
 ///|
+fn team_mcp_update(
+  draft : TeamNames,
+  role : String,
+  update : (TeamMcp) -> TeamMcp,
+) -> TeamNames {
+  if role != "refiner" && role != "rd" && role != "set" && role != "te" {
+    return draft
+  }
+  let mcp = draft.mcp.copy()
+  let current = match mcp.get(role) {
+    Some(value) => value
+    None => TeamMcp::defaults()
+  }
+  mcp[role] = update(current)
+  { ..draft, mcp }
+}
+
+///|
+fn team_skills_update(
+  draft : TeamNames,
+  role : String,
+  update : (TeamSkills) -> TeamSkills,
+) -> TeamNames {
+  if role != "refiner" && role != "rd" && role != "set" && role != "te" {
+    return draft
+  }
+  let skills = draft.skills.copy()
+  let current = match skills.get(role) {
+    Some(value) => value
+    None => TeamSkills::defaults()
+  }
+  skills[role] = update(current)
+  { ..draft, skills }
+}
+
+///|
 /// Reconnect states the baseline explicitly: an ordinary disconnect keeps it
 /// (the Hello replays on connect), invalidation or a first connect does not.
 fn reconnect(model : Model, emit : @rabbita.Emit[Msg]) -> (Model, @rabbita.Cmd) {
@@ -461,9 +497,20 @@ fn update(
         Some(team) => team
         None => TeamNames::defaults()
       }
-      ({ ..model, team_open: true, team_draft: draft, team_profile_draft: model.tickets.profile, }, @rabbita.none)
+      (
+        {
+          ..model,
+          team_open: true,
+          team_draft: draft,
+          team_profile_draft: model.tickets.profile,
+          team_tab: "refiner",
+        },
+        @rabbita.none,
+      )
     }
     TeamClosed => ({ ..model, team_open: false, }, @rabbita.none)
+    TeamTabChanged(role) =>
+      ({ ..model, team_tab: role }, @rabbita.none)
     TeamNameChanged(role, value) =>
       (
         {
@@ -475,6 +522,80 @@ fn update(
             "te" => { ..model.team_draft, te: value }
             _ => model.team_draft
           },
+        },
+        @rabbita.none,
+      )
+    TeamMcpEnabledChanged(role, enabled) =>
+      (
+        {
+          ..model,
+          team_draft: team_mcp_update(model.team_draft, role, current => {
+            { ..current, enabled }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamMcpAllChanged(role, all) =>
+      (
+        {
+          ..model,
+          team_draft: team_mcp_update(model.team_draft, role, current => {
+            { ..current, all }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamMcpServerToggled(role, server) =>
+      (
+        {
+          ..model,
+          team_draft: team_mcp_update(model.team_draft, role, current => {
+            let servers = if current.servers.contains(server) {
+              current.servers.filter(item => item != server)
+            } else {
+              let next = current.servers.copy()
+              next.push(server)
+              next
+            }
+            { ..current, servers }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamSkillsEnabledChanged(role, enabled) =>
+      (
+        {
+          ..model,
+          team_draft: team_skills_update(model.team_draft, role, current => {
+            { ..current, enabled }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamSkillsAllChanged(role, all) =>
+      (
+        {
+          ..model,
+          team_draft: team_skills_update(model.team_draft, role, current => {
+            { ..current, all }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamSkillToggled(role, name) =>
+      (
+        {
+          ..model,
+          team_draft: team_skills_update(model.team_draft, role, current => {
+            let skills = if current.skills.contains(name) {
+              current.skills.filter(item => item != name)
+            } else {
+              let next = current.skills.copy()
+              next.push(name)
+              next
+            }
+            { ..current, skills }
+          }),
         },
         @rabbita.none,
       )

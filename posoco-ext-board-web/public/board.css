@@ -623,7 +623,14 @@ button {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
+  overflow-wrap: anywhere;
   text-align: left;
+  white-space: normal;
+}
+
+.card-title.card-idea {
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .card-title:hover {
@@ -659,6 +666,24 @@ button {
   color: var(--muted);
   font: 10.5px/1.4 var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.team-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-story-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.user-story-line {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .chip.is-quiet {
@@ -1096,6 +1121,13 @@ dialog.sheet-dialog {
   border-top: 1px solid var(--line);
 }
 
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .dialog-hint {
   margin: 0;
   padding: 0 20px 12px;
@@ -1108,6 +1140,96 @@ dialog.sheet-dialog {
 }
 
 /* form fields */
+
+.team-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.team-tab {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.team-tab:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.team-tab.is-active {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.team-page {
+  display: grid;
+  gap: 16px;
+}
+
+.team-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.team-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.team-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.team-servers {
+  display: grid;
+  gap: 6px;
+}
+
+.team-server {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+}
+
+.team-server.is-muted {
+  opacity: 0.72;
+}
+
+.team-server-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.team-skill-desc {
+  max-width: 55%;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 
 .dialog-grid {
   display: grid;
