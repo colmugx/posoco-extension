@@ -1819,6 +1819,34 @@ pub impl @posoco.Lifecycle for MCPToolBridge with fn on_shutdown(self) -> Unit {
 }
 
 ///|
+/// Stable host-facing MCP catalog. Config order is the host's setup order;
+/// tools are only advertised while their server is connected. The Board uses
+/// this to render its per-role MCP selector without knowing the bridge.
+pub fn MCPToolBridge::catalog_json(self : MCPToolBridge) -> Json {
+  let servers : Array[Json] = []
+  for name in self.configs.keys() {
+    let tools : Array[Json] = []
+    let mut connected = false
+    for conn in self.connections {
+      if conn.name == name && conn.client is Some(_) {
+        connected = true
+        for tool in conn.cached_tools {
+          tools.push(Json::string(tool.name.to_string()))
+        }
+      }
+    }
+    servers.push(
+      Json::object({
+        "name": Json::string(name),
+        "connected": Json::boolean(connected),
+        "tools": Json::array(tools),
+      }),
+    )
+  }
+  Json::object({ "servers": Json::array(servers) })
+}
+
+///|
 pub impl @posoco.Extension for MCPToolBridge with fn extension_id(
   _self : MCPToolBridge,
 ) -> String {

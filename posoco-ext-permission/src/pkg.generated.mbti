@@ -56,6 +56,7 @@ pub(all) struct PermissionPolicy {
   // private fields
 }
 pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @devkit.EventBus?, workspace? : @devkit.WorkspaceAnchor?) -> Self
+pub fn PermissionPolicy::allow_read(Self, Array[String]) -> Unit
 pub async fn PermissionPolicy::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn PermissionPolicy::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn PermissionPolicy::commands(Self) -> Array[@port.CommandDef]
