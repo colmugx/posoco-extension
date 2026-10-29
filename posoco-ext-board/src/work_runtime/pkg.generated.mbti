@@ -39,11 +39,15 @@ pub fn task_required_roles(Json) -> Array[String]
 
 pub fn task_review_feedback(Json) -> String?
 
+pub fn ticket_language_contract() -> String
+
 pub fn validate_work_report(Json) -> Result[Unit, String]
 
 pub let work_progress_max_per_ticket : Int32
 
 pub fn work_session_id(String, String) -> String
+
+pub fn worker_prompt(Json, String, Bool, Array[WorkRun]) -> String
 
 // Errors
 
@@ -180,6 +184,7 @@ pub fn WorkRunStore::all(Self) -> Array[WorkRun]
 pub fn WorkRunStore::count_running(Self) -> Int32
 pub fn WorkRunStore::dismiss(Self, String) -> Unit
 pub fn WorkRunStore::from_json(Json) -> Self
+pub fn WorkRunStore::interrupt_running(Self, String) -> Unit
 pub fn WorkRunStore::park(Self, String, String, String, String) -> Unit
 pub fn WorkRunStore::roles_completed(Self, String, Array[String]) -> Bool
 pub fn WorkRunStore::run_for(Self, String) -> WorkRun?

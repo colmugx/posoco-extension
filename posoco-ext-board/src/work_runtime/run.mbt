@@ -177,15 +177,15 @@ pub fn WorkRun::from_json(value : Json) -> WorkRun? {
     status: run_string(fields, "status"),
     error: run_optional_string(fields, "error"),
     result: run_optional_string(fields, "result"),
-    report: (match fields.get("report") {
+    report: match fields.get("report") {
       Some(Json::Null) => None
       Some(value) => Some(value)
       None => None
-    }),
-    steps: (match fields.get("steps") {
+    },
+    steps: match fields.get("steps") {
       Some(Number(value, ..)) => value.to_int()
       _ => 0
-    }),
+    },
     current_tool: run_optional_string(fields, "current_tool"),
     preview: run_string(fields, "preview"),
     reasoning: run_string(fields, "reasoning"),

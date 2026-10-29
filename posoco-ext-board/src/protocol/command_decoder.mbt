@@ -148,7 +148,7 @@ fn args_role(
   match args_string(fields, key) {
     "po" => PO
     "sm" => SM
-      "rd" => RD
+    "rd" => RD
     "set" => SET
     "te" => TE
     _ => raise Schema("field '\{key}' must be one of: po, rd, set, te")
