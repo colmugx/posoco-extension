@@ -73,12 +73,9 @@ test "snapshot v2 and journal preserve complete proposal identity and forward DA
 }
 
 ///|
-test "v1 S3 snapshots load but v2 missing or ambiguous history fails closed" {
+test "only current snapshots load; v1 and missing history fail closed" {
   let v1 = "{\"schema_version\":1,\"revision\":\"7\",\"tasks\":[],\"attempts\":[]}"
-  let old = decode_snapshot(v1).unwrap()
-  assert_eq(old.revision, 7L)
-  assert_eq(old.expansions, [])
-  assert_eq(decode_snapshot(encode_snapshot(old).unwrap()), Ok(old))
+  assert_true(decode_snapshot(v1) is Err(_))
   let snapshot = x_proposal().next_state.snapshot()
   let base = match snapshot_json(snapshot) {
     Json::Object(f) => f

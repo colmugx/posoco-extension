@@ -264,29 +264,6 @@ fn ids_json(value : Array[@domain.BoardTaskId]) -> Json {
 }
 
 ///|
-fn optional_fields(
-  value : Json,
-  required : Array[String],
-  optional : Array[String],
-) -> Map[String, Json] raise CodecError {
-  let object = match value {
-    Json::Object(object) => object
-    _ => raise Bad("expected object")
-  }
-  for key in required {
-    if !object.contains(key) {
-      bad("missing field '\{key}'")
-    }
-  }
-  for key in object.keys() {
-    if !required.contains(key) && !optional.contains(key) {
-      bad("unexpected field '\{key}'")
-    }
-  }
-  object
-}
-
-///|
 fn model_json(value : @domain.ModelSelection?) -> Json {
   match value {
     Some(model) =>
@@ -581,20 +558,13 @@ fn task_json(task : @domain.BoardTask) -> Json {
 }
 
 ///|
-/// `model`, `review`, `review_feedback` and the story fields are optional
-/// keys so every pre-existing store keeps decoding with them absent.
+/// Every task field is required; there is no legacy key fallback.
 fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
-  let f = optional_fields(
-    value,
-    [
-      "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
-      "created_at_ms", "updated_at_ms", "ready_since_ms",
-    ],
-    [
-      "model", "review", "review_feedback", "user_story", "implementation_suggestions",
-      "assignments", "required_roles",
-    ],
-  )
+  let f = fields(value, [
+    "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
+    "created_at_ms", "updated_at_ms", "ready_since_ms", "user_story", "implementation_suggestions",
+    "assignments", "required_roles", "model", "review", "review_feedback",
+  ])
   @domain.BoardTask::from_record(
     id=task_id(f["id"]),
     title=nonempty(f["title"]),
@@ -606,33 +576,15 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     created_at_ms=integer(f["created_at_ms"]),
     updated_at_ms=integer(f["updated_at_ms"]),
     ready_since_ms=optional_integer(f["ready_since_ms"]),
-    user_story=match f.get("user_story") {
-      Some(value) => text(value)
-      None => ""
-    },
-    implementation_suggestions=match f.get("implementation_suggestions") {
-      Some(value) => text(value)
-      None => ""
-    },
-    assignments=match f.get("assignments") {
-      Some(value) => assignments(value)
-      None => []
-    },
-    required_roles=match f.get("required_roles") {
-      Some(value) => required_roles(value)
-      None => [RD, SET, TE]
-    },
-    model=match f.get("model") {
-      Some(value) => model(value)
-      None => None
-    },
-    review=match f.get("review") {
-      Some(value) => review(value)
-      None => None
-    },
-    review_feedback=match f.get("review_feedback") {
-      Some(Json::Null) | None => None
-      Some(value) => Some(nonempty(value))
+    user_story=text(f["user_story"]),
+    implementation_suggestions=text(f["implementation_suggestions"]),
+    assignments=assignments(f["assignments"]),
+    required_roles=required_roles(f["required_roles"]),
+    model=model(f["model"]),
+    review=review(f["review"]),
+    review_feedback=match f["review_feedback"] {
+      Json::Null => None
+      value => Some(nonempty(value))
     },
   )
 }
@@ -758,43 +710,22 @@ fn version(f : Map[String, Json]) -> Unit raise CodecError {
 }
 
 ///|
-fn snapshot_version(value : Json) -> Int64 raise CodecError {
-  let mut schema = 0L
-  match value {
-    Json::Number(1, ..) => schema = 1L
-    Json::Number(2, ..) => schema = 2L
-    _ => bad("unsupported schema version")
-  }
-  schema
-}
-
-///|
-/// v1 boards (pre-S4E1) carry exactly the four historical keys and decode
-/// with an empty expansion history; v2 boards carry the durable expansion
-/// history. Any other shape is rejected.
+/// Only the current snapshot schema is accepted. There is no legacy
+/// schema-version reader.
 fn snapshot_decode(value : Json) -> @domain.BoardStateSnapshot raise CodecError {
   let object = match value {
     Json::Object(object) => object
     _ => raise Bad("expected object")
   }
-  let schema = match object.get("schema_version") {
-    Some(value) => snapshot_version(value)
+  match object.get("schema_version") {
+    Some(Json::Number(2, ..)) => ()
+    Some(_) => bad("unsupported schema version")
     None => raise Bad("missing field 'schema_version'")
   }
-  if schema == 1L && object.contains("expansions") {
-    bad("unexpected field 'expansions' for schema version 1")
-  }
-  let keys = if schema == 1L {
-    ["schema_version", "revision", "tasks", "attempts"]
-  } else {
-    ["schema_version", "revision", "tasks", "attempts", "expansions"]
-  }
-  let f = fields(value, keys)
-  let expansions : Array[@domain.ExpansionRecord] = if schema == 1L {
-    []
-  } else {
-    array(f["expansions"]).map(expansion_decode)
-  }
+  let f = fields(value, [
+    "schema_version", "revision", "tasks", "attempts", "expansions",
+  ])
+  let expansions = array(f["expansions"]).map(expansion_decode)
   let snapshot : @domain.BoardStateSnapshot = {
     revision: integer(f["revision"]),
     tasks: array(f["tasks"]).map(task_decode),

@@ -867,7 +867,7 @@ test "from domain snapshot converts every field and detaches arrays" {
 }
 
 ///|
-test "task codec roundtrips a pinned model and accepts a pre-model record" {
+test "task codec roundtrips a pinned model" {
   let model = @domain.ModelSelection::ModelSelection(
     slot="openai/gpt-5.2",
     effort=Some("high"),
@@ -886,16 +886,6 @@ test "task codec roundtrips a pinned model and accepts a pre-model record" {
     model=Some(model),
   )
   assert_eq(task_decode(task_json(task)).model, Some(model))
-  let legacy = match task_json(task) {
-    Json::Object(fields) => {
-      ignore(fields.remove("model"))
-      Json::object(fields)
-    }
-    _ => fail("expected task object")
-  }
-  let decoded = task_decode(legacy)
-  assert_eq(decoded.model, None)
-  assert_eq(decoded.id, tid("m1"))
 }
 
 ///|
@@ -903,7 +893,7 @@ fn sample_review() -> @domain.ReviewReport {
   @domain.ReviewReport::from_record(
     outcome="Batches survive a restart.",
     summary="Persists the curated review report with the task.",
-    changes=["Task JSON carries review.", "Legacy stores decode as None."],
+    changes=["Task JSON carries review."],
     verification=[
       @domain.ReviewEvidence::from_record(
         kind=@domain.ReviewEvidenceKind::Command,
@@ -999,69 +989,6 @@ test "task codec roundtrips a review report and keeps null as none" {
   let encoded = encode_snapshot(snapshot).unwrap()
   assert_true(encoded.contains("open_questions"))
   assert_true(encoded.contains("uri_or_digest"))
-}
-
-///|
-test "task codec accepts a legacy record without the review key" {
-  let value = match task_json(review_task(review=Some(sample_review()))) {
-    Json::Object(fields) => {
-      ignore(fields.remove("review"))
-      Json::object(fields)
-    }
-    _ => fail("expected task object")
-  }
-  let decoded = task_decode(value)
-  assert_eq(decoded.review, None)
-  assert_eq(decoded.id, tid("r1"))
-  let snapshot = match snapshot_json(fixture()) {
-    Json::Object(fields) => {
-      let tasks = match fields["tasks"] {
-        Json::Array(tasks) => tasks
-        _ => fail("expected tasks")
-      }
-      match tasks[0] {
-        Json::Object(task_fields) => {
-          ignore(task_fields.remove("review"))
-          Json::object(fields)
-        }
-        _ => fail("expected task object")
-      }
-    }
-    _ => fail("expected snapshot object")
-  }
-  let restored = decode_snapshot(snapshot.stringify()).unwrap()
-  assert_eq(restored.tasks.length(), 2)
-  assert_eq(restored.tasks[0].review, None)
-  // A pre-review schema v1 store carries neither expansions nor review and
-  // still loads unchanged.
-  let v1 = match
-    snapshot_json({
-      revision: 1L,
-      tasks: [review_task(review=Some(sample_review()))],
-      attempts: [],
-      expansions: [],
-    }) {
-    Json::Object(fields) => {
-      fields["schema_version"] = Json::number(1)
-      ignore(fields.remove("expansions"))
-      let tasks = match fields["tasks"] {
-        Json::Array(tasks) => tasks
-        _ => fail("expected tasks")
-      }
-      match tasks[0] {
-        Json::Object(task_fields) => {
-          ignore(task_fields.remove("review"))
-          Json::object(fields)
-        }
-        _ => fail("expected task object")
-      }
-    }
-    _ => fail("expected snapshot object")
-  }
-  let legacy_v1 = decode_snapshot(v1.stringify()).unwrap()
-  assert_eq(legacy_v1.revision, 1L)
-  assert_eq(legacy_v1.tasks[0].review, None)
-  assert_eq(legacy_v1.expansions, [])
 }
 
 ///|
@@ -1331,7 +1258,7 @@ fn feedback_task() -> @domain.BoardTask {
 }
 
 ///|
-test "task codec roundtrips review feedback and accepts a legacy record" {
+test "task codec roundtrips review feedback and requires the key" {
   assert_eq(
     task_decode(task_json(feedback_task())).review_feedback,
     Some("Add the missing regression test."),
@@ -1349,17 +1276,6 @@ test "task codec roundtrips review feedback and accepts a legacy record" {
   assert_eq(decode_snapshot(encode_snapshot(snapshot).unwrap()), Ok(snapshot))
   let encoded = encode_snapshot(snapshot).unwrap()
   assert_true(encoded.contains("review_feedback"))
-  // The key is additive: a record written before it existed decodes as None.
-  let legacy = match task_json(feedback_task()) {
-    Json::Object(fields) => {
-      ignore(fields.remove("review_feedback"))
-      Json::object(fields)
-    }
-    _ => fail("expected task object")
-  }
-  let decoded = task_decode(legacy)
-  assert_eq(decoded.review_feedback, None)
-  assert_eq(decoded.id, tid("c1"))
   // An explicit null is the same as the absent key.
   let nulled = match task_json(review_task(review=None)) {
     Json::Object(fields) => {
