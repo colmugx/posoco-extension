@@ -773,6 +773,33 @@ fn task_details(
         task_assignments(model, task, emit),
       ]),
       @html.section(class="detail-section", [
+        @html.h2(class="section-title", "Scrum Master"),
+        @html.p(
+          class="section-note",
+          "Ask about blockers, dependencies or the next step. The answer does not change the ticket.",
+        ),
+        @ui.text_area(
+          id="sm-question",
+          name="sm_question",
+          value=model.sm_draft,
+          rows=3,
+          placeholder="What is blocking this ticket?",
+          disabled=model.ticket_sending,
+          on_input=value => emit(SmDraftChanged(value)),
+        ),
+        @html.div(class="ticket-answers", [
+          @html.button(
+            type_="button",
+            class="btn btn-sm",
+            disabled=model.ticket_sending ||
+              model.sm_draft.trim().is_empty() ||
+              !model.ticket_available,
+            on_click=emit(SmConsult(task.id)),
+            "Ask \{team_member_label(model, "sm")}",
+          ),
+        ]),
+      ]),
+      @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),
         task_dod(task),
       ]),

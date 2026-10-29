@@ -482,6 +482,7 @@ priv struct Model {
   team_draft : TeamNames
   team_profile_draft : WorkProfile
   team_tab : String
+  sm_draft : String
 } derive(Eq)
 
 ///|
@@ -545,6 +546,8 @@ priv enum Msg {
   TicketResume(String)
   TicketSetModel(String, ModelChoice?)
   TicketRunReady
+  SmDraftChanged(String)
+  SmConsult(String)
   TicketResultDismissed(String)
   TicketResult(Bool, String?, TicketState?)
   ArchiveOpened
@@ -623,6 +626,7 @@ fn Model::empty(available : Bool) -> Model {
     team_open: false,
     team_draft: TeamNames::defaults(),
     team_tab: "po",
+    sm_draft: "",
     team_profile_draft: WorkProfile::software(),
   }
 }

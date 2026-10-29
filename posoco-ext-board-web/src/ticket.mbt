@@ -1275,6 +1275,19 @@ fn ticket_set_model(
 }
 
 ///|
+fn ticket_consult_sm(
+  task_id : String,
+  question : String,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.consult_sm",
+    { "task_id": Json::string(task_id), "question": Json::string(question) },
+    emit,
+  )
+}
+
+///|
 fn ticket_dismiss(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
   let args : Json = { "task_id": Json::string(task_id) }
   send_ticket_command("board.ticket.dismiss", args, emit)

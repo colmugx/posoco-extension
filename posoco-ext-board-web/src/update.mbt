@@ -836,6 +836,19 @@ fn update(
           ticket_run_ready(emit),
         )
       }
+    SmDraftChanged(value) => ({ ..model, sm_draft: value }, @rabbita.none)
+    SmConsult(task_id) =>
+      if model.ticket_sending ||
+        !model.can_connect ||
+        !model.ticket_available ||
+        model.sm_draft.trim().is_empty() {
+        (model, @rabbita.none)
+      } else {
+        (
+          { ..model, ticket_sending: true },
+          ticket_consult_sm(task_id, model.sm_draft, emit),
+        )
+      }
     TicketResultDismissed(task_id) =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)
