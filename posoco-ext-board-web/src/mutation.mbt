@@ -69,21 +69,22 @@ fn Editor::from_task(
 /// A backlog idea becomes a short card title from its first non-empty line;
 /// the full text stays as the description for the Product Owner.
 fn idea_title(text : String) -> String {
-  let lines : Array[String] = []
   for part in text.split("\n") {
-    if part.trim() != "" {
-      lines.push(part.trim().to_owned())
+    let line = part.trim().to_owned()
+    if line != "" {
+      if line.length() <= 80 {
+        return line
+      }
+      return line[0:80].to_owned() + "…"
     }
   }
-  let line = match lines.get(0) {
-    Some(line) => line
-    None => ""
-  }
-  if line.length() <= 80 {
-    line
-  } else {
-    line[0:80].to_owned() + "…"
-  }
+  ""
+}
+
+///|
+/// Centralize the command ID prefix shared by all Board mutations.
+fn board_command_id(uuid : String) -> String {
+  "cmd-" + uuid
 }
 
 ///|
@@ -101,7 +102,7 @@ fn create_command(
     editor.title.trim().to_owned()
   }
   @client.create_task_command(
-    "cmd-" + uuid,
+    board_command_id(uuid),
     revision,
     id="task-" + uuid,
     title~,
@@ -124,7 +125,7 @@ fn update_command(
   editor : Editor,
 ) -> @protocol.BoardClientCommand {
   @client.update_task_command(
-    "cmd-" + uuid,
+    board_command_id(uuid),
     revision,
     id=task_id,
     title=editor.title.trim().to_owned(),
@@ -145,7 +146,7 @@ fn move_command(
   task_id : String,
   to : @client.ClientBoardStage,
 ) -> @protocol.BoardClientCommand {
-  @client.move_task_command("cmd-" + uuid, revision, id=task_id, to~)
+  @client.move_task_command(board_command_id(uuid), revision, id=task_id, to~)
 }
 
 ///|
@@ -156,7 +157,7 @@ fn queue_attempt_command(
   draft : AttemptDraft,
 ) -> @protocol.BoardClientCommand {
   @client.queue_attempt_command(
-    "cmd-" + uuid,
+    board_command_id(uuid),
     revision,
     id=draft.attempt_id.trim().to_owned(),
     task_id=draft.task_id,
@@ -175,7 +176,7 @@ fn review_command(
   decision : @client.ClientRecordableReviewDecision,
 ) -> @protocol.BoardClientCommand {
   @client.record_review_command(
-    "cmd-" + uuid,
+    board_command_id(uuid),
     revision,
     id=attempt_id,
     decision~,
@@ -188,7 +189,7 @@ fn start_attempt_command(
   revision : Int64,
   attempt_id : String,
 ) -> @protocol.BoardClientCommand {
-  @client.start_attempt_command("cmd-" + uuid, revision, id=attempt_id)
+  @client.start_attempt_command(board_command_id(uuid), revision, id=attempt_id)
 }
 
 ///|
@@ -201,7 +202,7 @@ fn finish_attempt_command(
   outcome : @client.ClientAttemptOutcome,
 ) -> @protocol.BoardClientCommand {
   @client.finish_attempt_command(
-    "cmd-" + uuid,
+    board_command_id(uuid),
     revision,
     id=attempt_id,
     outcome~,
@@ -272,8 +273,7 @@ fn rejection_text(error : String?) -> String {
       "The board did not respond in time; the change was not confirmed."
     Some("persistence_failed") =>
       "The board could not save this change. Nothing was retried."
-    Some(_) => "The board rejected this change."
-    None => "The board rejected this change."
+    _ => "The board rejected this change."
   }
 }
 

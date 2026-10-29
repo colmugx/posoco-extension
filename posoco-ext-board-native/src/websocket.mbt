@@ -139,6 +139,29 @@ async fn NativeBoardWebServer::bootstrap_client(
 }
 
 ///|
+/// Read post-handshake commands and enqueue replies only for this client.
+/// The backend publishes committed events before returning a command result.
+async fn board_receive_commands(
+  ws : @websocket.Conn,
+  client : @backend.BoardSubscription,
+  backend : @backend.BoardBackend,
+) -> Unit {
+  for ;; {
+    let raw = board_read_text(ws)
+    let frame = match @protocol.decode_client_frame(raw) {
+      Ok(Command(command)) =>
+        @protocol.CommandResult(backend.handle_command(command))
+      _ =>
+        @protocol.Error(
+          code="invalid_frame",
+          message="Expected Command after Hello",
+        )
+    }
+    backend.enqueue_local(client, frame)
+  }
+}
+
+///|
 async fn NativeBoardWebServer::serve_ws(
   self : NativeBoardWebServer,
   ws : @websocket.Conn,
@@ -169,25 +192,7 @@ async fn NativeBoardWebServer::serve_ws(
   // any owns and joins both local tasks on success, failure and cancellation.
   @async.any([
     () => board_client_sender(ws, client),
-    () => {
-      for ;; {
-        let raw = board_read_text(ws)
-        let frame = match @protocol.decode_client_frame(raw) {
-          Ok(Command(command)) =>
-            // The backend owns the authoritative answer; every committed
-            // event is already enqueued before the result frame is built.
-            // The result is enqueued only for this connection and never
-            // published into the retained stream.
-            @protocol.CommandResult(backend.handle_command(command))
-          _ =>
-            @protocol.Error(
-              code="invalid_frame",
-              message="Expected Command after Hello",
-            )
-        }
-        backend.enqueue_local(client, frame)
-      }
-    },
+    () => board_receive_commands(ws, client, backend),
   ]) catch {
     _ => ()
   }
