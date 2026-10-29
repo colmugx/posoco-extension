@@ -31,7 +31,7 @@ test "ticket state records questions without forcing the drawer" {
         options: [],
         asked_at: 1L,
         asked_by: "worker",
-        audience: "product_owner",
+        audience: "customer",
         status: "open",
       },
     ],

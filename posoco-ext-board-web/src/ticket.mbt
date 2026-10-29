@@ -113,8 +113,6 @@ fn ticket_state_from_json(value : Json) -> TicketState {
       Some({
         po: if name("po") != "" {
           name("po")
-        } else if name("refiner") != "" {
-          name("refiner")
         } else {
           defaults.po
         },
@@ -827,20 +825,15 @@ fn ticket_set_team(
 }
 
 ///|
-fn ticket_answer_as_refiner(
+fn ticket_forward_to_po(
   question_id : String,
   emit : @rabbita.Emit[Msg],
 ) -> @rabbita.Cmd {
   send_ticket_command(
-    "board.ticket.answer_as_refiner",
+    "board.ticket.forward_to_po",
     { "question_id": Json::string(question_id) },
     emit,
   )
-}
-
-///|
-fn ticket_run_ready(emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
-  send_ticket_command("board.ticket.run_ready", Json::object(Map([])), emit)
 }
 
 ///|
@@ -874,6 +867,11 @@ fn ticket_answer(
 }
 
 ///|
+fn ticket_run_ready(emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  send_ticket_command("board.ticket.run_ready", Json::object(Map([])), emit)
+}
+
+///|
 fn ticket_run_for(model : Model, task_id : String) -> TicketRun? {
   let runs = model.tickets.runs.filter(run => run.task_id == task_id)
   for run in runs {
@@ -904,7 +902,7 @@ fn ticket_task_running(model : Model, task_id : String) -> Bool {
 
 ///|
 fn is_customer_question(question : TicketQuestion) -> Bool {
-  question.audience == "customer" || question.audience == "product_owner" || question.audience == "sm"
+  question.audience == "customer" || question.audience == "sm"
 }
 
 ///|
@@ -1528,7 +1526,7 @@ fn team_member_label(model : Model, role : String) -> String {
   }
   match role {
     "product_owner" | "customer" => "Customer"
-    "refiner" | "po" => team.po
+    "po" => team.po
     "sm" => team.sm
     "rd" => team.rd
     "set" => team.set

@@ -120,3 +120,75 @@ pub fn WorkActivity::to_json(self : WorkActivity) -> Json {
     "text": Json::string(self.text),
   })
 }
+
+///|
+fn run_string(fields : Map[String, Json], key : String) -> String {
+  match fields.get(key) {
+    Some(String(value)) => value
+    _ => ""
+  }
+}
+
+///|
+fn run_optional_string(fields : Map[String, Json], key : String) -> String? {
+  match fields.get(key) {
+    Some(String(value)) => Some(value)
+    _ => None
+  }
+}
+
+///|
+pub fn WorkRun::from_json(value : Json) -> WorkRun? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let task_id = run_string(fields, "task_id")
+  let role = run_string(fields, "role")
+  if task_id == "" || role == "" {
+    return None
+  }
+  let activities : Array[WorkActivity] = []
+  match fields.get("activities") {
+    Some(Array(items)) =>
+      for item in items {
+        match item {
+          Object(fields) => {
+            let at_ms = match fields.get("at_ms") {
+              Some(Number(value, ..)) => value.to_int64()
+              _ => 0L
+            }
+            activities.push({
+              at_ms,
+              kind: run_string(fields, "kind"),
+              text: run_string(fields, "text"),
+            })
+          }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  Some({
+    task_id,
+    session_id: run_string(fields, "session_id"),
+    phase: run_string(fields, "phase"),
+    role,
+    status: run_string(fields, "status"),
+    error: run_optional_string(fields, "error"),
+    result: run_optional_string(fields, "result"),
+    report: (match fields.get("report") {
+      Some(Json::Null) => None
+      Some(value) => Some(value)
+      None => None
+    }),
+    steps: (match fields.get("steps") {
+      Some(Number(value, ..)) => value.to_int()
+      _ => 0
+    }),
+    current_tool: run_optional_string(fields, "current_tool"),
+    preview: run_string(fields, "preview"),
+    reasoning: run_string(fields, "reasoning"),
+    activities,
+  })
+}

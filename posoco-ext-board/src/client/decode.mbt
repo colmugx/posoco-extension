@@ -101,7 +101,7 @@ fn team_role(value : Json) -> ClientTeamRole raise DecodeFailure {
   match text(value) {
     "po" => PO
     "sm" => SM
-    "refiner" => Refiner
+    "refiner" => PO
     "rd" => RD
     "set" => SET
     "te" => TE

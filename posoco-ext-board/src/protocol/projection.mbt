@@ -224,7 +224,6 @@ fn wire_role(value : @domain.TeamRole) -> Json {
     match value {
       PO => "po"
       SM => "sm"
-      Refiner => "refiner"
       RD => "rd"
       SET => "set"
       TE => "te"

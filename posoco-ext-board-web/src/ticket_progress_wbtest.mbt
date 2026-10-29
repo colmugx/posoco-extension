@@ -149,7 +149,7 @@ test "the inbox badge still counts open questions" {
     options: [],
     asked_at: 1L,
     asked_by: "worker",
-    audience: "product_owner",
+    audience: "customer",
     status: "open",
   }
   let model = apply_ticket_state(Model::empty(true), {
@@ -189,7 +189,7 @@ test "opening the inbox sends nothing and keeps the questions" {
         options: [],
         asked_at: 1L,
         asked_by: "worker",
-        audience: "product_owner",
+        audience: "customer",
         status: "open",
       },
     ],

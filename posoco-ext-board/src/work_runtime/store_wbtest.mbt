@@ -67,3 +67,34 @@ test "roles_completed and counts read the run state" {
   assert_true(store.run_for("task-2") is None)
   assert_eq(store.count_running(), 0)
 }
+
+///|
+test "run journal round-trips runs and activities" {
+  let store = WorkRunStore::WorkRunStore()
+  let run = store.add("task-1", "rd", "work", "rd")
+  run.status = "failed"
+  run.error = Some("network down")
+  run.activity("error", "connection lost")
+  let parsed = WorkRunStore::from_json(store.to_json())
+  match parsed.run_role("task-1", "rd") {
+    Some(restored) => {
+      assert_eq(restored.session_id, "rd")
+      assert_eq(restored.status, "failed")
+      assert_eq(restored.error, Some("network down"))
+      assert_eq(restored.activities.length(), 1)
+      assert_eq(restored.activities[0].text, "connection lost")
+    }
+    None => fail("run was not restored")
+  }
+}
+
+///|
+test "runs loaded after a restart become interrupted, never live" {
+  let store = WorkRunStore::WorkRunStore()
+  ignore(store.add("task-1", "rd", "work", "rd"))
+  let restored = WorkRunStore::from_json(store.to_json())
+  restored.interrupt_running("host restarted")
+  let run = restored.run_role("task-1", "rd").unwrap()
+  assert_eq(run.status, "interrupted")
+  assert_eq(run.error, Some("host restarted"))
+}

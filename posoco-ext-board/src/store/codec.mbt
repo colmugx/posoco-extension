@@ -502,7 +502,6 @@ fn role_json(value : @domain.TeamRole) -> Json {
     match value {
       PO => "PO"
       SM => "SM"
-      Refiner => "Refiner"
       RD => "RD"
       SET => "SET"
       TE => "TE"
@@ -515,7 +514,7 @@ fn role(value : Json) -> @domain.TeamRole raise CodecError {
   match text(value) {
     "PO" => PO
     "SM" => SM
-    "Refiner" => Refiner
+    "Refiner" => PO
     "RD" => RD
     "SET" => SET
     "TE" => TE

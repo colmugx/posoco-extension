@@ -516,7 +516,7 @@ fn update(
         {
           ..model,
           team_draft: match role {
-            "po" | "refiner" => { ..model.team_draft, po: value }
+            "po" => { ..model.team_draft, po: value }
             "sm" => { ..model.team_draft, sm: value }
             "rd" => { ..model.team_draft, rd: value }
             "set" => { ..model.team_draft, set: value }
@@ -732,7 +732,7 @@ fn update(
       } else {
         (
           { ..model, ticket_sending: true, },
-          ticket_answer_as_refiner(question_id, emit),
+          ticket_forward_to_po(question_id, emit),
         )
       }
     TicketShape(task_id) =>

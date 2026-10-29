@@ -168,6 +168,7 @@ pub(all) struct WorkRun {
   activities : Array[WorkActivity]
 }
 pub fn WorkRun::activity(Self, String, String) -> Unit
+pub fn WorkRun::from_json(Json) -> Self?
 pub fn WorkRun::to_json(Self) -> Json
 
 pub struct WorkRunStore {
@@ -178,12 +179,14 @@ pub fn WorkRunStore::add(Self, String, String, String, String) -> WorkRun
 pub fn WorkRunStore::all(Self) -> Array[WorkRun]
 pub fn WorkRunStore::count_running(Self) -> Int32
 pub fn WorkRunStore::dismiss(Self, String) -> Unit
+pub fn WorkRunStore::from_json(Json) -> Self
 pub fn WorkRunStore::park(Self, String, String, String, String) -> Unit
 pub fn WorkRunStore::roles_completed(Self, String, Array[String]) -> Bool
 pub fn WorkRunStore::run_for(Self, String) -> WorkRun?
 pub fn WorkRunStore::run_role(Self, String, String) -> WorkRun?
 pub fn WorkRunStore::runs_for(Self, String) -> Array[WorkRun]
 pub fn WorkRunStore::set_status(Self, String, String, String, String?) -> Unit
+pub fn WorkRunStore::to_json(Self) -> Json
 
 // Type aliases
 

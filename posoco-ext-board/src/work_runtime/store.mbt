@@ -170,3 +170,56 @@ pub fn WorkRunStore::count_running(self : WorkRunStore) -> Int32 {
 pub fn WorkRunStore::dismiss(self : WorkRunStore, task_id : String) -> Unit {
   self.map.remove(task_id)
 }
+
+///|
+pub fn WorkRunStore::to_json(self : WorkRunStore) -> Json {
+  let out : Map[String, Json] = Map([])
+  for task_id, runs in self.map {
+    out[task_id] = Json::array(runs.map(WorkRun::to_json))
+  }
+  Json::object(out)
+}
+
+///|
+/// Rehydrate the host projection. Malformed entries are dropped instead of
+/// inventing runs; the Board snapshot remains the authority for the ticket.
+pub fn WorkRunStore::from_json(value : Json) -> WorkRunStore {
+  let store = WorkRunStore::WorkRunStore()
+  match value {
+    Object(fields) =>
+      for task_id, runs in fields {
+        match runs {
+          Array(items) => {
+            let decoded : Array[WorkRun] = []
+            for item in items {
+              match WorkRun::from_json(item) {
+                Some(run) if run.task_id == task_id => decoded.push(run)
+                _ => ()
+              }
+            }
+            if !decoded.is_empty() {
+              store.map[task_id] = decoded
+            }
+          }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  store
+}
+
+///|
+/// A journal loaded at host startup cannot own live children. Mark previously
+/// running roles interrupted so Resume can continue their durable sessions.
+pub fn WorkRunStore::interrupt_running(
+  self : WorkRunStore,
+  reason : String,
+) -> Unit {
+  for run in self.all() {
+    if run.status == "running" {
+      run.status = "interrupted"
+      run.error = Some(reason)
+    }
+  }
+}

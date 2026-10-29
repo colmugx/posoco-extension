@@ -1373,7 +1373,7 @@ fn team_name_field(
 ///|
 fn team_role_name(draft : TeamNames, role : String) -> String {
   match role {
-    "po" | "refiner" => draft.po
+    "po" => draft.po
     "sm" => draft.sm
     "rd" => draft.rd
     "set" => draft.set

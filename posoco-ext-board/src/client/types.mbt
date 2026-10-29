@@ -30,7 +30,6 @@ pub extend ClientBoardPriority with Eq::{equal, not_equal}
 pub(all) enum ClientTeamRole {
   PO
   SM
-  Refiner
   RD
   SET
   TE

@@ -670,7 +670,6 @@ fn team_role_id(role : @client.ClientTeamRole) -> String {
   match role {
     PO => "po"
     SM => "sm"
-    Refiner => "refiner"
     RD => "rd"
     SET => "set"
     TE => "te"

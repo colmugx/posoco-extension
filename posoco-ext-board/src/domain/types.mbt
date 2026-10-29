@@ -52,7 +52,6 @@ pub fn BoardPriority::rank(self : BoardPriority) -> Int32 {
 pub(all) enum TeamRole {
   PO
   SM
-  Refiner
   RD
   SET
   TE

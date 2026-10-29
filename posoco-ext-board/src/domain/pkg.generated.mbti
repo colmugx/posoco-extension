@@ -383,7 +383,6 @@ pub fn TeamAssignment::to_repr(Self) -> @debug.Repr
 pub(all) enum TeamRole {
   PO
   SM
-  Refiner
   RD
   SET
   TE
