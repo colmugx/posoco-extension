@@ -408,7 +408,7 @@ fn Ctx::finish_report(
   }
   // A broken required contract must not exit clean.
   if self.required_failures > 0 {
-    @abort.abort(
+    abort(
       "production gate closed: \{self.required_failures} required check(s) failed",
     )
   }
