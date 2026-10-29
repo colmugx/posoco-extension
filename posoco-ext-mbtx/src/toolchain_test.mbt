@@ -19,6 +19,20 @@ let script_source : String =
   #|}
 
 ///|
+/// A script-shaped compile failure. The import block is load-bearing: without
+/// it moon/moonx build the file as the synthetic `moon/test/single` package,
+/// whose implicit imports currently collide (`core/async/gzip` and
+/// `core/compress/gzip` share the `gzip` alias), so the run dies in package
+/// solving and never reaches the compiler that would name `unknown_value`.
+let invalid_script_source : String =
+  #|import {
+  #|  "moonbitlang/async@0.22.5",
+  #|}
+  #|fn main {
+  #|  unknown_value
+  #|}
+
+///|
 async test "installed moon and moonx execute normal mbtx scripts with normal imports" {
   for
     launcher in [
@@ -71,7 +85,7 @@ async test "moonx compiler failure before hello reports diagnostics rather than 
     group.add_defer(() => runtime.close())
     try
       runtime.run(
-        "fn main { unknown_value }",
+        invalid_script_source,
         {},
         invocation_id="bad",
         handshake_ms=30000,

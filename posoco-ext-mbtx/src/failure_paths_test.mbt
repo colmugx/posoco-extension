@@ -3,9 +3,7 @@ async test "compiler diagnostics are surfaced and a failed source does not disab
   let runtime = test_runtime()
   @async.with_task_group(group => {
     group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
-    try
-      runtime.run("fn main { unknown_value }", {}, invocation_id="compile")
-    catch {
+    try runtime.run(invalid_script_source, {}, invocation_id="compile") catch {
       @posoco-ext-mbtx.RuntimeError::BuildFailed(diagnostics) =>
         assert_true(diagnostics.contains("unknown_value"))
       error => raise error
