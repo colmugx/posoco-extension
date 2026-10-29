@@ -23,18 +23,20 @@ jobs:
       - name: moon update
         run: moon update
 
-      # The native host embeds `posoco-ext-board-web/dist` verbatim; it no
-      # longer compiles or stitches the browser bundle itself. `npm ci` both
-      # provides Vite and keeps the embed step honest: with `node_modules`
-      # present it rebuilds the frontend, and without it it refuses a dist
-      # older than its sources.
+      # The native host embeds `posoco-ext-board-web/dist` verbatim. Install
+      # Vite from the committed Bun lockfile so the embed step can rebuild
+      # the frontend instead of accepting an out-of-date bundle.
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
+      - name: setup bun
+        uses: oven-sh/setup-bun@v2
+
       - name: install board web dependencies
-        run: npm ci --prefix posoco-ext-board-web
+        working-directory: posoco-ext-board-web
+        run: bun install --frozen-lockfile
 
       - name: moon check (native)
         run: moon check --target native --output-json
