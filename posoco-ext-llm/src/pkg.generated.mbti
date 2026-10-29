@@ -116,7 +116,9 @@ pub(all) struct TransientRetryPolicy {
   initial_delay_ms : Int32
 } derive(@debug.Debug)
 pub fn TransientRetryPolicy::default() -> Self
+pub fn TransientRetryPolicy::delay_ms(Self, Int32) -> Int32
 pub fn TransientRetryPolicy::to_repr(Self) -> @debug.Repr
+pub fn TransientRetryPolicy::total_backoff_ms(Self) -> Int32
 
 // Type aliases
 pub using @posoco-kit-provider {type AuthMethod}

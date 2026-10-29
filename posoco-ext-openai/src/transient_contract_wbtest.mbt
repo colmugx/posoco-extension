@@ -8,10 +8,14 @@
 ///
 /// Retryable by design: truncated SSE (marker-less EOF — today's shape for a
 /// mid-stream connection reset until the upstream async fix surfaces the
-/// underlying error), stage=read_stream, and gateway 408/5xx.
-/// Never retryable: provider-declared failures, other 4xx, and the
-/// pre-response transport stages (conservative by design, mirrors
-/// kit-chat-completions transient.mbt).
+/// underlying error), stage=read_stream, gateway 408/5xx, and — since the
+/// network-fluctuation retry ticket — unmarked connection-establishment /
+/// transfer-stage transport failures (stage=post, post_stream, end_request,
+/// write_body, send_request, read_response, …).
+/// Never retryable: provider-declared failures (category=provider_error /
+/// not_completed / stage=response.error), client/URL construction
+/// (stage=create_client / split_url), user cancellations, marked 429/4xx,
+/// and other 4xx statuses (mirrors kit-chat-completions transient.mbt).
 test "truncated SSE (clean EOF) stays retry-classifiable" {
   match
     @responses.classify_stream_termination(
@@ -100,17 +104,30 @@ test "provider-declared SSE failure stays non-retryable" {
 }
 
 ///|
-test "pre-response transport stages stay non-retryable" {
+test "client construction stays non-retryable" {
   // create_client can fail for a malformed base_url — retrying cannot fix it.
   let create_client = @posoco.ModelError::Transport(
     "OpenAI transport failure (stage=create_client): InvalidFormat",
   )
-  // end_request covers connect/handshake/reset-while-awaiting-headers; the
-  // predicate intentionally leaves it out (conservative-by-design). If this
-  // pin flips to true, update kit-chat-completions transient.mbt first.
+  assert_false(@chatkit.is_transient_model_error(create_client))
+}
+
+///|
+/// Connection-establishment failures are network noise: since the
+/// network-fluctuation retry ticket they are retry-classifiable. This pin
+/// flipped together with kit-chat-completions transient.mbt (which the old
+/// conservative pin told future editors to update first).
+test "connection-establishment transport failures are retry-classifiable" {
   let end_request = @posoco.ModelError::Transport(
     "OpenAI transport failure (stage=end_request): TypeError: reset",
   )
-  assert_false(@chatkit.is_transient_model_error(create_client))
-  assert_false(@chatkit.is_transient_model_error(end_request))
+  assert_true(@chatkit.is_transient_model_error(end_request))
+}
+
+///|
+test "user cancellations stay non-retryable" {
+  let aborted = @posoco.ModelError::Transport(
+    "OpenAI transport failure (stage=post): The operation was aborted",
+  )
+  assert_false(@chatkit.is_transient_model_error(aborted))
 }
