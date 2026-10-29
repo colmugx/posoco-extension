@@ -2,7 +2,11 @@
 package "colmugx/posoco-ext-board/work_runtime"
 
 import {
+  "colmugx/posoco-ext-askquestion",
   "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/async/cond_var",
   "moonbitlang/core/debug",
 }
 
@@ -21,15 +25,17 @@ pub fn parse_shape_children(Json?, String) -> Result[Array[ShapeChild], String]
 
 pub fn parse_shape_story(Map[String, Json], String, title_fallback? : String) -> Result[ShapeChild, String]
 
-pub fn shape_priority(String) -> String?
+pub fn question_prompt(@port.UiRequest) -> String
 
-pub fn shape_session_id(String) -> String
+pub fn shape_priority(String) -> String?
 
 pub fn task_definition_of_done(Json) -> Array[String]
 
 pub fn task_field(Json, String) -> String
 
 pub fn task_model(Json) -> ModelPin?
+
+pub fn task_required_roles(Json) -> Array[String]
 
 pub fn task_review_feedback(Json) -> String?
 
@@ -42,6 +48,19 @@ pub fn work_session_id(String, String) -> String
 // Errors
 
 // Types and methods
+pub(all) struct BoardQuestionEndpoint {
+  questions : TicketQuestions
+  task_id : String
+  asked_by : String
+  audience : String
+  on_open : ((String, String, String, String, String) -> Unit)?
+  auto_po : ((String) -> Unit)?
+}
+pub async fn BoardQuestionEndpoint::ask_with(Self, String, String, @port.UiRequest) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
+pub async fn BoardQuestionEndpoint::request(Self, origin_call~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
+pub async fn BoardQuestionEndpoint::request_with_audience(Self, origin_call~ : String, audience~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
+pub impl @posoco-ext-askquestion.QuestionEndpoint for BoardQuestionEndpoint
+
 pub struct BoardState {
   tasks : Array[Json]
   attempts : Array[Json]
@@ -71,6 +90,43 @@ pub(all) struct ShapeChild {
 pub fn ShapeChild::equal(Self, Self) -> Bool
 pub fn ShapeChild::not_equal(Self, Self) -> Bool
 pub fn ShapeChild::to_repr(Self) -> @debug.Repr
+
+pub(all) struct TicketActivityObserver {
+  run : WorkRun
+}
+pub fn TicketActivityObserver::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub impl @port.Observer for TicketActivityObserver
+
+pub(all) struct TicketQuestion {
+  id : String
+  task_id : String
+  origin_call : String
+  req : @port.UiRequest
+  asked_by : String
+  mut audience : String
+  asked_at_ms : Int64
+  cond : @cond_var.Cond
+  mut outcome : @port.UiResponse?
+  mut status : String
+  mut answer : String?
+  mut answered_by : String?
+  mut answered_at_ms : Int64?
+  mut forwarded_by : String?
+}
+
+pub(all) struct TicketQuestions {
+  mut counter : Int32
+  questions : Map[String, TicketQuestion]
+}
+pub fn TicketQuestions::TicketQuestions() -> Self
+pub fn TicketQuestions::answer(Self, String, @port.UiResponse, String) -> Result[(String, String, String), String]
+pub async fn TicketQuestions::ask(Self, String, String, String, String, @port.UiRequest) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
+pub fn TicketQuestions::cancel(Self, String) -> Unit
+pub fn TicketQuestions::forward(Self, String, String) -> Result[Unit, String]
+pub fn TicketQuestions::get(Self, String) -> TicketQuestion?
+pub fn TicketQuestions::json(Self) -> Json
+pub fn TicketQuestions::open(Self, String, String, String, String, @port.UiRequest) -> String
+pub async fn TicketQuestions::wait(Self, String) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
 
 pub(all) struct WorkActivity {
   at_ms : Int64

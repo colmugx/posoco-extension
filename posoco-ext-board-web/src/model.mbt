@@ -151,17 +151,19 @@ priv struct TeamMcp {
   enabled : Bool
   all : Bool
   servers : Array[String]
+  tools : Array[String]
 } derive(Eq)
 
 ///|
 fn TeamMcp::defaults() -> TeamMcp {
-  { enabled: false, all: true, servers: [] }
+  { enabled: false, all: true, servers: [], tools: [] }
 }
 
 ///|
 fn default_team_mcp() -> Map[String, TeamMcp] {
   Map::from_array([
-    ("refiner", TeamMcp::defaults()),
+    ("po", TeamMcp::defaults()),
+    ("sm", TeamMcp::defaults()),
     ("rd", TeamMcp::defaults()),
     ("set", TeamMcp::defaults()),
     ("te", TeamMcp::defaults()),
@@ -189,7 +191,8 @@ fn TeamSkills::defaults() -> TeamSkills {
 ///|
 fn default_team_skills() -> Map[String, TeamSkills] {
   Map::from_array([
-    ("refiner", TeamSkills::defaults()),
+    ("po", TeamSkills::defaults()),
+    ("sm", TeamSkills::defaults()),
     ("rd", TeamSkills::defaults()),
     ("set", TeamSkills::defaults()),
     ("te", TeamSkills::defaults()),
@@ -200,7 +203,8 @@ fn default_team_skills() -> Map[String, TeamSkills] {
 /// Lightweight names shown in prompts and on the Board. Defaults are used
 /// when the host frame has no team field.
 priv struct TeamNames {
-  refiner : String
+  po : String
+  sm : String
   rd : String
   set : String
   te : String
@@ -211,7 +215,8 @@ priv struct TeamNames {
 ///|
 fn TeamNames::defaults() -> TeamNames {
   {
-    refiner: "Agile Coach",
+    po: "Product Owner",
+    sm: "Scrum Master",
     rd: "RD",
     set: "SET",
     te: "TE",
@@ -615,7 +620,7 @@ fn Model::empty(available : Bool) -> Model {
     live_open: false,
     team_open: false,
     team_draft: TeamNames::defaults(),
-    team_tab: "refiner",
+    team_tab: "po",
     team_profile_draft: WorkProfile::software(),
   }
 }

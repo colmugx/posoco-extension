@@ -4,7 +4,7 @@ fn team_mcp_update(
   role : String,
   update : (TeamMcp) -> TeamMcp,
 ) -> TeamNames {
-  if role != "refiner" && role != "rd" && role != "set" && role != "te" {
+  if role != "po" && role != "sm" && role != "rd" && role != "set" && role != "te" {
     return draft
   }
   let mcp = draft.mcp.copy()
@@ -22,7 +22,7 @@ fn team_skills_update(
   role : String,
   update : (TeamSkills) -> TeamSkills,
 ) -> TeamNames {
-  if role != "refiner" && role != "rd" && role != "set" && role != "te" {
+  if role != "po" && role != "sm" && role != "rd" && role != "set" && role != "te" {
     return draft
   }
   let skills = draft.skills.copy()
@@ -503,7 +503,7 @@ fn update(
           team_open: true,
           team_draft: draft,
           team_profile_draft: model.tickets.profile,
-          team_tab: "refiner",
+          team_tab: "po",
         },
         @rabbita.none,
       )
@@ -516,7 +516,8 @@ fn update(
         {
           ..model,
           team_draft: match role {
-            "refiner" => { ..model.team_draft, refiner: value }
+            "po" | "refiner" => { ..model.team_draft, po: value }
+            "sm" => { ..model.team_draft, sm: value }
             "rd" => { ..model.team_draft, rd: value }
             "set" => { ..model.team_draft, set: value }
             "te" => { ..model.team_draft, te: value }
@@ -614,7 +615,8 @@ fn update(
     TeamSaved =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)
-      } else if model.team_draft.refiner.trim().is_empty() ||
+      } else if model.team_draft.po.trim().is_empty() ||
+        model.team_draft.sm.trim().is_empty() ||
         model.team_draft.rd.trim().is_empty() ||
         model.team_draft.set.trim().is_empty() ||
         model.team_draft.te.trim().is_empty() {
@@ -658,7 +660,7 @@ fn update(
             question_id,
             TicketText(answer),
             emit,
-            answered_by="refiner",
+            answered_by="po",
           ),
         )
       }

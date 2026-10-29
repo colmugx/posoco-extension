@@ -223,6 +223,7 @@ fn wire_role(value : @domain.TeamRole) -> Json {
   Json::string(
     match value {
       PO => "po"
+      SM => "sm"
       Refiner => "refiner"
       RD => "rd"
       SET => "set"

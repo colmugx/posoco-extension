@@ -393,14 +393,14 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ),
           @html.p(
             class="dialog-hint",
-            "A Refiner turns this into a user story, sets the priority, and writes the definition of done.",
+            "A Product Owner turns this into a user story, sets the priority, and writes the definition of done.",
           ),
         ])
       }
       let story_fields = if creating {
         @html.p(
           class="dialog-hint",
-          "A Refiner turns this into a user story, sets the P0-P3 priority, and writes the definition of done.",
+          "A Product Owner turns this into a user story, sets the P0-P3 priority, and writes the definition of done.",
         )
       } else {
         @html.fragment([
@@ -530,7 +530,7 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       match editor.mode {
         CreateMode =>
           (
-            "New backlog item", "A Refiner turns it into a user story and sets the initial priority.",
+            "New backlog item", "A Product Owner turns it into a user story and sets the initial priority.",
             "Add to Backlog",
           )
         EditMode(task_id~) => ("Edit \{task_id}", "", "Save changes")
@@ -1442,7 +1442,8 @@ fn team_name_field(
 ///|
 fn team_role_name(draft : TeamNames, role : String) -> String {
   match role {
-    "refiner" => draft.refiner
+    "po" | "refiner" => draft.po
+    "sm" => draft.sm
     "rd" => draft.rd
     "set" => draft.set
     _ => draft.te
@@ -1680,7 +1681,7 @@ fn team_mcp_panel(
 fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let draft = model.team_draft
   let draft_profile = model.team_profile_draft
-  let roles = ["refiner", "rd", "set", "te"]
+  let roles = ["po", "sm", "rd", "set", "te"]
   @html.dialog(
     id="team-dialog",
     class="dialog team-dialog",

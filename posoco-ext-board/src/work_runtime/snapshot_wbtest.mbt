@@ -187,3 +187,12 @@ test "latest running review attempt prefers the newest creation" {
   )
   assert_true(state.latest_running_review_attempt("task-3") is None)
 }
+
+///|
+test "task required roles defaults to all and rejects plans without RD" {
+  assert_eq(task_required_roles({}), ["rd", "set", "te"])
+  assert_eq(task_required_roles({ "required_roles": ["rd"] }), ["rd"])
+  assert_eq(task_required_roles({ "required_roles": ["set", "te"] }), [
+    "rd", "set", "te",
+  ])
+}

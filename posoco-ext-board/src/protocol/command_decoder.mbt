@@ -147,6 +147,7 @@ fn args_role(
 ) -> @domain.TeamRole raise SchemaError {
   match args_string(fields, key) {
     "po" => PO
+    "sm" => SM
     "refiner" => Refiner
     "rd" => RD
     "set" => SET

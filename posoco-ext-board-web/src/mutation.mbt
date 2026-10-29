@@ -67,7 +67,7 @@ fn Editor::from_task(
 
 ///|
 /// A backlog idea becomes a short card title from its first non-empty line;
-/// the full text stays as the description for the Refiner.
+/// the full text stays as the description for the Product Owner.
 fn idea_title(text : String) -> String {
   let lines : Array[String] = []
   for part in text.split("\n") {

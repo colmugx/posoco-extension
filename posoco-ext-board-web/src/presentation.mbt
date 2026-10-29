@@ -312,7 +312,7 @@ pub fn queue_attempt_id_valid(
 /// story contract. Backlog and Shaping are intentionally not gated.
 pub fn ready_blocked_hint(task : @client.ClientBoardTask) -> String? {
   if task.user_story.trim().is_empty() {
-    Some("A Refiner must add the user story before this can be Ready.")
+    Some("A Product Owner must add the user story before this can be Ready.")
   } else if task.description.trim().is_empty() {
     Some("The story needs a detailed description before it can be Ready.")
   } else if task.implementation_suggestions.trim().is_empty() {

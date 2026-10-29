@@ -232,3 +232,26 @@ pub fn BoardState::latest_running_review_attempt(
     Some(chosen)
   }
 }
+
+///|
+/// The delivery roles this ticket actually runs. RD is mandatory; missing or
+/// malformed plans fall back to the full historical plan.
+pub fn task_required_roles(task : Json) -> Array[String] {
+  let fields = match task {
+    Object(fields) => fields
+    _ => return ["rd", "set", "te"]
+  }
+  match fields.get("required_roles") {
+    Some(Array(values)) => {
+      let roles : Array[String] = []
+      for value in values {
+        match value {
+          String(role) if !roles.contains(role) => roles.push(role)
+          _ => ()
+        }
+      }
+      if roles.contains("rd") { roles } else { ["rd", "set", "te"] }
+    }
+    _ => ["rd", "set", "te"]
+  }
+}

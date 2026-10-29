@@ -100,6 +100,7 @@ fn priority(value : Json) -> ClientBoardPriority raise DecodeFailure {
 fn team_role(value : Json) -> ClientTeamRole raise DecodeFailure {
   match text(value) {
     "po" => PO
+    "sm" => SM
     "refiner" => Refiner
     "rd" => RD
     "set" => SET

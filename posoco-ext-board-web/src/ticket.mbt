@@ -18,7 +18,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
   let team_mcp = match fields.get("team_mcp") {
     Some(Object(mcp)) => {
       let out = default_team_mcp()
-      for role in ["refiner", "rd", "set", "te"] {
+      for role in ["po", "sm", "rd", "set", "te"] {
         match mcp.get(role) {
           Some(Object(item)) => {
             let enabled = match item.get("enabled") {
@@ -32,6 +32,18 @@ fn ticket_state_from_json(value : Json) -> TicketState {
               _ => true
             }
             let servers : Array[String] = []
+            let tools : Array[String] = []
+            match item.get("tools") {
+              Some(Array(items)) =>
+                for value in items {
+                  match value {
+                    String(name) if name != "" && !tools.contains(name) =>
+                      tools.push(name)
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
             match item.get("servers") {
               Some(Array(items)) =>
                 for value in items {
@@ -43,7 +55,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
                 }
               _ => ()
             }
-            out[role] = { enabled, all, servers }
+            out[role] = { enabled, all, servers, tools }
           }
           _ => ()
         }
@@ -55,7 +67,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
   let team_skills = match fields.get("team_skills") {
     Some(Object(skills)) => {
       let out = default_team_skills()
-      for role in ["refiner", "rd", "set", "te"] {
+      for role in ["po", "sm", "rd", "set", "te"] {
         match skills.get(role) {
           Some(Object(item)) => {
             let enabled = match item.get("enabled") {
@@ -99,11 +111,14 @@ fn ticket_state_from_json(value : Json) -> TicketState {
       }
       let defaults = TeamNames::defaults()
       Some({
-        refiner: if name("refiner") == "" {
-          defaults.refiner
-        } else {
+        po: if name("po") != "" {
+          name("po")
+        } else if name("refiner") != "" {
           name("refiner")
+        } else {
+          defaults.po
         },
+        sm: if name("sm") == "" { defaults.sm } else { name("sm") },
         rd: if name("rd") == "" { defaults.rd } else { name("rd") },
         set: if name("set") == "" { defaults.set } else { name("set") },
         te: if name("te") == "" { defaults.te } else { name("te") },
@@ -339,7 +354,7 @@ fn decode_ticket_question(value : Json) -> TicketQuestion? {
   }
   let audience = match fields.get("audience") {
     Some(String(value)) => value
-    _ => "product_owner"
+    _ => "customer"
   }
   let status = match fields.get("status") {
     Some(String(value)) => value
@@ -744,7 +759,7 @@ fn send_ticket_command(
 ///|
 fn team_mcp_json(mcp : Map[String, TeamMcp]) -> Json {
   let fields : Map[String, Json] = Map([])
-  for role in ["refiner", "rd", "set", "te"] {
+  for role in ["po", "sm", "rd", "set", "te"] {
     let value = match mcp.get(role) {
       Some(value) => value
       None => TeamMcp::defaults()
@@ -753,6 +768,7 @@ fn team_mcp_json(mcp : Map[String, TeamMcp]) -> Json {
       "enabled": Json::boolean(value.enabled),
       "all": Json::boolean(value.all),
       "servers": Json::array(value.servers.map(Json::string)),
+      "tools": Json::array(value.tools.map(Json::string)),
     })
   }
   Json::object(fields)
@@ -761,7 +777,7 @@ fn team_mcp_json(mcp : Map[String, TeamMcp]) -> Json {
 ///|
 fn team_skills_json(skills : Map[String, TeamSkills]) -> Json {
   let fields : Map[String, Json] = Map([])
-  for role in ["refiner", "rd", "set", "te"] {
+  for role in ["po", "sm", "rd", "set", "te"] {
     let value = match skills.get(role) {
       Some(value) => value
       None => TeamSkills::defaults()
@@ -798,7 +814,8 @@ fn ticket_set_team(
   emit : @rabbita.Emit[Msg],
 ) -> @rabbita.Cmd {
   let args : Json = {
-    "refiner": Json::string(names.refiner.trim().to_owned()),
+    "po": Json::string(names.po.trim().to_owned()),
+    "sm": Json::string(names.sm.trim().to_owned()),
     "rd": Json::string(names.rd.trim().to_owned()),
     "set": Json::string(names.set.trim().to_owned()),
     "te": Json::string(names.te.trim().to_owned()),
@@ -831,7 +848,7 @@ fn ticket_answer(
   question_id : String,
   answer : TicketAnswer,
   emit : @rabbita.Emit[Msg],
-  answered_by~ : String = "product_owner",
+  answered_by~ : String = "customer",
 ) -> @rabbita.Cmd {
   let args : Json = match answer {
     TicketText(value) =>
@@ -886,8 +903,13 @@ fn ticket_task_running(model : Model, task_id : String) -> Bool {
 }
 
 ///|
+fn is_customer_question(question : TicketQuestion) -> Bool {
+  question.audience == "customer" || question.audience == "product_owner" || question.audience == "sm"
+}
+
+///|
 fn ticket_question_count(model : Model) -> Int32 {
-  model.tickets.questions.length()
+  model.tickets.questions.filter(is_customer_question).length()
 }
 
 ///|
@@ -1492,8 +1514,9 @@ fn team_member_label(model : Model, role : String) -> String {
     None => TeamNames::defaults()
   }
   match role {
-    "product_owner" | "po" => "USER"
-    "refiner" => team.refiner
+    "product_owner" | "customer" => "Customer"
+    "refiner" | "po" => team.po
+    "sm" => team.sm
     "rd" => team.rd
     "set" => team.set
     "te" => team.te
@@ -1513,7 +1536,7 @@ fn ticket_question_card(
     None => question.task_id
   }
   let draft = model.ticket_drafts.get(question.id).unwrap_or("")
-  let refiner_name = team_member_label(model, "refiner")
+  let refiner_name = team_member_label(model, "po")
   let answer_controls = match question.kind {
     "confirm" =>
       @html.div(class="ticket-answers", [
@@ -1790,7 +1813,7 @@ fn ticket_updates_section(
 /// and worker updates that need nothing. Live and finished run detail lives on
 /// the ticket's own Activity dialog.
 fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  let question_count = model.tickets.questions.length()
+  let question_count = ticket_question_count(model)
   let update_count = model.tickets.progress.length()
   let unseen_count = ticket_unseen_update_count(model)
   let updates = inbox_updates(model, board_now_ms())
@@ -1799,7 +1822,9 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     items.push(ticket_updates_section(updates, unseen_count, emit))
   }
   for question in model.tickets.questions {
-    items.push(ticket_question_card(model, question, emit))
+    if is_customer_question(question) {
+      items.push(ticket_question_card(model, question, emit))
+    }
   }
   if question_count == 0 {
     items.push(@html.div(class="empty-line", "No open questions."))

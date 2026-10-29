@@ -596,6 +596,7 @@ fn propose_assign_role(
 fn role_rank(role : TeamRole) -> Int32 {
   match role {
     PO => 0
+    SM => 1
     Refiner => 1
     RD => 2
     SET => 3

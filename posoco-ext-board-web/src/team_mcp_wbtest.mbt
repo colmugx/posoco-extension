@@ -2,13 +2,13 @@
 test "team state carries per-role mcp and host servers" {
   let state = ticket_state_from_json({
     "project": "demo",
-    "team": { "refiner": "Coach", "rd": "R&D", "set": "SET", "te": "TE" },
+    "team": { "po": "Coach", "rd": "R&D", "set": "SET", "te": "TE" },
     "team_mcp": {
-      "refiner": { "enabled": true, "all": false, "servers": ["github"] },
+      "po": { "enabled": true, "all": false, "servers": ["github"] },
       "rd": { "enabled": false, "all": true, "servers": [] },
     },
     "team_skills": {
-      "refiner": { "enabled": true, "all": false, "skills": ["tdd"] },
+      "po": { "enabled": true, "all": false, "skills": ["tdd"] },
       "rd": { "enabled": true, "all": true, "skills": [] },
     },
     "skills": [
@@ -26,9 +26,9 @@ test "team state carries per-role mcp and host servers" {
     Some(team) => team
     None => fail("team missing")
   }
-  assert_eq(team.refiner, "Coach")
+  assert_eq(team.po, "Coach")
   assert_eq(team.rd, "R&D")
-  match team.mcp.get("refiner") {
+  match team.mcp.get("po") {
     Some(value) => {
       assert_true(value.enabled)
       assert_false(value.all)
@@ -36,7 +36,7 @@ test "team state carries per-role mcp and host servers" {
     }
     None => fail("refiner mcp missing")
   }
-  match team.skills.get("refiner") {
+  match team.skills.get("po") {
     Some(value) => {
       assert_true(value.enabled)
       assert_false(value.all)
