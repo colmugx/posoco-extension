@@ -97,30 +97,45 @@ pub fn BoardState::snapshot(self : BoardState) -> BoardStateSnapshot {
 }
 
 ///|
+/// Compare timestamps without subtraction, preserving ordering at Int64 bounds.
+fn compare_creation_times(left : Int64, right : Int64) -> Int32 {
+  if left < right {
+    -1
+  } else if left > right {
+    1
+  } else {
+    0
+  }
+}
+
+///|
 /// Deterministic listing order; ids make the order total.
 fn compare_task_order(a : BoardTask, b : BoardTask) -> Int32 {
   let rank = b.priority.rank() - a.priority.rank()
   if rank != 0 {
     return rank
   }
-  if a.created_at_ms != b.created_at_ms {
-    return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
+  let created_order = compare_creation_times(a.created_at_ms, b.created_at_ms)
+  if created_order != 0 {
+    return created_order
   }
   a.id.value.compare(b.id.value)
 }
 
 ///|
 fn compare_attempt_order(a : Attempt, b : Attempt) -> Int32 {
-  if a.created_at_ms != b.created_at_ms {
-    return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
+  let created_order = compare_creation_times(a.created_at_ms, b.created_at_ms)
+  if created_order != 0 {
+    return created_order
   }
   a.id.value.compare(b.id.value)
 }
 
 ///|
 fn compare_expansion_order(a : ExpansionRecord, b : ExpansionRecord) -> Int32 {
-  if a.created_at_ms != b.created_at_ms {
-    return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
+  let created_order = compare_creation_times(a.created_at_ms, b.created_at_ms)
+  if created_order != 0 {
+    return created_order
   }
   a.expansion_id.value.compare(b.expansion_id.value)
 }

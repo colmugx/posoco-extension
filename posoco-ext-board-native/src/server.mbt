@@ -92,6 +92,22 @@ fn board_request_token_ok(request : @moonback.Request, token : String) -> Bool {
 }
 
 ///|
+/// Require a valid Host on all requests and a matching Origin on WebSockets.
+fn board_request_source_ok(
+  request : @moonback.Request,
+  endpoint : BoardEndpoint,
+) -> Bool {
+  board_request_host_ok(request, endpoint) &&
+  (request.path != "/ws" || board_request_origin_ok(request, endpoint))
+}
+
+///|
+/// Health and manifest-declared static resources are the only public paths.
+fn board_token_required(path : StringView, public_assets : Set[String]) -> Bool {
+  path != "/health" && !public_assets.contains(path.to_owned())
+}
+
+///|
 fn board_response_headers() -> Map[String, String] {
   { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
 }
@@ -107,11 +123,9 @@ fn board_security(
 ) -> @moonback.Middleware {
   @moonback.Middleware(next => {
     (req, res) => {
-      if !board_request_host_ok(req, endpoint) ||
-        (req.path == "/ws" && !board_request_origin_ok(req, endpoint)) {
+      if !board_request_source_ok(req, endpoint) {
         res.send_text("forbidden", status=403, headers=board_response_headers())
-      } else if req.path != "/health" &&
-        !public_assets.contains(req.path.to_owned()) &&
+      } else if board_token_required(req.path, public_assets) &&
         !board_request_token_ok(req, token) {
         res.send_text(
           "unauthorized",

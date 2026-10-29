@@ -76,8 +76,21 @@ fn validate_restoration(
     Some(cycle) => return Err(DependencyCycle(cycle~))
     None => ()
   }
+  match validate_restored_attempt_references(snapshot.attempts, tasks) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  validate_restored_expansion_records(snapshot.expansions, tasks)
+}
+
+///|
+/// Check attempt identity and task references after the task graph is valid.
+fn validate_restored_attempt_references(
+  attempts : Array[Attempt],
+  tasks : Map[BoardTaskId, BoardTask],
+) -> Result[Unit, BoardError] {
   let attempt_ids : Set[AttemptId] = Set::from_array([])
-  for attempt in snapshot.attempts {
+  for attempt in attempts {
     if attempt_ids.contains(attempt.id) {
       return Err(DuplicateAttempt(attempt=attempt.id))
     }
@@ -86,9 +99,18 @@ fn validate_restoration(
     }
     attempt_ids.add(attempt.id)
   }
+  Ok(())
+}
+
+///|
+/// Validate durable expansion identities and exclusive task mappings.
+fn validate_restored_expansion_records(
+  records : Array[ExpansionRecord],
+  tasks : Map[BoardTaskId, BoardTask],
+) -> Result[Unit, BoardError] {
   let expansions : Map[ExpansionId, ExpansionRecord] = Map::from_array([])
   let mapped : Set[BoardTaskId] = Set::from_array([])
-  for record in snapshot.expansions {
+  for record in records {
     match validate_restored_expansion(record, tasks) {
       Err(error) => return Err(error)
       Ok(_) => ()

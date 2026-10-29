@@ -80,6 +80,23 @@ fn dispatch_command(
 }
 
 ///|
+/// Keep the UUID failure response consistent across editor and move submissions.
+fn missing_submission_id(model : Model) -> (Model, @rabbita.Cmd) {
+  (
+    {
+      ..model,
+      notice: Some(
+        notice(
+          Error,
+          "This browser cannot generate the identifiers required to submit changes.",
+        ),
+      ),
+    },
+    @rabbita.none,
+  )
+}
+
+///|
 /// Shared submit guards: authoritative replica, no in-flight command, a
 /// trimmed non-empty title and an injectable identifier. Guards are quiet;
 /// the view keeps the controls disabled in every disallowed state.
@@ -109,18 +126,7 @@ fn submit_editor(
     )
   }
   guard (env.uuid)() is Some(uuid) else {
-    return (
-      {
-        ..model,
-        notice: Some(
-          notice(
-            Error,
-            "This browser cannot generate the identifiers required to submit changes.",
-          ),
-        ),
-      },
-      @rabbita.none,
-    )
+    return missing_submission_id(model)
   }
   let revision = model.replica.revision()
   let (command, kind) = match editor.mode {
@@ -143,18 +149,7 @@ fn submit_move(
     return (model, @rabbita.none)
   }
   guard (env.uuid)() is Some(uuid) else {
-    return (
-      {
-        ..model,
-        notice: Some(
-          notice(
-            Error,
-            "This browser cannot generate the identifiers required to submit changes.",
-          ),
-        ),
-      },
-      @rabbita.none,
-    )
+    return missing_submission_id(model)
   }
   if to is @client.Ready {
     match task_by_id(model.replica, task_id) {
