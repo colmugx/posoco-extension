@@ -144,3 +144,22 @@ test "three-line user stories render as three rows" {
   assert_eq(lines[1], "我希望看到活动")
   assert_eq(lines[2], "以便确认工作在进行")
 }
+
+///|
+test "empty legacy story labels do not become a fake story" {
+  assert_eq(user_story_lines("As a , I want , so that "), [
+    "As a , I want , so that ",
+  ])
+  assert_eq(user_story_lines("As a user, I want , so that value"), [
+    "As a user, I want , so that value",
+  ])
+}
+
+///|
+test "legacy comma story keeps all three parts" {
+  assert_eq(user_story_lines("As a user, I want export, so that I can share"), [
+    "As a user",
+    "I want export",
+    "So that I can share",
+  ])
+}
