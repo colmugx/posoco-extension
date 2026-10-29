@@ -1,4 +1,14 @@
 ///|
+/// Adapter from the model's severity spelling to the component tone vocabulary.
+fn notice_tone(severity : NoticeSeverity) -> @ui.NoticeTone {
+  match severity {
+    Success => @ui.NoticeTone::Success
+    Warning => @ui.NoticeTone::Warning
+    Error => @ui.NoticeTone::Error
+  }
+}
+
+///|
 /// One card action button. Card actions stop click propagation: activating
 /// Edit or a suggested move must not also trigger the card's
 /// select-to-inspect handler.
@@ -30,15 +40,6 @@ fn card_action_click(
 ) -> @rabbita.Cmd {
   event.stop_propagation()
   emit(msg)
-}
-
-///|
-fn labeled_field(
-  id : String,
-  label_text : String,
-  control : @html.Html,
-) -> @html.Html {
-  @html.div(class="field", [@html.label(for_=id, label_text), control])
 }
 
 ///|
@@ -235,55 +236,31 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn banner(text : String) -> @html.Html {
-  @html.div(
-    class="banner",
-    attrs=@html.Attrs::build().role("status").aria_live("polite"),
-    [@html.span(class="banner-dot", ""), @html.span(text)],
-  )
-}
-
-///|
-fn banner_retry(text : String, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  @html.div(
-    class="banner",
-    attrs=@html.Attrs::build().role("status").aria_live("polite"),
-    [
-      @html.span(class="banner-dot", ""),
-      @html.span(text),
-      @html.button(
-        type_="button",
-        class="btn btn-sm banner-action",
-        on_click=emit(ManualReconnect),
-        "Retry",
-      ),
-    ],
-  )
-}
-
-///|
 fn connection_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   match model.connection {
     Online if model.replica.has_snapshot() => @html.nothing
-    Online => banner("Waiting for the board.")
-    Connecting => banner("Connecting to the board.")
+    Online => @ui.banner("Waiting for the board.")
+    Connecting => @ui.banner("Connecting to the board.")
     Reconnecting =>
       if model.replica.has_snapshot() {
-        banner("Reconnecting. Showing the last known board.")
+        @ui.banner("Reconnecting. Showing the last known board.")
       } else {
-        banner("Reconnecting.")
+        @ui.banner("Reconnecting.")
       }
     Offline =>
       if model.can_connect {
-        banner_retry("Offline. The connection stopped.", emit)
+        @ui.banner_retry("Offline. The connection stopped.", emit(ManualReconnect))
       } else {
-        banner("Offline. Open this page from the Board host to connect.")
+        @ui.banner("Offline. Open this page from the Board host to connect.")
       }
     ProtocolError(_) =>
       if model.can_connect {
-        banner_retry("Connection stopped. Retry after checking the host.", emit)
+        @ui.banner_retry(
+          "Connection stopped. Retry after checking the host.",
+          emit(ManualReconnect),
+        )
       } else {
-        banner("Connection stopped. Reload after checking the host version.")
+        @ui.banner("Connection stopped. Reload after checking the host version.")
       }
   }
 }
@@ -327,26 +304,27 @@ fn toolbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   }
   @html.div(class="toolbar", [
     @html.div(class="filters", [
-      @html.input(
-        input_type=Search,
+      @ui.search_input(
         id="board-search",
-        class="filter-search",
         placeholder="Search tasks",
         value=filter.query,
-        attrs=@html.Attrs::build().aria_label(
-          "Search tasks by title, ID, or description",
-        ),
+        aria_label="Search tasks by title, ID, or description",
         on_input=value => emit(FilterQueryChanged(value)),
+        style=["width:auto", "flex:1 1 240px", "max-width:360px"],
       ),
-      @html.select(
-        class="filter-select",
-        attrs=@html.Attrs::build().aria_label("Filter by stage"),
+      @ui.select_field(
+        id="filter-stage",
+        name="filter_stage",
+        disabled=false,
+        aria_label="Filter by stage",
         on_change=value => emit(FilterStageChanged(value)),
         stage_filter_options(filter),
       ),
-      @html.select(
-        class="filter-select",
-        attrs=@html.Attrs::build().aria_label("Filter by priority"),
+      @ui.select_field(
+        id="filter-priority",
+        name="filter_priority",
+        disabled=false,
+        aria_label="Filter by priority",
         on_change=value => emit(FilterPriorityChanged(value)),
         priority_filter_options(filter),
       ),
@@ -377,19 +355,15 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       let creating = editor.mode is CreateMode
       if creating {
         return @html.div(class="dialog-form", [
-          labeled_field(
-            "\{id}-idea",
-            "What do you want to build?",
-            @html.textarea(
-              id="\{id}-idea",
-              name="idea",
-              rows=6,
-              value=editor.description,
-              placeholder="Describe the idea in your own words. Rough notes are enough.",
-              disabled=locked,
-              on_input=value => emit(DescriptionChanged(value)),
-              @html.fragment([]),
-            ),
+          @ui.text_area(
+            id="\{id}-idea",
+            name="idea",
+            label="What do you want to build?",
+            value=editor.description,
+            rows=6,
+            placeholder="Describe the idea in your own words. Rough notes are enough.",
+            disabled=locked,
+            on_input=value => emit(DescriptionChanged(value)),
           ),
           @html.p(
             class="dialog-hint",
@@ -404,33 +378,25 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         )
       } else {
         @html.fragment([
-          labeled_field(
-            "\{id}-user-story",
-            "User story",
-            @html.textarea(
-              id="\{id}-user-story",
-              name="user_story",
-              rows=3,
-              value=editor.user_story,
-              placeholder="As a ..., I want ..., so that ...",
-              disabled=locked,
-              on_input=value => emit(UserStoryChanged(value)),
-              @html.fragment([]),
-            ),
+          @ui.text_area(
+            id="\{id}-user-story",
+            name="user_story",
+            label="User story",
+            value=editor.user_story,
+            rows=3,
+            placeholder="As a ..., I want ..., so that ...",
+            disabled=locked,
+            on_input=value => emit(UserStoryChanged(value)),
           ),
-          labeled_field(
-            "\{id}-suggestions",
-            "Implementation suggestions",
-            @html.textarea(
-              id="\{id}-suggestions",
-              name="implementation_suggestions",
-              rows=3,
-              value=editor.implementation_suggestions,
-              placeholder="Starting points, not a mandate",
-              disabled=locked,
-              on_input=value => emit(ImplementationSuggestionsChanged(value)),
-              @html.fragment([]),
-            ),
+          @ui.text_area(
+            id="\{id}-suggestions",
+            name="implementation_suggestions",
+            label="Implementation suggestions",
+            value=editor.implementation_suggestions,
+            rows=3,
+            placeholder="Starting points, not a mandate",
+            disabled=locked,
+            on_input=value => emit(ImplementationSuggestionsChanged(value)),
           ),
         ])
       }
@@ -439,79 +405,64 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       } else {
         @html.fragment([
           @html.div(class="dialog-pair", [
-            labeled_field(
-              "\{id}-priority",
-              "Priority",
-              @html.select(
-                id="\{id}-priority",
-                name="priority",
-                disabled=locked,
-                on_change=value => emit(PriorityChanged(value)),
-                priorities().map(priority => {
-                  @html.option(
-                    value=priority.to_wire(),
-                    selected=priority == editor.priority,
-                    "\{priority_short(priority)} \{priority_label(priority)}",
-                  )
-                }),
-              ),
+            @ui.select_field(
+              id="\{id}-priority",
+              name="priority",
+              label="Priority",
+              value=editor.priority.to_wire(),
+              disabled=locked,
+              on_change=value => emit(PriorityChanged(value)),
+              priorities().map(priority => {
+                @html.option(
+                  value=priority.to_wire(),
+                  selected=priority == editor.priority,
+                  "\{priority_short(priority)} \{priority_label(priority)}",
+                )
+              }),
             ),
             @html.div(class="dialog-stage", [
               @html.span(class="dialog-stage-label", "Stage"),
               @html.span(class="dialog-stage-value", "Ready needs all fields"),
             ]),
           ]),
-          labeled_field(
-            "\{id}-dod",
-            "Definition of done",
-            @html.textarea(
-              id="\{id}-dod",
-              name="definition_of_done",
-              rows=4,
-              value=editor.definition_of_done,
-              placeholder="One entry per line",
-              disabled=locked,
-              on_input=value => emit(DefinitionOfDoneChanged(value)),
-              @html.fragment([]),
-            ),
+          @ui.text_area(
+            id="\{id}-dod",
+            name="definition_of_done",
+            label="Definition of done",
+            value=editor.definition_of_done,
+            rows=4,
+            placeholder="One entry per line",
+            disabled=locked,
+            on_input=value => emit(DefinitionOfDoneChanged(value)),
           ),
         ])
       }
       @html.div(class="dialog-form", [
         @html.div(class="dialog-grid", [
-          labeled_field(
-            "\{id}-title",
-            "Title",
-            @html.input(
-              input_type=Text,
-              id="\{id}-title",
-              name="title",
-              class="dialog-title-input",
-              value=editor.title,
-              attrs=@html.Attrs::build()
-                .disabled(locked)
-                .aria_label("Task title")
-                .data_set("autofocus", "true"),
-              on_input=value => emit(TitleChanged(value)),
-            ),
+          @ui.text_input(
+            id="\{id}-title",
+            name="title",
+            label="Title",
+            value=editor.title,
+            placeholder="",
+            disabled=locked,
+            autofocus=true,
+            aria_label="Task title",
+            on_input=value => emit(TitleChanged(value)),
           ),
-          labeled_field(
-            "\{id}-description",
-            "Description",
-            @html.textarea(
-              id="\{id}-description",
-              name="description",
-              rows=if creating { 4 } else { 3 },
-              value=editor.description,
-              placeholder=if creating {
-                "What should change? Rough notes are enough."
-              } else {
-                "Detailed scope and constraints"
-              },
-              disabled=locked,
-              on_input=value => emit(DescriptionChanged(value)),
-              @html.fragment([]),
-            ),
+          @ui.text_area(
+            id="\{id}-description",
+            name="description",
+            label="Description",
+            value=editor.description,
+            rows=if creating { 4 } else { 3 },
+            placeholder=if creating {
+              "What should change? Rough notes are enough."
+            } else {
+              "Detailed scope and constraints"
+            },
+            disabled=locked,
+            on_input=value => emit(DescriptionChanged(value)),
           ),
           story_fields,
           priority_and_dod,
@@ -547,11 +498,11 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       }
     None => true
   }
-  @html.dialog(
-    id="create-dialog",
-    class="dialog form-dialog",
-    on_close=_ => emit(EditorCancelled),
-    attrs=@html.Attrs::build().aria_label(heading),
+  @ui.dialog(
+    "create-dialog",
+    heading,
+    _ => emit(EditorCancelled),
+    ["width:min(calc(100% - 2rem),54rem)","max-height:calc(100vh - 3rem)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -562,9 +513,8 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               "A backlog item becomes a story during Shaping.",
             ),
           ]),
-          close_button("create-dialog"),
         ]),
-        inline_notice(model),
+        inline_notice(model, emit),
         @html.div(
           class="dialog-body",
           on_keydown=event => {
@@ -613,30 +563,15 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn close_button(dialog_id : String) -> @html.Html {
-  @html.button(
-    type_="button",
-    class="icon-btn dialog-close",
-    title="Close",
-    attrs=@html.Attrs::build()
-      .aria_label("Close")
-      .on_click(_ => {
-        ui_close(dialog_id)
-        @rabbita.none
-      }),
-    "✕",
-  )
-}
-
-///|
-fn inline_notice(model : Model) -> @html.Html {
+fn inline_notice(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   match model.notice {
     None => @html.nothing
     Some(value) =>
-      @html.div(
-        class="inline-notice \{notice_class(value.severity)}",
-        attrs=@html.Attrs::build().role("status").aria_live("polite"),
-        [@html.span(class="notice-dot", ""), @html.span(value.text)],
+      @ui.notice(
+        notice_tone(value.severity),
+        value.text,
+        on_dismiss=emit(NoticeDismissed),
+        class="inline-notice",
       )
   }
 }
@@ -647,11 +582,11 @@ fn confirm_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     Some(intent) => (intent.title(), intent.body(), intent.action())
     None => ("", "", "")
   }
-  @html.dialog(
-    id="confirm-dialog",
-    class="dialog confirm-dialog",
-    on_close=_ => emit(ConfirmDismissed),
-    attrs=@html.Attrs::build().aria_label(title),
+  @ui.dialog(
+    "confirm-dialog",
+    title,
+    _ => emit(ConfirmDismissed),
+    ["width:min(calc(100% - 2rem),26rem)"],
     [
       @html.div(class="dialog-shell confirm-shell", [
         @html.h2(class="confirm-title", title),
@@ -914,18 +849,18 @@ fn task_card(
       if task.dependencies.length() == 0 {
         @html.nothing
       } else {
-        @html.span(
-          class="chip",
+        @ui.chip(
           dependency_count_label(task.dependencies.length()),
+          @ui.ChipTone::Quiet,
         )
       },
       if attempts == 0 {
         @html.nothing
       } else {
-        @html.span(class="chip is-attempt", attempt)
+        @ui.chip(attempt, @ui.ChipTone::Quiet)
       },
       if pending_for_task(model.pending, task.id) {
-        @html.span(class="chip is-running", "saving")
+        @ui.chip("saving", @ui.ChipTone::Running)
       } else {
         @html.nothing
       },
@@ -1001,7 +936,13 @@ fn task_card(
               card_action(
                 MoveRequested(task.id, to),
                 emit,
-                class="menu-item",
+                // Destructive moves read as such instead of matching every
+                // other row; the durable server still owns the decision.
+                class=if to == @client.Cancelled || to == @client.Suspended {
+                  "menu-item is-danger"
+                } else {
+                  "menu-item"
+                },
                 title="Move to \{ui_stage_label(to)}",
                 disabled=locked,
                 label="Move to \{ui_stage_label(to)}",
@@ -1088,8 +1029,8 @@ fn lane(
 ///|
 fn skeleton_card() -> @html.Html {
   @html.div(class="skeleton-card", [
-    @html.div(class="skeleton skeleton-line w-60", ""),
-    @html.div(class="skeleton skeleton-line w-40", ""),
+    @ui.skeleton_line("skeleton-line w-60"),
+    @ui.skeleton_line("skeleton-line w-40"),
   ])
 }
 
@@ -1124,7 +1065,7 @@ fn loading_board() -> @html.Html {
 fn empty_state(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let hint = create_unavailable_hint(model)
   @html.div(class="board-area", [
-    @html.div(class="empty-state", [
+    @ui.empty_shell([
       @html.div(class="empty-flow", [
         @html.span(class="empty-step", "1 Backlog"),
         @html.span(class="empty-arrow", "→"),
@@ -1167,7 +1108,7 @@ fn empty_state(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 ///|
 fn filtered_empty(_model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.div(class="board-area", [
-    @html.div(class="empty-state", [
+    @ui.empty_shell([
       @html.h2("No tasks match"),
       @html.p("Clear the filters to see the full board."),
       @html.button(
@@ -1230,11 +1171,11 @@ fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let done = archived(Done)
   let paused = archived(Suspended)
   let cancelled = archived(Cancelled)
-  @html.dialog(
-    id="archive-dialog",
-    class="dialog directory-dialog",
-    on_close=_ => emit(ArchiveClosed),
-    attrs=@html.Attrs::build().aria_label("Archive"),
+  @ui.dialog(
+    "archive-dialog",
+    "Archive",
+    _ => emit(ArchiveClosed),
+    ["width:min(calc(100% - 2rem),74rem)","height:min(82vh,900px)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -1245,7 +1186,6 @@ fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               "\{done.length()} done · \{paused.length()} paused · \{cancelled.length()} cancelled. Finished work leaves the flow.",
             ),
           ]),
-          close_button("archive-dialog"),
         ]),
         @html.div(class="directory-body", [
           archive_section("Done", "Closed and accepted.", done, model, emit),
@@ -1301,31 +1241,25 @@ fn notice_toast(notice : Notice?, emit : @rabbita.Emit[Msg]) -> @html.Html {
       match notice {
         None => @html.nothing
         Some(value) =>
-          @html.div(class="toast \{notice_class(value.severity)}", [
-            @html.span(class="toast-dot", ""),
-            @html.span(class="toast-text", value.text),
-            match value.action {
-              Some(action) =>
-                @html.button(
-                  type_="button",
-                  class="btn btn-sm toast-action",
-                  attrs=@html.Attrs::build().aria_label(
-                    "\{action.label}: move the task back to \{ui_stage_label(action.move_to)}",
-                  ),
-                  on_click=emit(NoticeActionInvoked),
-                  action.label,
-                )
-              None => @html.nothing
-            },
-            @html.button(
-              type_="button",
-              class="toast-close",
-              title="Dismiss notification",
-              attrs=@html.Attrs::build().aria_label("Dismiss notification"),
-              on_click=emit(NoticeDismissed),
-              "✕",
-            ),
-          ])
+          match value.action {
+            Some(action) =>
+              @ui.notice_with_action(
+                notice_tone(value.severity),
+                value.text,
+                action_label=action.label,
+                action_aria="\{action.label}: move the task back to \{ui_stage_label(action.move_to)}",
+                action_cmd=emit(NoticeActionInvoked),
+                on_dismiss=emit(NoticeDismissed),
+                class="toast",
+              )
+            None =>
+              @ui.notice(
+                notice_tone(value.severity),
+                value.text,
+                on_dismiss=emit(NoticeDismissed),
+                class="toast",
+              )
+          }
       },
     ],
   )
@@ -1393,11 +1327,11 @@ fn live_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         "Runtime details are not available yet. Ticket state exposes them after the first snapshot.",
       )
   }
-  @html.dialog(
-    id="live-dialog",
-    class="dialog live-dialog",
-    on_close=_ => emit(LiveClosed),
-    attrs=@html.Attrs::build().aria_label("Cetas runtime"),
+  @ui.dialog(
+    "live-dialog",
+    "Cetas runtime",
+    _ => emit(LiveClosed),
+    ["width:min(calc(100% - 2rem),35rem)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -1408,7 +1342,6 @@ fn live_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               "Connection, active model and provider manager.",
             ),
           ]),
-          close_button("live-dialog"),
         ]),
         @html.div(class="dialog-body", [details]),
       ]),
@@ -1424,18 +1357,16 @@ fn team_name_field(
   role : String,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  labeled_field(
-    id,
-    label,
-    @html.input(
-      input_type=Text,
-      id~,
-      name=id,
-      class="dialog-title-input",
-      value~,
-      attrs=@html.Attrs::build().aria_label(label),
-      on_input=text => emit(TeamNameChanged(role, text)),
-    ),
+  @ui.text_input(
+    id~,
+    name=id,
+    label~,
+    value~,
+    placeholder="",
+    disabled=false,
+    autofocus=false,
+    aria_label=label,
+    on_input=text => emit(TeamNameChanged(role, text)),
   )
 }
 
@@ -1670,6 +1601,54 @@ fn team_mcp_panel(
               )
             }),
           ),
+          @html.label(class="team-check", [
+            @html.input(
+              input_type=Checkbox,
+              name="team_mcp_restrict_tools",
+              checked=config.tools.length() > 0,
+              on_change=_ =>
+                emit(TeamMcpToolsRestricted(role, config.tools.is_empty())),
+            ),
+            @html.span("Only selected tools"),
+          ]),
+          if config.tools.is_empty() {
+            @html.p(
+              class="empty-line",
+              "Every tool from the allowed servers is available.",
+            )
+          } else {
+            @html.div(class="team-tools", {
+              let groups : Array[@html.Html] = []
+              for server in servers {
+                let selected = config.all ||
+                  config.servers.contains(server.name)
+                if selected && !server.tools.is_empty() {
+                  groups.push(
+                    @html.div(class="team-tool-group", [
+                      @html.span(class="team-tool-server", server.name),
+                      @html.div(
+                        class="team-tool-list",
+                        server.tools.map(tool =>
+                          @html.label(class="team-check team-tool", [
+                            @html.input(
+                              input_type=Checkbox,
+                              name="team_mcp_tool",
+                              value=tool,
+                              checked=config.tools.contains(tool),
+                              on_change=_ =>
+                                emit(TeamMcpToolToggled(role, tool)),
+                            ),
+                            @html.span(tool),
+                          ])
+                        ),
+                      ),
+                    ]),
+                  )
+                }
+              }
+              groups
+            })
+          },
         ])
       },
     ]),
@@ -1682,11 +1661,11 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let draft = model.team_draft
   let draft_profile = model.team_profile_draft
   let roles = ["po", "sm", "rd", "set", "te"]
-  @html.dialog(
-    id="team-dialog",
-    class="dialog team-dialog",
-    on_close=_ => emit(TeamClosed),
-    attrs=@html.Attrs::build().aria_label("Team settings"),
+  @ui.dialog(
+    "team-dialog",
+    "Team settings",
+    _ => emit(TeamClosed),
+    ["width:min(calc(100% - 2rem),46rem)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -1697,24 +1676,21 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               "Each member has a name and its own MCP access. MCP servers come from the host's mcp.json.",
             ),
           ]),
-          close_button("team-dialog"),
         ]),
         @html.div(class="dialog-body", [
-          labeled_field(
-            "team-profile",
-            "Work profile",
-            @html.select(
-              id="team-profile",
-              name="work_profile",
-              on_change=value => emit(TeamProfileChanged(value)),
-              work_profiles().map(profile => {
-                @html.option(
-                  value=profile.id,
-                  selected=profile.id == draft_profile.id,
-                  profile.label,
-                )
-              }),
-            ),
+          @ui.select_field(
+            id="team-profile",
+            name="work_profile",
+            label="Work profile",
+            disabled=false,
+            on_change=value => emit(TeamProfileChanged(value)),
+            work_profiles().map(profile => {
+              @html.option(
+                value=profile.id,
+                selected=profile.id == draft_profile.id,
+                profile.label,
+              )
+            }),
           ),
           @html.div(
             class="team-tabs",
@@ -1754,7 +1730,7 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 
 ///|
 fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  @html.main_(class="app", [
+  @ui.theme_root(@html.main_(class="app", [
     topbar(model, emit),
     toolbar(model, emit),
     connection_banner(model, emit),
@@ -1768,5 +1744,5 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     team_dialog(model, emit),
     confirm_dialog(model, emit),
     notice_toast(model.notice, emit),
-  ])
+  ]))
 }

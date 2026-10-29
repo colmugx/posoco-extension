@@ -6,7 +6,15 @@ import {
 }
 
 ///|
-async fn copy_public(source : String, target : String) -> Unit {
+/// Local directories that never describe frontend sources: build output,
+/// resolved dependencies and the published artifact itself.
+fn ignored_dir(name : String) -> Bool {
+  name == "_build" || name == ".mooncakes" || name == "node_modules" ||
+  name == ".git" || name == "dist"
+}
+
+///|
+async fn copy_tree(source : String, target : String) -> Unit {
   @fs.mkdir(target, recursive=true, allow_exist=true)
   for
     name in @fs.readdir(
@@ -21,29 +29,142 @@ async fn copy_public(source : String, target : String) -> Unit {
     let from = source + "/" + name
     let to = target + "/" + name
     match @fs.kind(from, follow_symlink=false) {
-      Directory => copy_public(from, to)
+      Directory => copy_tree(from, to)
       Regular => @fs.write_file(to, @fs.read_file(from).binary())
-      _ => fail("Browser public assets must be regular files or directories")
+      _ => fail("Browser dist assets must be regular files or directories")
     }
   }
 }
 
 ///|
+/// Newest modification time under `path`, recursing into directories while
+/// skipping build output, dependencies and `dist` itself. Returns `None` for a
+/// missing path.
+async fn newest_mtime(path : String) -> (Int64, Int)? {
+  if !@fs.exists(path) {
+    return None
+  }
+  match @fs.kind(path, follow_symlink=true) {
+    Directory => {
+      let mut newest = @fs.mtime(path)
+      for name in @fs.readdir(path, include_hidden=true, sort=true) {
+        if name == "." || name == ".." || ignored_dir(name) {
+          continue
+        }
+        match newest_mtime(path + "/" + name) {
+          Some(stamp) =>
+            if stamp.0 > newest.0 || (stamp.0 == newest.0 && stamp.1 > newest.1) {
+              newest = stamp
+            }
+          None => ()
+        }
+      }
+      Some(newest)
+    }
+    _ => Some(@fs.mtime(path))
+  }
+}
+
+///|
+/// Dist URLs every host serves. Keep in sync with `required_assets` in
+/// `generate.mbtx` and with the pinned names in `vite.config.ts`.
+let required_dist_assets : Array[String] = [
+  "index.html", "index.js", "board.css",
+]
+
+///|
+/// Frontend sources whose modification invalidates a prebuilt `dist`.
+let frontend_sources : Array[String] = [
+  "src", "cmd", "styles", "public", "index.html", "package.json",
+  "package-lock.json", "vite.config.ts", "moon.mod",
+]
+
+///|
+async fn dist_problems(dist : String) -> Array[String] {
+  let problems : Array[String] = []
+  for name in required_dist_assets {
+    if !@fs.exists(dist + "/" + name) {
+      problems.push("missing " + dist + "/" + name)
+    }
+  }
+  problems
+}
+
+///|
+async fn build_frontend(web : String) -> Unit {
+  println(
+    "board-web dist is out of date; building the frontend (npm run build in \{web})",
+  )
+  @shell.Cmd("npm", ["run", "build"], cwd=web).run()
+}
+
+///|
+/// Resolve `dist` for the embed step.
+///
+/// The frontend is the single source of browser assets, so this build never
+/// compiles MoonBit or copies `public/` itself. Two environments are supported:
+///
+/// - `node_modules` present: rebuild unconditionally, so the embedded bytes
+///   always match the checked-in sources.
+/// - `node_modules` absent (release tarball, CI artifact, native-only box):
+///   consume a prebuilt `dist`, but refuse to embed bytes older than the
+///   sources they are supposed to represent.
+async fn ensure_dist(web : String) -> String {
+  let dist = web + "/dist"
+  let has_toolchain = @fs.exists(web + "/node_modules")
+  if has_toolchain {
+    build_frontend(web)
+  }
+  let problems = dist_problems(dist)
+  if problems.length() > 0 {
+    let detail = problems.join("\n  - ")
+    if has_toolchain {
+      fail(
+        "The frontend build did not produce the published dist contract:\n  - " +
+        detail,
+      )
+    }
+    fail(
+      "board-web has no prebuilt dist and no node_modules, so the browser assets cannot be produced:\n  - " +
+      detail +
+      "\nRun `npm install && npm run build` in " +
+      web +
+      " first.",
+    )
+  }
+  if !has_toolchain {
+    // Without a toolchain the bytes are only as fresh as the last manual
+    // build; refuse to embed a dist that predates its sources.
+    let dist_stamp = @fs.mtime(dist + "/index.js")
+    for source in frontend_sources {
+      match newest_mtime(web + "/" + source) {
+        Some(stamp) =>
+          if stamp.0 > dist_stamp.0 ||
+            (stamp.0 == dist_stamp.0 && stamp.1 > dist_stamp.1) {
+            fail(
+              "board-web/dist is older than its source `" +
+              source +
+              "` and node_modules is absent, so the embedded assets would be stale.\nRun `npm install && npm run build` in " +
+              web +
+              ".",
+            )
+          }
+        None => ()
+      }
+    }
+  }
+  dist
+}
+
+///|
 async fn main {
-  // Separate the nested browser compiler from the caller's workspace build lock.
-  let browser_build = "../_build/board-browser-assets"
-  @shell.Cmd("moon", [
-    "-C", "../posoco-ext-board-web", "--target-dir", browser_build, "build", "cmd/browser",
-    "--target", "js", "--release", "--output-json",
-  ]).run()
+  let web = "../posoco-ext-board-web"
+  let source = ensure_dist(web)
   let dist = "_build/browser-assets-dist"
   if @fs.exists(dist) {
     @fs.rmdir(dist, recursive=true)
   }
-  copy_public("../posoco-ext-board-web/public", dist)
-  let js = browser_build +
-    "/js/release/build/colmugx/posoco-ext-board-web/cmd/browser/browser.js"
-  @fs.write_file(dist + "/index.js", @fs.read_file(js).binary())
+  copy_tree(source, dist)
   @shell.Cmd("moon", [
     "--target-dir", "_build/assets-generator", "run", "tools/embed-assets/generate.mbtx",
     "--target", "native", "--output-json", "--", dist,

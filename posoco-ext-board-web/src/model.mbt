@@ -558,6 +558,8 @@ priv enum Msg {
   TeamMcpEnabledChanged(String, Bool)
   TeamMcpAllChanged(String, Bool)
   TeamMcpServerToggled(String, String)
+  TeamMcpToolsRestricted(String, Bool)
+  TeamMcpToolToggled(String, String)
   TeamSkillsEnabledChanged(String, Bool)
   TeamSkillsAllChanged(String, Bool)
   TeamSkillToggled(String, String)

@@ -1,0 +1,22 @@
+/* Tailwind entry for the Board shell.
+ *
+ * Preflight is deliberately not imported: `public/board.css` already owns the
+ * reset and the whole "Instrument" design system, and this stage must not
+ * change one pixel. Only the theme variables and the utility layer are loaded,
+ * so utilities are available for new work while every existing rule keeps
+ * winning on its own specificity.
+ *
+ * The design system sits in `layer(components)` so that, as components migrate,
+ * utilities can override them without an !important arms race.
+ *
+ * The MoonBit sources are declared explicitly instead of relying on automatic
+ * source detection: class names live in `.mbt` string literals.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../public/board.css" layer(components);
+
+@source "../src";
+@source "../cmd";

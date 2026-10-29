@@ -3,11 +3,11 @@
 /// step, its review, and its history. Rendered as a native dialog so the
 /// browser owns Esc, focus and the backdrop.
 fn detail_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  @html.dialog(
-    id="detail-dialog",
-    class="dialog sheet-dialog",
-    on_close=_ => emit(InspectorClosed),
-    attrs=@html.Attrs::build().aria_label("Task detail"),
+  @ui.sheet_dialog(
+    "detail-dialog",
+    "Task detail",
+    _ => emit(InspectorClosed),
+    "40rem",
     [@html.div(class="sheet", [detail_body(model, emit)])],
   )
 }
@@ -20,7 +20,6 @@ fn detail_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   if !model.replica.has_snapshot() {
     return @html.div(class="sheet-head", [
       @html.h2(class="sheet-title", "Waiting for the board"),
-      close_button("detail-dialog"),
     ])
   }
   match inspector_task(model) {
@@ -28,7 +27,6 @@ fn detail_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     None =>
       @html.div(class="sheet-head", [
         @html.h2(class="sheet-title", "This task is no longer on the board"),
-        close_button("detail-dialog"),
       ])
   }
 }
@@ -151,29 +149,26 @@ fn model_picker(
       if option.efforts.length() == 0 {
         @html.nothing
       } else {
-        labeled_field(
-          "ticket-model-effort",
-          "Effort",
-          @html.select(
-            id="ticket-model-effort",
-            name="ticket_model_effort",
-            disabled=locked,
-            on_change=value => {
-              emit(
-                TicketSetModel(
-                  task.id,
-                  Some(model_choice_with_effort(option.id, value)),
-                ),
-              )
-            },
-            model_select_html(
-              model_effort_options(
-                option,
-                match selection {
-                  Some(selection) => selection.effort
-                  None => None
-                },
+        @ui.select_field(
+          id="ticket-model-effort",
+          name="ticket_model_effort",
+          label="Effort",
+          disabled=locked,
+          on_change=value => {
+            emit(
+              TicketSetModel(
+                task.id,
+                Some(model_choice_with_effort(option.id, value)),
               ),
+            )
+          },
+          model_select_html(
+            model_effort_options(
+              option,
+              match selection {
+                Some(selection) => selection.effort
+                None => None
+              },
             ),
           ),
         )
@@ -181,18 +176,15 @@ fn model_picker(
     None => @html.nothing
   }
   @html.div(class="model-picker", [
-    labeled_field(
-      "ticket-model-slot",
-      "Model",
-      @html.select(
-        id="ticket-model-slot",
-        name="ticket_model",
-        disabled=locked,
-        on_change=value => {
-          emit(TicketSetModel(task.id, model_choice_from_slot(value)))
-        },
-        model_select_html(model_slot_options(catalog, selection)),
-      ),
+    @ui.select_field(
+      id="ticket-model-slot",
+      name="ticket_model",
+      label="Model",
+      disabled=locked,
+      on_change=value => {
+        emit(TicketSetModel(task.id, model_choice_from_slot(value)))
+      },
+      model_select_html(model_slot_options(catalog, selection)),
     ),
     effort,
     @html.p(
@@ -360,7 +352,7 @@ fn review_verification_section(
         let row = review_evidence_row(evidence)
         @html.li(class="review-evidence-row is-\{row.tone}", [
           @html.div(class="review-evidence-head", [
-            @html.span(class="review-evidence-result", row.result),
+            @ui.chip(row.result, review_result_chip_tone(row.tone)),
             @html.span(class="review-evidence-kind", row.kind),
             @html.span(class="review-evidence-label", row.label),
           ]),
@@ -466,23 +458,17 @@ fn request_changes_editor(
 ) -> @html.Html {
   let id = "review-request-changes"
   @html.div(class="review-feedback-editor", [
-    labeled_field(
-      id,
-      "What must the next run change?",
-      @html.textarea(
-        id~,
-        name="review_feedback",
-        class="review-feedback-input",
-        rows=4,
-        value=draft.feedback,
-        placeholder="Name the gap: what is missing, wrong, or unverified.",
-        disabled=model.ticket_sending,
-        attrs=@html.Attrs::build().aria_label(
-          "Reviewer feedback the next run must address",
-        ),
-        on_input=value => emit(RequestChangesFeedbackChanged(value)),
-        @html.fragment([]),
-      ),
+    @ui.text_area(
+      id~,
+      name="review_feedback",
+      label="What must the next run change?",
+      value=draft.feedback,
+      rows=4,
+      placeholder="Name the gap: what is missing, wrong, or unverified.",
+      disabled=model.ticket_sending,
+      class="review-feedback-input",
+      aria_label="Reviewer feedback the next run must address",
+      on_input=value => emit(RequestChangesFeedbackChanged(value)),
     ),
     @html.p(
       class="review-feedback-hint",
@@ -748,9 +734,9 @@ fn task_details(
         // The stepper below is the only stage read; the meta row keeps the
         // facts the title does not carry.
         @html.p(class="sheet-meta", [
-          @html.span(
-            class="chip",
+          @ui.chip(
             priority_short(task.priority) + " " + priority_label(task.priority),
+            @ui.ChipTone::Quiet,
           ),
           model_chip(ticket_model_catalog(model), task.model),
         ]),
@@ -761,12 +747,14 @@ fn task_details(
           class="btn btn-sm",
           title="Open this ticket's activity",
           attrs=@html.Attrs::build().on_click(_ => {
+            // One sheet at a time: the activity pane replaces the detail sheet
+            // instead of stacking a second modal on top of it.
+            ui_close("detail-dialog")
             ui_show("ticket-activity-dialog")
             emit(TicketActivityOpened(task.id))
           }),
           "Activity",
         ),
-        close_button("detail-dialog"),
       ]),
     ]),
     @html.div(class="sheet-body", [
@@ -1070,9 +1058,9 @@ fn attempt_row(
     @html.div(class="attempt-line", [
       @html.span(class="mono", attempt.id),
       @html.span(class="attempt-kind", attempt_kind_label(attempt.kind)),
-      @html.span(
-        class="state-chip is-\{attempt_state_tone(attempt.status)}",
+      @ui.chip(
         attempt_status_label(attempt.status),
+        attempt_chip_tone(attempt.status),
       ),
       match attempt.review {
         Some(review) => @html.span(class="attempt-review", review_label(review))
@@ -1089,13 +1077,25 @@ fn attempt_row(
 }
 
 ///|
-fn attempt_state_tone(status : @client.ClientAttemptStatus) -> String {
+fn attempt_chip_tone(status : @client.ClientAttemptStatus) -> @ui.ChipTone {
   match status {
-    Queued => "queued"
-    Running => "running"
-    Succeeded => "ok"
-    Failed => "bad"
-    Cancelled | Interrupted => "muted"
+    Queued => @ui.ChipTone::Quiet
+    Running => @ui.ChipTone::Running
+    Succeeded => @ui.ChipTone::Success
+    Failed => @ui.ChipTone::Warn
+    Cancelled | Interrupted => @ui.ChipTone::Muted
+  }
+}
+
+///|
+/// Review rows carry the client's own wire spelling for the result, so the tone
+/// is derived from that string rather than re-deriving the enum.
+fn review_result_chip_tone(tone : String) -> @ui.ChipTone {
+  match tone {
+    "passed" => @ui.ChipTone::Success
+    "failed" => @ui.ChipTone::Warn
+    "not_run" => @ui.ChipTone::Muted
+    _ => @ui.ChipTone::Quiet
   }
 }
 
@@ -1132,22 +1132,19 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           } else {
             @html.nothing
           },
-          labeled_field(
-            "attempt-queue-kind",
-            "Kind",
-            @html.select(
-              id="attempt-queue-kind",
-              name="attempt_kind",
-              disabled=!editable,
-              on_change=value => emit(AttemptKindChanged(value)),
-              attempt_kinds().map(kind => {
-                @html.option(
-                  value=kind.to_wire(),
-                  selected=kind == draft.kind,
-                  attempt_kind_label(kind),
-                )
-              }),
-            ),
+          @ui.select_field(
+            id="attempt-queue-kind",
+            name="attempt_kind",
+            label="Kind",
+            disabled=!editable,
+            on_change=value => emit(AttemptKindChanged(value)),
+            attempt_kinds().map(kind => {
+              @html.option(
+                value=kind.to_wire(),
+                selected=kind == draft.kind,
+                attempt_kind_label(kind),
+              )
+            }),
           ),
           @html.div(class="button-row", [
             @html.button(
@@ -1297,29 +1294,26 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       } else {
         @html.nothing
       },
-      labeled_field(
-        "attempt-finish-outcome",
-        "Terminal outcome",
-        @html.select(
-          id="attempt-finish-outcome",
-          name="attempt_outcome",
-          disabled=!editable,
-          on_change=value => emit(AttemptOutcomeChanged(value)),
-          [
+      @ui.select_field(
+        id="attempt-finish-outcome",
+        name="attempt_outcome",
+        label="Terminal outcome",
+        disabled=!editable,
+        on_change=value => emit(AttemptOutcomeChanged(value)),
+        [
+          @html.option(
+            value="",
+            selected=draft.outcome is None,
+            "Choose an outcome…",
+          ),
+          ..attempt_outcomes().map(outcome => {
             @html.option(
-              value="",
-              selected=draft.outcome is None,
-              "Choose an outcome…",
-            ),
-            ..attempt_outcomes().map(outcome => {
-              @html.option(
-                value=outcome.to_wire(),
-                selected=draft.outcome == Some(outcome),
-                outcome_label(outcome),
-              )
-            }),
-          ],
-        ),
+              value=outcome.to_wire(),
+              selected=draft.outcome == Some(outcome),
+              outcome_label(outcome),
+            )
+          }),
+        ],
       ),
       @html.div(class="button-row", [
         @html.button(

@@ -292,15 +292,6 @@ fn accepted_text(kind : PendingKind) -> String {
 }
 
 ///|
-fn notice_class(severity : NoticeSeverity) -> String {
-  match severity {
-    Warning => "notice-warning"
-    Error => "notice-error"
-    Success => "notice-success"
-  }
-}
-
-///|
 /// An accepted correlated command closes only the editor that produced it.
 fn close_matching_editor(editor : Editor?, kind : PendingKind) -> Editor? {
   match (editor, kind) {

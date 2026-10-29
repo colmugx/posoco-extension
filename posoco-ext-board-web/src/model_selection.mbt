@@ -68,10 +68,14 @@ fn model_chip(
   catalog : ModelCatalog,
   selection : @client.ClientModelSelection?,
 ) -> @html.Html {
-  @html.span(
-    class="chip model-chip \{model_chip_tone(catalog, selection)}",
+  @ui.chip(
+    model_chip_label(selection),
+    match model_chip_tone(catalog, selection) {
+      "is-inherit" => @ui.ChipTone::Quiet
+      "is-warn" => @ui.ChipTone::Warn
+      _ => @ui.ChipTone::Pinned
+    },
     title=model_chip_title(catalog, selection),
-    [@html.span(class="chip-text", model_chip_label(selection))],
   )
 }
 

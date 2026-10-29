@@ -20,6 +20,7 @@ async fn copy_sources(source : String, target : String) -> Unit {
       name == "_build" ||
       name == ".mooncakes" ||
       name == ".git" ||
+      name == "node_modules" ||
       name == "web_assets.generated.mbt" {
       continue
     }
@@ -42,31 +43,60 @@ async fn check_native(root : String) -> Unit {
 }
 
 ///|
+/// Run the embed builder without going through the development rule, so a
+/// changed dist is embedded even when no MoonBit input changed.
+async fn embed(native : String) -> Unit {
+  @shell.Cmd("moon", [
+    "-C", native, "--target-dir", "_build/assets-builder-direct", "run",
+    "tools/embed-assets/build.mbtx", "--target", "native", "--output-json",
+  ]).run()
+}
+
+///|
 async fn main {
   let root = "../board-assets-regression-" + @async.now().to_string()
   @fs.mkdir(root, recursive=true, allow_exist=false)
   defer @fs.rmdir(root, recursive=true)
   for
     module_name in [
-      "posoco-ext-board", "posoco-ext-board-native", "posoco-ext-board-web",
+      "posoco-ext-board",
+      "posoco-ext-board-native",
+      "posoco-ext-board-web",
+      // `posoco-ext-board` depends on this sibling module, which is not
+      // published; the temporary workspace must carry it to resolve.
+      "posoco-ext-askquestion",
     ] {
     copy_sources("../" + module_name, root + "/" + module_name)
   }
   @fs.write_file(
     root + "/moon.work",
-    "members = [\"./posoco-ext-board-native\", \"./posoco-ext-board\", \"./posoco-ext-board-web\"]\n",
+    "members = [\"./posoco-ext-board-native\", \"./posoco-ext-board\", \"./posoco-ext-board-web\", \"./posoco-ext-askquestion\"]\n",
   )
   let native = root + "/posoco-ext-board-native"
   let generated = native + "/src/web_assets.generated.mbt"
+  let dist = root + "/posoco-ext-board-web/dist"
+  // The temp copy has no `node_modules`, so the embed step consumes `dist` as
+  // a prebuilt artifact and refuses a dist older than its sources. Copying
+  // rewrites every mtime, so restate `index.js` to keep the artifact newest.
+  let js = dist + "/index.js"
+  @fs.write_file(js, @fs.read_file(js).binary())
   assert_false(@fs.exists(generated))
   check_native(root)
   assert_true(@fs.exists(generated))
+  assert_eq(
+    @fs.read_file(native + "/_build/browser-assets-dist/index.js").binary(),
+    @fs.read_file(js).binary(),
+  )
   let first = @fs.read_file(generated).binary()
-  let css = root + "/posoco-ext-board-web/public/board.css"
+  // Incrementality: a changed dist byte must reach the embed on the next embed
+  // run. The embed rule is deliberately not keyed on `dist` (a missing dist
+  // would abort `moon check` before the rule could build it), so drive the
+  // builder directly here.
+  let css = dist + "/board.css"
   let changed = @fs.read_file(css).binary() +
     b"\n/* incremental-resource-regression */\n"
   @fs.write_file(css, changed)
-  check_native(root)
+  embed(native)
   assert_eq(
     @fs.read_file(native + "/_build/browser-assets-dist/board.css").binary(),
     changed,
@@ -76,6 +106,20 @@ async fn main {
     "-C", native, "run", "tools/embed-assets/generate.mbtx", "--target", "native",
     "--output-json", "--", "--check",
   ]).run()
+  // Freshness guard: without a toolchain, a source newer than dist must stop
+  // the build instead of silently embedding yesterday's bundle.
+  let source = root + "/posoco-ext-board-web/styles/app.css"
+  @fs.write_file(source, @fs.read_file(source).binary())
+  let stale = @shell.Cmd("moon", [
+    "-C", root, "check", "posoco-ext-board-native/src", "--target", "native",
+    "--output-json",
+  ]).output()
+  assert_true(stale.exit_code() != 0, msg="a stale dist must fail the build")
+  assert_true(
+    (stale.stdout() + stale.stderr()).contains("older than its source"),
+    msg=stale.stdout() + stale.stderr(),
+  )
+  @fs.write_file(js, @fs.read_file(js).binary())
   let packaged = @shell.Cmd("moon", ["-C", native, "package", "--list"]).output()
   if packaged.exit_code() != 0 {
     println(packaged.stdout())

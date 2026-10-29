@@ -137,6 +137,30 @@ button {
   cursor: pointer;
 }
 
+/* RUI's native select draws its own chevron; the Instrument rule above would
+   stack a second one on top. */
+/* Native checkboxes and radios stay native: the state lives in the model, and
+   RUI's checkbox is a stateful component that a pure render function cannot
+   own. Only the visual is aligned with the Instrument palette. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+  cursor: not-allowed;
+}
+
+select[data-slot="native-select"] {
+  background-image: none;
+  padding-right: 2.25rem;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -160,6 +184,47 @@ button {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+/* ---------------------------------------------------------- drawers --- */
+
+/* RUI's dialog recipe fades and scales in place, which reads as a modal. A
+   sheet has to arrive from the edge it belongs to, so both states are restated.
+   RUI injects its interaction sheet into a later cascade layer than this one
+   (`rui-interactions` is declared at runtime, after `components`), so a plain
+   selector would lose: these two rules are the documented exception where
+   `!important` is doing real work, and the reduced-motion query below removes
+   the motion again. */
+dialog.sheet-dialog {
+  opacity: 1 !important;
+  transform: translateX(100%) !important;
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    display 260ms allow-discrete,
+    overlay 260ms allow-discrete !important;
+}
+
+dialog.sheet-dialog[open] {
+  transform: translateX(0) !important;
+}
+
+/* A dialog starts life at `display:none`, so the closed transform never gets a
+   frame to transition from. `@starting-style` supplies that first frame; RUI
+   ships one for its own recipe, and it has to be answered here or the drawer
+   would animate from the wrong edge. */
+@starting-style {
+  dialog.sheet-dialog[open] {
+    opacity: 1 !important;
+    transform: translateX(100%) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.sheet-dialog {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
 }
 
 /* ------------------------------------------------------------- shell --- */
@@ -835,6 +900,7 @@ button {
 
 .card-menu > summary {
   list-style: none;
+  cursor: pointer;
 }
 
 .card-menu > summary::-webkit-details-marker {
@@ -861,19 +927,35 @@ button {
 }
 
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 7px 10px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
   text-align: left;
+  cursor: pointer;
+}
+
+.menu-item + .menu-item {
+  margin-top: 1px;
 }
 
 .menu-item:hover:not(:disabled) {
   background: var(--surface-2);
+}
+
+.menu-item.is-danger {
+  color: var(--danger);
+}
+
+.menu-item.is-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
 }
 
 .menu-item:disabled {
@@ -1073,18 +1155,6 @@ dialog.confirm-dialog {
 
 dialog.directory-dialog {
   width: fit-content;
-}
-
-dialog.sheet-dialog {
-  margin: 0 0 0 auto;
-  height: 100dvh;
-  max-height: none;
-  /* fit-content inside hard bounds: an empty inbox must not collapse to its
-   * one-line intrinsic width, and wide content must not eat the board. */
-  min-width: min(400px, 96vw);
-  max-width: min(640px, 96vw);
-  width: fit-content;
-  animation: sheet-in 200ms var(--ease);
 }
 
 .dialog-shell {
@@ -1444,7 +1514,9 @@ dialog.sheet-dialog {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 12px;
+  /* RUI's dialog owns a floating close button in the top-right corner; the
+     sheet's own actions must never sit under it. */
+  padding: 14px 46px 12px 16px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -2522,17 +2594,6 @@ dialog.sheet-dialog {
   }
 }
 
-@keyframes sheet-in {
-  from {
-    transform: translateX(28px);
-    opacity: 0.6;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
 @keyframes backdrop-in {
   from {
     opacity: 0;
@@ -2591,11 +2652,6 @@ dialog.sheet-dialog {
 
   .filter-search {
     width: 200px;
-  }
-
-  dialog.sheet-dialog {
-    width: min(460px, 96vw);
-    max-width: min(460px, 96vw);
   }
 
   dialog.directory-dialog {
@@ -2711,18 +2767,6 @@ dialog.sheet-dialog {
     grid-template-columns: 1fr;
   }
 
-  dialog.sheet-dialog {
-    top: auto;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    margin: 0;
-    width: 100vw;
-    max-width: 100vw;
-    height: 88dvh;
-    animation: sheet-up 200ms var(--ease);
-  }
-
   .sheet {
     border: 0;
     border-top: 1px solid var(--line);
@@ -2736,16 +2780,6 @@ dialog.sheet-dialog {
     max-width: none;
   }
 
-  @keyframes sheet-up {
-    from {
-      transform: translateY(40px);
-      opacity: 0.6;
-    }
-    to {
-      transform: none;
-      opacity: 1;
-    }
-  }
 }
 
 @media (pointer: coarse) {
@@ -2874,3 +2908,37 @@ dialog.sheet-dialog {
   margin-left: auto;
 }
 
+
+.team-tools {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.team-tool-group {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.team-tool-server {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-tool-list {
+  display: grid;
+  gap: 3px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.team-tool {
+  font-size: 12px;
+}

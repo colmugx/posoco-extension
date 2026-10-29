@@ -1573,16 +1573,14 @@ fn ticket_question_card(
         @html.div(class="ticket-other", [
           @html.div(class="ticket-other-label", "Other answer"),
           @html.div(class="ticket-answers", [
-            @html.textarea(
+            @ui.text_area(
               id="ticket-other-\{question.id}",
               name="ticket_other",
-              class="ticket-input",
-              rows=3,
               value=draft,
+              rows=3,
               placeholder="None of these fit? Write your answer…",
               disabled=model.ticket_sending,
               on_input=value => emit(TicketDraftChanged(question.id, value)),
-              @html.fragment([]),
             ),
             @html.button(
               type_="button",
@@ -1604,16 +1602,14 @@ fn ticket_question_card(
     }
     _ =>
       @html.div(class="ticket-answers", [
-        @html.textarea(
+        @ui.text_area(
           id="ticket-answer-\{question.id}",
           name="ticket_answer",
-          class="ticket-input",
-          rows=4,
           value=draft,
+          rows=4,
           placeholder="Write your answer or feedback…",
           disabled=model.ticket_sending,
           on_input=value => emit(TicketDraftChanged(question.id, value)),
-          @html.fragment([]),
         ),
         @html.button(
           type_="button",
@@ -1663,7 +1659,21 @@ fn ticket_activity_dialog(
 ) -> @html.Html {
   let task_id = match model.ticket_activity_task {
     Some(task_id) => task_id
-    None => return @html.nothing
+    None =>
+      // The element must exist before the Activity click can open it: `ui_show`
+      // looks the dialog up by id, so a dialog rendered only for a selected
+      // ticket would be missing on the very first click.
+      return @ui.sheet_dialog(
+        "ticket-activity-dialog",
+        "Ticket activity",
+        _ => emit(TicketActivityClosed),
+        "40rem",
+        [
+          @html.div(class="sheet", [
+            @html.p(class="section-note", "Open a ticket to see its activity."),
+          ]),
+        ],
+      )
   }
   let task = task_by_id(model.replica, task_id)
   let title = match task {
@@ -1676,11 +1686,11 @@ fn ticket_activity_dialog(
   } else {
     "\{runs.length()} runs"
   }
-  @html.dialog(
-    id="ticket-activity-dialog",
-    class="dialog sheet-dialog",
-    on_close=_ => emit(TicketActivityClosed),
-    attrs=@html.Attrs::build().aria_label("Ticket activity"),
+  @ui.sheet_dialog(
+    "ticket-activity-dialog",
+    "Ticket activity",
+    _ => emit(TicketActivityClosed),
+    "40rem",
     [
       @html.div(class="sheet", [
         @html.header(class="sheet-head", [
@@ -1706,18 +1716,17 @@ fn ticket_activity_dialog(
             ),
             @html.h2(class="sheet-title", "Activity"),
             @html.p(class="sheet-meta", [
-              @html.span(
-                class="chip",
+              @ui.chip(
                 if runs.is_empty() {
                   "No runs yet"
                 } else {
                   run_label
                 },
+                @ui.ChipTone::Quiet,
               ),
-              @html.span(class="chip is-quiet", task_id),
+              @ui.chip(task_id, @ui.ChipTone::Quiet),
             ]),
           ]),
-          close_button("ticket-activity-dialog"),
         ]),
         @html.div(
           class="sheet-body ticket-activity-body",
@@ -1829,11 +1838,11 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   if question_count == 0 {
     items.push(@html.div(class="empty-line", "No open questions."))
   }
-  @html.dialog(
-    id="inbox-dialog",
-    class="dialog sheet-dialog",
-    on_close=_ => emit(TicketDrawerClosed),
-    attrs=@html.Attrs::build().aria_label("Ticket inbox"),
+  @ui.sheet_dialog(
+    "inbox-dialog",
+    "Ticket inbox",
+    _ => emit(TicketDrawerClosed),
+    "34rem",
     [
       @html.div(class="sheet", [
         @html.header(class="sheet-head", [
@@ -1858,29 +1867,31 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
             @html.h2(class="sheet-title", "Inbox"),
             @html.p(class="sheet-meta", [
               if question_count == 0 {
-                @html.span(class="chip is-quiet", "No open questions")
+                @ui.chip("No open questions", @ui.ChipTone::Quiet)
               } else {
-                @html.span(class="chip", "\{question_count} awaiting an answer")
+                @ui.chip(
+                  "\{question_count} awaiting an answer",
+                  @ui.ChipTone::Pinned,
+                )
               },
               if update_count == 0 {
                 @html.nothing
               } else {
-                @html.span(
-                  class="chip is-quiet",
+                @ui.chip(
                   ticket_update_total_label(update_count),
+                  @ui.ChipTone::Quiet,
                 )
               },
               if unseen_count == 0 {
                 @html.nothing
               } else {
-                @html.span(
-                  class="chip is-running",
+                @ui.chip(
                   ticket_update_count_label(unseen_count),
+                  @ui.ChipTone::Running,
                 )
               },
             ]),
           ]),
-          close_button("inbox-dialog"),
         ]),
         @html.div(class="sheet-body inbox-body", items),
       ]),

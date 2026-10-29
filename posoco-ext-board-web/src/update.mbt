@@ -563,6 +563,49 @@ fn update(
         },
         @rabbita.none,
       )
+    TeamMcpToolsRestricted(role, restricted) =>
+      (
+        {
+          ..model,
+          team_draft: team_mcp_update(model.team_draft, role, current => {
+            if !restricted {
+              { ..current, tools: [] }
+            } else {
+              let tools : Array[String] = []
+              for server in model.tickets.mcp_servers {
+                let selected = current.all ||
+                  current.servers.contains(server.name)
+                if selected {
+                  for tool in server.tools {
+                    if !tools.contains(tool) {
+                      tools.push(tool)
+                    }
+                  }
+                }
+              }
+              { ..current, tools }
+            }
+          }),
+        },
+        @rabbita.none,
+      )
+    TeamMcpToolToggled(role, tool) =>
+      (
+        {
+          ..model,
+          team_draft: team_mcp_update(model.team_draft, role, current => {
+            let tools = if current.tools.contains(tool) {
+              current.tools.filter(item => item != tool)
+            } else {
+              let next = current.tools.copy()
+              next.push(tool)
+              next
+            }
+            { ..current, tools }
+          }),
+        },
+        @rabbita.none,
+      )
     TeamSkillsEnabledChanged(role, enabled) =>
       (
         {

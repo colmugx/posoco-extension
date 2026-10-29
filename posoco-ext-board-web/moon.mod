@@ -15,7 +15,8 @@ preferred_target = "js"
 supported_targets = "js"
 
 import {
-  "moonbit-community/rabbita@0.16.4",
+  "moonbit-community/rabbita@0.17.0",
+  "moonbit-community/rui@0.4.0",
   "moonbitlang/async@0.22.5",
   "colmugx/posoco-ext-board@0.1.0",
 }

@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco-ext-board/client",
   "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board-web/src/ui" @ui,
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/dom",
