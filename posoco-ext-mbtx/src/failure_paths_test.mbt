@@ -160,3 +160,27 @@ async test "an abandoned in-flight request exits promptly without a fabricated o
     error => raise error
   }
 }
+
+///|
+async test "an import-less source is rejected before the launcher runs" {
+  let runtime = test_runtime()
+  @async.with_task_group(group => {
+    group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
+    try
+      runtime.run("fn main { println(\"hi\") }", {}, invocation_id="importless")
+    catch {
+      @posoco-ext-mbtx.RuntimeError::Invalid(reason) =>
+        assert_true(reason.contains("import"))
+      error => raise error
+    } noraise {
+      _ => fail("import-less source was accepted")
+    }
+    // The rejection must not wedge the invocation table or the runtime.
+    let good = test_program(group, compute_source)
+    let result = runtime.run_file(good, {}, invocation_id="after-importless")
+    assert_true(result.outcome is @protocol.Success(..))
+  }) catch {
+    @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)
+    error => raise error
+  }
+}

@@ -153,6 +153,49 @@ priv enum Program {
 }
 
 ///|
+/// A guest reaches the SDK, the wire protocol and JSON only through imports,
+/// so an import-less script cannot greet on the protocol no matter how it is
+/// compiled. The launcher would also give up in package resolution before the
+/// compiler runs, which hides the real reason behind a toolchain error.
+fn declares_imports(source : String) -> Bool {
+  source.contains("import {")
+}
+
+///|
+/// Standalone `.mbtx` compilation resolves the script as the synthetic
+/// `moon/test/single` package. Core 0.10.18 exports both
+/// `core/async/gzip` and `core/compress/gzip` under the `gzip` alias, and that
+/// package imports both, so resolution fails before the compiler ever sees the
+/// script. Anything else in a resolution failure stays the caller's problem
+/// (a misspelled or unpublished import), so match the signature narrowly.
+fn core_alias_collision(diagnostics : String) -> Bool {
+  diagnostics.contains("Conflicting import alias") &&
+  diagnostics.contains("moonbitlang/core/compress/gzip")
+}
+
+///|
+fn core_alias_collision_message(diagnostics : String) -> String {
+  "the MoonBit toolchain failed to resolve the script's package graph, so the compiler never ran and there are no diagnostics for the script itself. Core exports both `moonbitlang/core/async/gzip` and `moonbitlang/core/compress/gzip` under the same alias while standalone-file compilation imports both: this is a toolchain defect, not a defect in the submitted script, and resubmitting the same source fails identically. Update or pin the toolchain instead.\nThe launcher reported:\n" +
+  diagnostics
+}
+
+///|
+/// The launcher reports a resolution failure either as build diagnostics
+/// (moon) or as guest stderr (moonx); both carry the same text.
+fn core_alias_collision_error(error : Error) -> String? {
+  let diagnostics = match error {
+    RuntimeError::BuildFailed(diagnostics) => diagnostics
+    RuntimeError::GuestFailure(message) => message
+    _ => return None
+  }
+  if core_alias_collision(diagnostics) {
+    Some(core_alias_collision_message(diagnostics))
+  } else {
+    None
+  }
+}
+
+///|
 async fn Runtime::execute(
   self : Runtime,
   program : Program,
@@ -190,6 +233,10 @@ async fn Runtime::execute(
   match program {
     Source(source) if source == "" || @utf8.encode(source).length() > 1048576 =>
       raise RuntimeError::Invalid("source must be 1..1048576 bytes")
+    Source(source) if !declares_imports(source) =>
+      raise RuntimeError::Invalid(
+        "an mbtx script must open with an `import { ... }` block: the guest reaches the SDK, the wire protocol and JSON only through imports, and an import-less source cannot compile",
+      )
     File(path) if path == "" || path.has_prefix("-") =>
       raise RuntimeError::Invalid(
         "program must be a nonempty file or package path",
@@ -275,7 +322,11 @@ async fn Runtime::execute(
               if error is @async.TimeoutError {
                 raise RuntimeError::TimedOut("invocation")
               } else {
-                raise error
+                match core_alias_collision_error(error) {
+                  Some(message) =>
+                    raise RuntimeError::ToolchainUnavailable(message)
+                  None => raise error
+                }
               }
           }
         }) {
