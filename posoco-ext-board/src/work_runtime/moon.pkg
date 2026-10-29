@@ -4,6 +4,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-ext-askquestion" @askquestion,
+  "colmugx/posoco-ext-board/presence" @board_presence,
   "colmugx/posoco-ext-board/protocol" @board_protocol,
   "moonbitlang/async",
   "moonbitlang/core/debug",

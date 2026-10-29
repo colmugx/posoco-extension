@@ -1025,7 +1025,7 @@ fn ticket_request_changes_hint(model : Model, feedback : String) -> String? {
   } else if !model.can_connect {
     Some("Reconnect to the board before sending feedback.")
   } else if !model.ticket_available {
-    Some(ticket_rejection_text(Some("ticket_runtime_unavailable")))
+    Some(ticket_rejection_text(Some("board_work_unavailable")))
   } else if feedback.trim().is_empty() {
     Some("Write the feedback the next run must address.")
   } else {
@@ -1472,7 +1472,7 @@ fn ticket_rejection_text(reason : String?) -> String {
       "Move the ticket back to Backlog or Shaping before shaping it again."
     Some("ticket must be Ready before it can run") =>
       "Shape the ticket and move it to Ready before starting work."
-    Some("ticket_runtime_unavailable") =>
+    Some("board_work_unavailable") =>
       "The Board ticket runtime is unavailable. Restart Cetas with workflows enabled."
     Some("ticket_start_failed") | Some("ticket_shape_failed") =>
       "The ticket could not start. Open its Activity dialog for the failure detail."
@@ -1525,7 +1525,7 @@ fn team_member_label(model : Model, role : String) -> String {
     None => TeamNames::defaults()
   }
   match role {
-    "product_owner" | "customer" => "Customer"
+    "customer" => "Customer"
     "po" => team.po
     "sm" => team.sm
     "rd" => team.rd
@@ -1547,7 +1547,7 @@ fn ticket_question_card(
     None => question.task_id
   }
   let draft = model.ticket_drafts.get(question.id).unwrap_or("")
-  let refiner_name = team_member_label(model, "po")
+  let po_name = team_member_label(model, "po")
   let answer_controls = match question.kind {
     "confirm" =>
       @html.div(class="ticket-answers", [
@@ -1604,8 +1604,8 @@ fn ticket_question_card(
               type_="button",
               class="btn btn-sm",
               disabled=model.ticket_sending || draft.trim().is_empty(),
-              on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
-              "Answer as " + refiner_name,
+              on_click=emit(TicketAnsweredAsPo(question.id, draft)),
+              "Answer as " + po_name,
             ),
           ]),
         ]),
@@ -1633,8 +1633,8 @@ fn ticket_question_card(
           type_="button",
           class="btn btn-sm",
           disabled=model.ticket_sending || draft.trim().is_empty(),
-          on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
-          "Answer as " + refiner_name,
+          on_click=emit(TicketAnsweredAsPo(question.id, draft)),
+          "Answer as " + po_name,
         ),
       ])
   }
@@ -1654,8 +1654,8 @@ fn ticket_question_card(
         type_="button",
         class="btn btn-sm",
         disabled=model.ticket_sending,
-        on_click=emit(TicketRefinerRequested(question.id)),
-        "Ask " + refiner_name,
+        on_click=emit(TicketPoRequested(question.id)),
+        "Ask " + po_name,
       ),
     ]),
   ])

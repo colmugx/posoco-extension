@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-board/work_runtime"
 
 import {
   "colmugx/posoco-ext-askquestion",
+  "colmugx/posoco-ext-board/presence",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
@@ -42,6 +43,8 @@ pub fn task_review_feedback(Json) -> String?
 pub fn ticket_language_contract() -> String
 
 pub fn validate_work_report(Json) -> Result[Unit, String]
+
+pub fn work_presence(runs~ : WorkRunStore, questions~ : TicketQuestions, progress~ : WorkProgressLog) -> @presence.BoardPresence
 
 pub let work_progress_max_per_ticket : Int32
 
@@ -130,6 +133,7 @@ pub fn TicketQuestions::forward(Self, String, String) -> Result[Unit, String]
 pub fn TicketQuestions::get(Self, String) -> TicketQuestion?
 pub fn TicketQuestions::json(Self) -> Json
 pub fn TicketQuestions::open(Self, String, String, String, String, @port.UiRequest) -> String
+pub fn TicketQuestions::open_count(Self) -> Int32
 pub async fn TicketQuestions::wait(Self, String) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
 
 pub(all) struct WorkActivity {

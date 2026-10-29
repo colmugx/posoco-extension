@@ -146,20 +146,11 @@ test "three-line user stories render as three rows" {
 }
 
 ///|
-test "empty legacy story labels do not become a fake story" {
-  assert_eq(user_story_lines("As a , I want , so that "), [
-    "As a , I want , so that ",
-  ])
-  assert_eq(user_story_lines("As a user, I want , so that value"), [
-    "As a user, I want , so that value",
-  ])
-}
-
-///|
-test "legacy comma story keeps all three parts" {
+test "comma stories are not rewritten into three lines" {
   assert_eq(user_story_lines("As a user, I want export, so that I can share"), [
-    "As a user",
-    "I want export",
-    "So that I can share",
+    "As a user, I want export, so that I can share",
+  ])
+  assert_eq(user_story_lines("As a , I want , so that "), [
+    "As a , I want , so that",
   ])
 }

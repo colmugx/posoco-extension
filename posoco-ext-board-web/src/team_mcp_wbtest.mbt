@@ -34,7 +34,7 @@ test "team state carries per-role mcp and host servers" {
       assert_false(value.all)
       assert_eq(value.servers, ["github"])
     }
-    None => fail("refiner mcp missing")
+    None => fail("po mcp missing")
   }
   match team.skills.get("po") {
     Some(value) => {
@@ -42,7 +42,7 @@ test "team state carries per-role mcp and host servers" {
       assert_false(value.all)
       assert_eq(value.skills, ["tdd"])
     }
-    None => fail("refiner skills missing")
+    None => fail("po skills missing")
   }
   assert_eq(state.skills.length(), 2)
   assert_eq(state.skills[0].name, "tdd")

@@ -690,7 +690,7 @@ fn update(
           ticket_answer(question_id, answer, emit),
         )
       }
-    TicketAnsweredAsRefiner(question_id, answer) =>
+    TicketAnsweredAsPo(question_id, answer) =>
       if model.ticket_sending ||
         !model.can_connect ||
         !model.ticket_available ||
@@ -726,7 +726,7 @@ fn update(
           ticket_set_required_roles(task_id, next, emit),
         )
       }
-    TicketRefinerRequested(question_id) =>
+    TicketPoRequested(question_id) =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)
       } else {

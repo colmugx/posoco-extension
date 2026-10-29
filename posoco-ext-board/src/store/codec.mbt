@@ -514,7 +514,6 @@ fn role(value : Json) -> @domain.TeamRole raise CodecError {
   match text(value) {
     "PO" => PO
     "SM" => SM
-    "Refiner" => PO
     "RD" => RD
     "SET" => SET
     "TE" => TE

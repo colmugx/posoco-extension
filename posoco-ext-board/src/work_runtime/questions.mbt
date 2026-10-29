@@ -190,6 +190,17 @@ pub fn TicketQuestions::get(
 }
 
 ///|
+pub fn TicketQuestions::open_count(self : TicketQuestions) -> Int32 {
+  let mut count = 0
+  for question in self.questions.values() {
+    if question.status == "open" {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 pub fn TicketQuestions::json(self : TicketQuestions) -> Json {
   let items : Array[Json] = []
   for question in self.questions.values() {

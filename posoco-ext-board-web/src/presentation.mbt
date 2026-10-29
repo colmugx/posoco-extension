@@ -74,7 +74,7 @@ pub fn stage_step(stage : @client.ClientBoardStage) -> Int32? {
 }
 
 ///|
-/// A pipeline step is offered only when the v1 FSM allows that move.
+/// A pipeline step is offered only when the Board stage machine allows that move.
 pub fn step_reachable(
   from : @client.ClientBoardStage,
   to : @client.ClientBoardStage,
@@ -308,7 +308,7 @@ pub fn queue_attempt_id_valid(
 }
 
 ///|
-/// A work item may enter Ready only after a Refiner has written the full
+/// A work item may enter Ready only after the Product Owner has written the full
 /// story contract. Backlog and Shaping are intentionally not gated.
 pub fn ready_blocked_hint(task : @client.ClientBoardTask) -> String? {
   if task.user_story.trim().is_empty() {

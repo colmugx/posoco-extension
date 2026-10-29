@@ -677,9 +677,6 @@ fn team_role_id(role : @client.ClientTeamRole) -> String {
 }
 
 ///|
-/// Split the canonical three-line story, and only fall back to the legacy
-/// comma form when all three parts actually carry content. Empty labels are a
-/// malformed model answer, not a story worth rendering.
 fn user_story_lines(text : String) -> Array[String] {
   let lines : Array[String] = []
   for line in text.split("\n") {
@@ -688,24 +685,7 @@ fn user_story_lines(text : String) -> Array[String] {
       lines.push(trimmed)
     }
   }
-  if lines.length() >= 2 {
-    return lines
-  }
-  let parts = text.split(", I want").collect()
-  if parts.length() != 2 {
-    return [text]
-  }
-  let tail = parts[1].split(", so that").collect()
-  if tail.length() != 2 {
-    return [text]
-  }
-  let role = parts[0].trim().to_owned()
-  let want = tail[0].trim().to_owned()
-  let benefit = tail[1].trim().to_owned()
-  if role == "" || want == "" || benefit == "" {
-    return [text]
-  }
-  [role, "I want " + want, "So that " + benefit]
+  lines
 }
 
 ///|
