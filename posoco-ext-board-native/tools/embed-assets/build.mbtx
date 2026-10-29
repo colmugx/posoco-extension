@@ -76,7 +76,7 @@ let required_dist_assets : Array[String] = [
 /// Frontend sources whose modification invalidates a prebuilt `dist`.
 let frontend_sources : Array[String] = [
   "src", "cmd", "styles", "public", "index.html", "package.json",
-  "package-lock.json", "vite.config.ts", "moon.mod",
+  "bun.lock", "vite.config.ts", "moon.mod",
 ]
 
 ///|

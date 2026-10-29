@@ -41,7 +41,7 @@ dev_build(
     "../../posoco-ext-board-web/moon.mod",
     "../../posoco-ext-board-web/index.html",
     "../../posoco-ext-board-web/package.json",
-    "../../posoco-ext-board-web/package-lock.json",
+    "../../posoco-ext-board-web/bun.lock",
     "../../posoco-ext-board-web/vite.config.ts",
     "../../posoco-ext-board-web/styles",
     "../../posoco-ext-board-web/styles/app.css",
