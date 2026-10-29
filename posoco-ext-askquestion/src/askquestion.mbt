@@ -110,12 +110,8 @@ fn ask_question_schema(answerer~ : String = "the user") -> Json {
       }),
       "audience": Json::object({
         "type": Json::string("string"),
-        "enum": Json::array([
-          Json::string("refiner"),
-          Json::string("product_owner"),
-        ]),
         "description": Json::string(
-          "Who should answer: refiner for requirements/design, product_owner for business trade-offs",
+          "Host-defined routing token for the answering role. The host decides which roles exist; omit it to use the endpoint default.",
         ),
       }),
     }),
@@ -194,11 +190,10 @@ fn parse_audience(arguments : Json) -> String raise @posoco.RuntimeError {
   }
   match fields.get("audience") {
     None | Some(Json::Null) => ""
-    Some(Json::String("refiner")) => "refiner"
-    Some(Json::String("product_owner")) => "product_owner"
+    Some(Json::String(value)) => value.trim().to_owned()
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question_child: 'audience' must be refiner or product_owner",
+        "ask_question_child: 'audience' must be a string",
       )
   }
 }
@@ -642,7 +637,7 @@ pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_pro
     Human =>
       "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover. When you can keep working without the answer, use notify_user instead: it returns immediately and the reply arrives later as ordinary user input — never block on it, and never ask the same thing twice."
     ParentAgent =>
-      "Use ask_question_child only when a decision or missing fact blocks progress. Set audience=refiner for requirement/design questions and audience=product_owner for business trade-offs; the host routes it to that role. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+      "Use ask_question_child only when a decision or missing fact blocks progress. Set audience to the host-defined routing token for the answering role; omit it to use the endpoint default. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
   }
 }
 

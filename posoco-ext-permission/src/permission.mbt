@@ -222,21 +222,6 @@ pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
 pub extend PermissionPolicy with @posoco/devkit.BusSubscriber::{on_bus_event}
 
 ///|
-/// Extend the read class without reconstructing the policy. Hosts use this
-/// for dynamic read-only tools discovered after composition (for example a
-/// filtered MCP view); write and shell classification is unchanged.
-pub fn PermissionPolicy::allow_read(
-  self : PermissionPolicy,
-  names : Array[String],
-) -> Unit {
-  for name in names {
-    if !self.read_tools.contains(name) {
-      self.read_tools.push(name)
-    }
-  }
-}
-
-///|
 pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
   self.mode
 }
