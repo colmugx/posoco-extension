@@ -250,7 +250,11 @@ pub fn task_required_roles(task : Json) -> Array[String] {
           _ => ()
         }
       }
-      if roles.contains("rd") { roles } else { ["rd", "set", "te"] }
+      if roles.contains("rd") {
+        roles
+      } else {
+        ["rd", "set", "te"]
+      }
     }
     _ => ["rd", "set", "te"]
   }

@@ -26,7 +26,8 @@ pub impl @askquestion.QuestionEndpoint for BoardQuestionEndpoint with fn request
   audience~,
   req~,
 ) -> @posoco.UiResponse raise @askquestion.QuestionError {
-  let audience = if audience == "po" || audience == "customer" ||
+  let audience = if audience == "po" ||
+    audience == "customer" ||
     audience == "sm" {
     audience
   } else {
@@ -52,7 +53,13 @@ pub async fn BoardQuestionEndpoint::ask_with(
   if audience != "customer" {
     match self.on_open {
       Some(callback) =>
-        callback(id, self.task_id, self.asked_by, audience, question_prompt(req))
+        callback(
+          id,
+          self.task_id,
+          self.asked_by,
+          audience,
+          question_prompt(req),
+        )
       None => ()
     }
   }
@@ -74,6 +81,8 @@ pub fn question_prompt(req : @posoco.UiRequest) -> String {
   }
 }
 
-
 ///|
-pub extend BoardQuestionEndpoint with @askquestion.QuestionEndpoint::{request, request_with_audience}
+pub extend BoardQuestionEndpoint with @askquestion.QuestionEndpoint::{
+  request,
+  request_with_audience,
+}

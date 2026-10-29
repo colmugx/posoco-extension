@@ -5,4 +5,3 @@ pub fn work_session_id(task_id : String, role : String) -> String {
   let _ = task_id
   role
 }
-

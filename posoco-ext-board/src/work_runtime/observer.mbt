@@ -78,8 +78,7 @@ pub impl @posoco.Observer for TicketActivityObserver with fn on_event(
     TurnFailed(message) => run.activity("error", "Step failed · \{message}")
     StreamChunkReceived(chunk~) =>
       match chunk {
-        TextDelta(token~) =>
-          run.preview = append_tail(run.preview, token, 600)
+        TextDelta(token~) => run.preview = append_tail(run.preview, token, 600)
         ReasoningDelta(token~) =>
           run.reasoning = append_tail(run.reasoning, token, 600)
         _ => ()
@@ -94,8 +93,6 @@ pub impl @posoco.Observer for TicketActivityObserver with fn on_event(
     _ => ()
   }
 }
-
-
 
 ///|
 pub extend TicketActivityObserver with @posoco.Observer::{on_event}

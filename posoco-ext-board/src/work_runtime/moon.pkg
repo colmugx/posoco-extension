@@ -2,7 +2,7 @@
 // Board extension. The host (cetas-js) adapts this state to its process and
 // composes child agents; the Board stage stays the authority for the ticket.
 import {
-  "colmugx/posoco" @posoco,
+  "colmugx/posoco",
   "colmugx/posoco-ext-askquestion" @askquestion,
   "colmugx/posoco-ext-board/protocol" @board_protocol,
   "moonbitlang/async",

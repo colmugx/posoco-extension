@@ -132,7 +132,6 @@ pub fn TicketQuestions::cancel(self : TicketQuestions, id : String) -> Unit {
   }
 }
 
-
 ///|
 fn answer_text(
   response : @posoco.UiResponse,
@@ -183,7 +182,10 @@ pub fn TicketQuestions::answer(
 }
 
 ///|
-pub fn TicketQuestions::get(self : TicketQuestions, id : String) -> TicketQuestion? {
+pub fn TicketQuestions::get(
+  self : TicketQuestions,
+  id : String,
+) -> TicketQuestion? {
   self.questions.get(id)
 }
 
@@ -235,4 +237,3 @@ pub fn TicketQuestions::json(self : TicketQuestions) -> Json {
   }
   Json::array(items)
 }
-
