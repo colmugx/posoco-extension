@@ -1,0 +1,13 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-fs-session" @codec,
+  "nowledge-co/hawdb" @hawdb,
+}
+
+options(
+  link: {
+    "native": {
+      "cc-link-flags": "../_hawdb_checkout/bindings/moonbit/native/target/release/libhawdb_moonbit.a -ldl -lpthread -lm",
+    },
+  },
+)
