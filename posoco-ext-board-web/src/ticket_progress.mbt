@@ -131,9 +131,16 @@ fn inbox_updates(model : Model, now_ms : Int64) -> Array[InboxUpdate] {
 /// Activity dialog shows it above the live run so progress is visible where
 /// the run is inspected.
 fn ticket_latest_update(model : Model, task_id : String) -> TicketProgress? {
-  ticket_progress_latest_first(model.tickets.progress)
-  .filter(update => update.task_id == task_id)
-  .get(0)
+  let mut latest : TicketProgress? = None
+  for update in model.tickets.progress {
+    if update.task_id == task_id {
+      match latest {
+        Some(previous) if previous.at_ms >= update.at_ms => ()
+        _ => latest = Some(update)
+      }
+    }
+  }
+  latest
 }
 
 ///|
@@ -143,7 +150,13 @@ fn is_customer_question(question : TicketQuestion) -> Bool {
 
 ///|
 fn ticket_question_count(model : Model) -> Int32 {
-  model.tickets.questions.filter(is_customer_question).length()
+  let mut count = 0
+  for question in model.tickets.questions {
+    if is_customer_question(question) {
+      count += 1
+    }
+  }
+  count
 }
 
 ///|
@@ -151,11 +164,13 @@ fn ticket_question_count(model : Model) -> Int32 {
 /// list that was on screen as seen; anything a worker reports afterwards is
 /// unseen again until the next open.
 fn ticket_unseen_update_count(model : Model) -> Int32 {
-  model.tickets.progress
-  .filter(update => {
-    !model.ticket_seen_updates.contains(ticket_progress_key(update))
-  })
-  .length()
+  let mut count = 0
+  for update in model.tickets.progress {
+    if !model.ticket_seen_updates.contains(ticket_progress_key(update)) {
+      count += 1
+    }
+  }
+  count
 }
 
 ///|
