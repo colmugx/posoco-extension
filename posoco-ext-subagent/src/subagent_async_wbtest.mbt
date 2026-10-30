@@ -1524,6 +1524,8 @@ priv struct AskParentTool {
   req : @posoco.UiRequest
   /// Parking delay before the ask registers (cancellation-race tests).
   ask_delay_ms : Int32
+  /// Signal once the child's tool tree has begun executing this tool.
+  ask_started : @async.Queue[Unit]?
   answers : Array[String]
 }
 
@@ -1550,6 +1552,10 @@ impl @posoco.ToolProvider for AskParentTool with fn execute(
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   if ctx.name.to_string() != "ask_parent" {
     raise @posoco.RuntimeError::UnknownTool("ask_parent: unknown tool")
+  }
+  match self.ask_started {
+    Some(queue) => ignore(queue.try_put(()) catch { _ => false })
+    None => ()
   }
   if self.ask_delay_ms > 0 {
     @async.sleep(self.ask_delay_ms)
@@ -1608,6 +1614,7 @@ priv struct AskingComposer {
   req : @posoco.UiRequest
   finish_text : String
   ask_delay_ms : Int32
+  ask_started : @async.Queue[Unit]?
   /// How many times the child asks before finishing.
   asks : Int32
   answers : Array[String]
@@ -1620,9 +1627,10 @@ fn AskingComposer::AskingComposer(
   req~ : @posoco.UiRequest,
   finish_text~ : String,
   ask_delay_ms~ : Int32 = 0,
+  ask_started~ : @async.Queue[Unit]? = None,
   asks~ : Int32 = 1,
 ) -> AskingComposer {
-  { channel, req, finish_text, ask_delay_ms, asks, answers: [], specs: [], }
+  { channel, req, finish_text, ask_delay_ms, ask_started, asks, answers: [], specs: [], }
 }
 
 ///|
@@ -1669,6 +1677,7 @@ impl ChildComposer for AskingComposer with fn compose(
           channel: self.channel,
           req: self.req,
           ask_delay_ms: self.ask_delay_ms,
+          ask_started: self.ask_started,
           answers: self.answers,
         }
         as &@posoco.ToolProvider,
@@ -2096,11 +2105,13 @@ async test "interactive_child_answer_deadline_times_out" {
 ///|
 async test "interactive_wave_cancel_kills_child_and_closes_question" {
   let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let ask_started : @async.Queue[Unit] = @async.Queue(kind=Unbounded)
   let composer = AskingComposer::AskingComposer(
     channel=broker.channel(),
     req=@posoco.UiRequest::Input(prompt="stalling?", default=None),
     finish_text="never reached",
     ask_delay_ms=40,
+    ask_started=Some(ask_started),
   )
   let tools = test_tools(
     composer=composer as &ChildComposer,
@@ -2137,8 +2148,10 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
           ),
         )
       })
-      // 10ms: compose + submit done, ask still delayed (40ms).
-      @async.sleep(10)
+      // Wait for the child tool tree to start, then cancel during its
+      // delayed ask (before question registration). A fixed 10ms sleep
+      // could cancel core while it was still initializing its task group.
+      ignore(@async.with_timeout(5000, () => ask_started.get()))
       task.cancel()
       let cancelled : Bool = try {
         ignore(task.wait())
