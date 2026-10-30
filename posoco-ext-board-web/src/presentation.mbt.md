@@ -23,8 +23,8 @@ copy of Board state.
 
 ```moonbit check
 ///|
-test "eight lanes and wire-independent labels" {
-  assert_eq(@src.lanes().length(), 8)
+test "nine lanes and wire-independent labels" {
+  assert_eq(@src.lanes().length(), 9)
   assert_eq(@src.stage_label(@client.Created), "Created")
   assert_eq(@src.stage_label(@client.Cancelled), "Cancelled")
   assert_eq(@src.stage_label(@client.Suspended), "Suspended")
