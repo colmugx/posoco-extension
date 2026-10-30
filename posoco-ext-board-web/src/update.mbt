@@ -1,10 +1,16 @@
 ///|
+/// Editable team roles are validated in one place.
+fn editable_team_role(role : String) -> Bool {
+  role == "po" || role == "sm" || role == "rd" || role == "set" || role == "te"
+}
+
+///|
 fn team_mcp_update(
   draft : TeamNames,
   role : String,
   update : (TeamMcp) -> TeamMcp,
 ) -> TeamNames {
-  if role != "po" && role != "sm" && role != "rd" && role != "set" && role != "te" {
+  if !editable_team_role(role) {
     return draft
   }
   let mcp = draft.mcp.copy()
@@ -22,7 +28,7 @@ fn team_skills_update(
   role : String,
   update : (TeamSkills) -> TeamSkills,
 ) -> TeamNames {
-  if role != "po" && role != "sm" && role != "rd" && role != "set" && role != "te" {
+  if !editable_team_role(role) {
     return draft
   }
   let skills = draft.skills.copy()
