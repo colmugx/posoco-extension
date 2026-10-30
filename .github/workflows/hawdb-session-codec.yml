@@ -41,13 +41,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("moon.work")
-          body = p.read_text()
-          anchor = "members = [\\n"
-          assert body.count(anchor) == 1
-          p.write_text(body.replace(
-              anchor,
-              anchor + '  "./_hawdb_checkout/bindings/moonbit",\\n',
-          ))
+          lines = p.read_text().splitlines()
+          assert lines[0].strip() == "members = ["
+          extra = '  "./_hawdb_checkout/bindings/moonbit",'
+          assert extra not in lines
+          lines.insert(1, extra)
+          p.write_text(chr(10).join(lines) + chr(10))
           PY
           moon update
           moon check --target native posoco-ext-fs-session
