@@ -18,3 +18,9 @@ import {
 } for "wbtest"
 
 warnings = "-unused_package"
+
+// These async tests share task-group lifecycle scheduling under the JS runner.
+// Run them one at a time to prevent cross-test cancellation races.
+options(
+  "max-concurrent-tests": 1,
+)
