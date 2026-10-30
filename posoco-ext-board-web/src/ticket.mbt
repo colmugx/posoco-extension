@@ -1,12 +1,17 @@
 ///|
+/// Locate the first running attempt, or the newest matching attempt.
+/// A single pass avoids allocating a filtered run array for every card render.
 fn ticket_run_for(model : Model, task_id : String) -> TicketRun? {
-  let runs = model.tickets.runs.filter(run => run.task_id == task_id)
-  for run in runs {
-    if run.status == "running" {
-      return Some(run)
+  let mut latest : TicketRun? = None
+  for run in model.tickets.runs {
+    if run.task_id == task_id {
+      if run.status == "running" {
+        return Some(run)
+      }
+      latest = Some(run)
     }
   }
-  runs.get(runs.length() - 1)
+  latest
 }
 
 ///|
