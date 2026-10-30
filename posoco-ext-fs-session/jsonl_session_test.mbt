@@ -266,12 +266,14 @@ test "serde: runtime failure outcome also persists is_error" {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(outcome~, ..) =>
-          // Failure-ness survives the round-trip; the codec collapses the
-          // exact failure variant into ToolReportedError, carrying the
-          // summary text as content.
+          // V2 retains the exact failure discriminant and payload;
+          // the legacy is_error marker remains for older JSONL readers.
           match outcome {
-            @posoco.ToolOutcome::ToolReportedError(..) => ()
-            _ => fail("RuntimeFailure should load back as a failure outcome")
+            @posoco.ToolOutcome::RuntimeFailure(error_category~, message~) => {
+              assert_eq(error_category, "spawn")
+              assert_eq(message, "binary not found")
+            }
+            _ => fail("RuntimeFailure must round-trip without losing its variant")
           }
         _ => fail("expected ToolMessage")
       }
