@@ -21,12 +21,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout rolling HawDB module (unpublished)
-        uses: actions/checkout@v4
-        with:
-          repository: colmugx/hawdb
-          ref: feat/moonbit-native-sdk
-          path: _hawdb_checkout
       - name: Install current MoonBit
         shell: bash
         run: |
@@ -38,16 +32,6 @@ jobs:
         run: |
           set -euo pipefail
           moon version --all
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("moon.work")
-          lines = p.read_text().splitlines()
-          assert lines[0].strip() == "members = ["
-          extra = '  "./_hawdb_checkout/bindings/moonbit",'
-          assert extra not in lines
-          lines.insert(1, extra)
-          p.write_text(chr(10).join(lines) + chr(10))
-          PY
           moon update
           moon check --target native posoco-ext-fs-session
           moon test --target native posoco-ext-fs-session

@@ -55,6 +55,12 @@ fn empty_session() -> @posoco.Session {
 
 ///|
 fn decode_document(document : String) -> Result[@posoco.Session, String] {
+  // A HawDB row is transactionally materialized: there is no filesystem
+  // torn-tail exception. Reject an incomplete snapshot rather than silently
+  // replaying only the last valid message.
+  if document == "" || !document.has_suffix("\n") {
+    return Err("incomplete HawDB session snapshot")
+  }
   match @codec.session_from_jsonl(document) {
     Ok(session) => Ok(session)
     Err(error) => Err(error.to_string())
