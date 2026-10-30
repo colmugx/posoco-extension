@@ -266,12 +266,14 @@ test "serde: runtime failure outcome also persists is_error" {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(outcome~, ..) =>
-          // Failure-ness survives the round-trip; the codec collapses the
-          // exact failure variant into ToolReportedError, carrying the
-          // summary text as content.
+          // V2 retains the exact failure discriminant and payload;
+          // the legacy is_error marker remains for older JSONL readers.
           match outcome {
-            @posoco.ToolOutcome::ToolReportedError(..) => ()
-            _ => fail("RuntimeFailure should load back as a failure outcome")
+            @posoco.ToolOutcome::RuntimeFailure(error_category~, message~) => {
+              assert_eq(error_category, "spawn")
+              assert_eq(message, "binary not found")
+            }
+            _ => fail("RuntimeFailure must round-trip without losing its variant")
           }
         _ => fail("expected ToolMessage")
       }
@@ -653,5 +655,71 @@ async test "io[native]: failed persist publishes nothing" {
   assert_eq(capture.events.length(), 0)
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
+  }
+}
+
+///|
+/// The v2 codec preserves every ToolOutcome discriminant and structured JSON;
+/// the legacy "content" field alone cannot recover these variants.
+test "serde: lossless canonical tool outcomes" {
+  let structured = Json::object({"answer": Json::number(42), "null": Json::null()})
+  let outcomes : Array[@posoco.ToolOutcome] = [
+    @posoco.ToolOutcome::Success(content="✅", structured=Some(structured)),
+    @posoco.ToolOutcome::SuccessWithAttachments(
+      content="file", structured=Some(Json::null()),
+      attachments=[@posoco.Content::Image(media_type="image/png", data="abcdef")],
+    ),
+    @posoco.ToolOutcome::ToolReportedError(content="rejected", structured=Some(structured)),
+    @posoco.ToolOutcome::RuntimeFailure(error_category="network", message="retry later"),
+    @posoco.ToolOutcome::NotExecuted(
+      reason=@posoco.NotExecutedReason::SchemaMismatch(
+        json_path="$.input", expected="string", actual="number",
+      ),
+      original_call_id=@posoco.CallId::unchecked("call-5"),
+    ),
+    @posoco.ToolOutcome::NotExecuted(
+      reason=@posoco.NotExecutedReason::RejectedByHook(reason="policy"),
+      original_call_id=@posoco.CallId::unchecked("call-6"),
+    ),
+  ]
+  let messages : Array[@posoco.Message] = []
+  for outcome in outcomes {
+    messages.push(@posoco.Message::ToolMessage(
+      call_id=@posoco.CallId::unchecked("tool-1"),
+      tool_name=@posoco.ToolName::unchecked("tool"),
+      outcome~,
+    ))
+  }
+  let session = @posoco.Session::{messages, metadata: {"note": Json::string("非BMP 🚀")}}
+  let encoded = @posoco-ext-fs-session.session_to_jsonl(session)
+  match @posoco-ext-fs-session.session_from_jsonl(encoded) {
+    Ok(decoded) => assert_true(decoded == session)
+    Err(e) => fail("lossless roundtrip failed: \{e}")
+  }
+}
+
+///|
+test "serde: finish reason Other(stop) remains distinct from Stop" {
+  let message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("test")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Other("stop"),
+  )
+  let session = @posoco.Session::{messages:[message], metadata: Map([])}
+  match @posoco-ext-fs-session.session_from_jsonl(
+    @posoco-ext-fs-session.session_to_jsonl(session),
+  ) {
+    Ok(decoded) => assert_true(decoded == session)
+    Err(e) => fail("finish reason roundtrip failed: \{e}")
+  }
+}
+
+///|
+test "serde: malformed v2 payload never falls back to lossy legacy" {
+  let corrupted = "{\"name\":\"test\"}\n{\"role\":\"tool\",\"content\":[],\"name\":\"tool\",\"tool_call_id\":\"c1\",\"outcome_v2\":{\"kind\":\"not_executed\"}}\n"
+  match @posoco-ext-fs-session.session_from_jsonl(corrupted) {
+    Err(@posoco.SessionError::Load(_)) => ()
+    _ => fail("malformed v2 outcome must fail load")
   }
 }
