@@ -14,6 +14,10 @@ on:
       - ".github/workflows/hawdb-session-native.yml"
   workflow_dispatch:
 
+concurrency:
+  group: hawdb-session-native-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -32,6 +36,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: _hawdb_checkout/bindings/moonbit/native
       - name: Install current MoonBit
         shell: bash
         run: |
