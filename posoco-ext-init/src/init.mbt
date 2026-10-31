@@ -262,7 +262,7 @@ pub impl @posoco.CommandPort for Init with fn invoke(
       )
     Err(reason) =>
       @posoco.CommandOutcome::Failure(
-        reason="/init could not schedule a turn: " + reason.to_string() +
+        reason="/init could not schedule a turn: " + repr(reason) +
           ". Keep Agent::run_scoped active and bind this session via Agent::set_active_session.",
       )
   }
