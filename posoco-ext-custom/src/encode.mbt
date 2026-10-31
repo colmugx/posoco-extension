@@ -1,7 +1,9 @@
 ///|
-/// Wire encoder: kernel canonical types to standard OpenAI Chat Completions
-/// JSON. The only reasoning field is the top-level `reasoning_effort`, sent
-/// verbatim when a level is selected. Tool call arguments are JSON strings
+/// Chat-completions wire encoder: kernel canonical types to standard OpenAI
+/// Chat Completions JSON.
+///
+/// The only reasoning field on this wire is the top-level `reasoning_effort`,
+/// sent verbatim when a level is selected. Tool call arguments are JSON strings
 /// (OpenAI convention); message order is append-only.
 
 ///|
@@ -39,7 +41,6 @@ fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
     Some(id) => obj["tool_call_id"] = Json::string(id)
     None => ()
   }
-  // Tool calls (assistant messages requesting tool execution)
   if tool_calls.length() > 0 {
     let tc_arr = tool_calls.map(fn(tc) {
       let tc_obj : Map[String, Json] = {
@@ -83,24 +84,8 @@ fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
 }
 
 ///|
-/// Resolve the request's `prompt_cache_key`: derived from the session id via
-/// the shared kit helper, only when the endpoint opted in and the provider has
-/// not already rejected the parameter.
-fn oai_compat_resolve_cache_key(
-  send_prompt_cache_key : Bool,
-  rejected : Bool,
-  session_id : String,
-) -> String? {
-  if send_prompt_cache_key && !rejected {
-    Some(@chatkit.derive_prompt_cache_key(session_id))
-  } else {
-    None
-  }
-}
-
-///|
-/// Build the full chat completions request body. Returns just the JSON payload;
-/// the caller prepends base_url.
+/// Build the full chat completions request body. Returns just the JSON
+/// payload; the caller owns the URL.
 fn build_chat_request(
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],

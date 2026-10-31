@@ -1,12 +1,12 @@
 ///|
-/// JS (bun) wire log: raw SSE payload capture for
-/// diagnosing provider streams without disturbing the TUI.
+/// JS (bun) wire log: raw SSE payload capture for diagnosing provider streams
+/// without disturbing the TUI.
 ///
 /// Activated by the `POSOCO_WIRE_LOG` env var holding the target file path;
-/// when unset or empty, every function here is a no-op. The file receives
-/// one verbatim SSE data payload per line — full provider traffic, so keep
-/// it for debugging only (it may contain streamed content and provider
-/// error payloads).
+/// when unset or empty, every function here is a no-op. The file receives one
+/// verbatim SSE data payload per line — full provider traffic, so keep it for
+/// debugging only (it may contain streamed content and provider error
+/// payloads). All three wires write through the same sink.
 
 ///|
 extern "js" fn js_wire_log_path() -> String =
@@ -41,8 +41,8 @@ fn wire_log_path() -> String? {
 }
 
 ///|
-/// Append one line to the wire log. IO failures are swallowed inside the
-/// FFI: logging must never break a turn.
+/// Append one line to the wire log. IO failures are swallowed inside the FFI:
+/// logging must never break a turn.
 fn wire_log_append(path : String, line : String) -> Unit {
   js_append_line(fs_append_line_sync, path, line)
 }

@@ -1,0 +1,102 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-custom"
+
+import {
+  "colmugx/posoco-kit-provider",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
+  "posoco/devkit",
+  "posoco/ext-oauth",
+}
+
+// Values
+pub const CUSTOM_DEFAULT_MAX_OUTPUT_TOKENS : Int32 = 8192
+
+pub fn custom_auth_choices() -> String
+
+pub fn custom_auth_of_id(String) -> CustomAuth?
+
+pub fn custom_protocol_choices() -> String
+
+pub fn custom_protocol_of_id(String) -> CustomProtocol?
+
+// Errors
+
+// Types and methods
+pub(all) enum CustomAuth {
+  Auto
+  Bearer
+  ApiKeyHeader
+} derive(Eq, @debug.Debug)
+pub fn CustomAuth::equal(Self, Self) -> Bool
+pub fn CustomAuth::not_equal(Self, Self) -> Bool
+pub fn CustomAuth::to_id(Self) -> String
+pub fn CustomAuth::to_repr(Self) -> @debug.Repr
+
+pub(all) struct CustomConfig {
+  api_key : String
+  base_url : String
+  endpoint_prefix : String
+  model : String
+  protocol : CustomProtocol
+  auth : CustomAuth
+  max_output_tokens : Int32
+  reasoning_effort : String?
+  thinking_efforts : Array[String]
+  context_window : Int32?
+  compact_threshold : Double?
+  supports_images : Bool
+  send_prompt_cache_key : Bool
+} derive(Eq, @debug.Debug)
+pub fn CustomConfig::CustomConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, protocol? : CustomProtocol, auth? : CustomAuth, max_output_tokens? : Int32, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
+pub fn CustomConfig::equal(Self, Self) -> Bool
+pub fn CustomConfig::not_equal(Self, Self) -> Bool
+pub fn CustomConfig::to_repr(Self) -> @debug.Repr
+pub fn CustomConfig::with_api_key(Self, String) -> Self
+pub fn CustomConfig::with_protocol(Self, CustomProtocol) -> Self
+pub fn CustomConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct CustomModelPort {
+  provider_id : String
+  config : CustomConfig
+  request_headers : (() -> Map[String, String])?
+  mut prompt_cache_key_rejected : Bool
+  prompt_cache_key_rejection_state : @ref.Ref[Bool]
+}
+pub fn CustomModelPort::CustomModelPort(String, CustomConfig, request_headers? : () -> Map[String, String]) -> Self
+pub async fn CustomModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn CustomModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn CustomModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn CustomModelPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.ModelPort for CustomModelPort
+
+pub(all) enum CustomProtocol {
+  ChatCompletions
+  Responses
+  Messages
+} derive(Eq, @debug.Debug)
+pub fn CustomProtocol::equal(Self, Self) -> Bool
+pub fn CustomProtocol::not_equal(Self, Self) -> Bool
+pub fn CustomProtocol::to_id(Self) -> String
+pub fn CustomProtocol::to_repr(Self) -> @debug.Repr
+
+pub(all) struct CustomProvider {
+  provider_id : String
+  ctx : @devkit.ExtContext
+  prompt_cache_key_rejection_state : @ref.Ref[Bool]
+}
+pub fn CustomProvider::CustomProvider(String, ctx? : @devkit.ExtContext) -> Self
+pub fn CustomProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub fn CustomProvider::credential_id(Self) -> String
+pub async fn CustomProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
+pub fn CustomProvider::provider_id(Self) -> String
+pub impl @posoco-kit-provider.ApiKeyFactory for CustomProvider
+pub impl @posoco-kit-provider.ProviderFactory for CustomProvider
+
+// Type aliases
+
+// Traits

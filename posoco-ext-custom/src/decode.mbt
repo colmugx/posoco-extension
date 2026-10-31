@@ -14,17 +14,17 @@ fn decode_chat_response(
 ) -> @posoco.Completion raise @posoco.ModelError {
   guard json is Object(root) else {
     raise @posoco.ModelError::ResponseParse(
-      "openai-compatible response parse failure (stage=response, category=not_object)",
+      "custom provider response parse failure (wire=chat_completions, stage=response, category=not_object)",
     )
   }
   match root.get("error") {
     Some(Object(_)) =>
       raise @posoco.ModelError::Transport(
-        "openai-compatible API error (stage=response.error, category=structured)",
+        "custom provider API error (wire=chat_completions, stage=response.error, category=structured)",
       )
     Some(_) =>
       raise @posoco.ModelError::Transport(
-        "openai-compatible API error (stage=response.error, category=wrong_type)",
+        "custom provider API error (wire=chat_completions, stage=response.error, category=wrong_type)",
       )
     None => ()
   }
@@ -32,32 +32,32 @@ fn decode_chat_response(
     Some(Array(choices)) => choices
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=choices, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=choices, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=choices, category=missing)",
+        "custom provider response parse failure (wire=chat_completions, stage=choices, category=missing)",
       )
   }
   if choices.length() == 0 {
     raise @posoco.ModelError::ResponseParse(
-      "openai-compatible response parse failure (stage=choices, category=empty)",
+      "custom provider response parse failure (wire=chat_completions, stage=choices, category=empty)",
     )
   }
   guard choices[0] is Object(choice) else {
     raise @posoco.ModelError::ResponseParse(
-      "openai-compatible response parse failure (stage=choice, category=not_object)",
+      "custom provider response parse failure (wire=chat_completions, stage=choice, category=not_object)",
     )
   }
   let msg = match choice.get("message") {
     Some(Object(msg)) => msg
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=message, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=message, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=message, category=missing)",
+        "custom provider response parse failure (wire=chat_completions, stage=message, category=missing)",
       )
   }
   let text = match msg.get("content") {
@@ -65,7 +65,7 @@ fn decode_chat_response(
     Some(Null) | None => ""
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=message.content, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=message.content, category=wrong_type)",
       )
   }
   // reasoning_content: optional. Surface when present and non-empty; servers
@@ -74,7 +74,7 @@ fn decode_chat_response(
     Some(String(s)) => if s == "" { None } else { Some(s) }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=message.reasoning_content, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=message.reasoning_content, category=wrong_type)",
       )
     None => None
   }
@@ -88,15 +88,15 @@ fn decode_chat_response(
               Some(String(s)) if s != "" => s
               Some(String(_)) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.id, category=empty)",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.id, category=empty)",
                 )
               Some(_) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.id, category=wrong_type)",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.id, category=wrong_type)",
                 )
               None =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.id, category=missing)",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.id, category=missing)",
                 )
             }
             let (name, args_str) = match o.get("function") {
@@ -105,43 +105,43 @@ fn decode_chat_response(
                   Some(String(s)) if s != "" => s
                   Some(String(_)) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "openai-compatible response parse failure (stage=tool.name, category=empty)",
+                      "custom provider response parse failure (wire=chat_completions, stage=tool.name, category=empty)",
                     )
                   Some(_) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "openai-compatible response parse failure (stage=tool.name, category=wrong_type)",
+                      "custom provider response parse failure (wire=chat_completions, stage=tool.name, category=wrong_type)",
                     )
                   None =>
                     raise @posoco.ModelError::ResponseParse(
-                      "openai-compatible response parse failure (stage=tool.name, category=missing)",
+                      "custom provider response parse failure (wire=chat_completions, stage=tool.name, category=missing)",
                     )
                 }
                 let a = match f.get("arguments") {
                   Some(String(s)) => s
                   Some(_) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "openai-compatible response parse failure (stage=tool.arguments, category=wrong_type)",
+                      "custom provider response parse failure (wire=chat_completions, stage=tool.arguments, category=wrong_type)",
                     )
                   None =>
                     raise @posoco.ModelError::ResponseParse(
-                      "openai-compatible response parse failure (stage=tool.arguments, category=missing)",
+                      "custom provider response parse failure (wire=chat_completions, stage=tool.arguments, category=missing)",
                     )
                 }
                 (n, a)
               }
               Some(_) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.function, category=wrong_type)",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.function, category=wrong_type)",
                 )
               None =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.function, category=missing)",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.function, category=missing)",
                 )
             }
             let args : Json = @json.parse(args_str) catch {
               _ =>
                 raise @posoco.ModelError::ResponseParse(
-                  "openai-compatible response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
+                  "custom provider response parse failure (wire=chat_completions, stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
                 )
             }
             result.push({
@@ -152,7 +152,7 @@ fn decode_chat_response(
           }
           _ =>
             raise @posoco.ModelError::ResponseParse(
-              "openai-compatible response parse failure (stage=tool, category=not_object)",
+              "custom provider response parse failure (wire=chat_completions, stage=tool, category=not_object)",
             )
         }
       }
@@ -160,14 +160,14 @@ fn decode_chat_response(
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=message.tool_calls, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=message.tool_calls, category=wrong_type)",
       )
     None => []
   }
   let finish : @posoco.FinishReason = match choice.get("finish_reason") {
     Some(String("")) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=finish_reason, category=empty)",
+        "custom provider response parse failure (wire=chat_completions, stage=finish_reason, category=empty)",
       )
     Some(String(s)) =>
       match s {
@@ -178,18 +178,18 @@ fn decode_chat_response(
       }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=finish_reason, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=finish_reason, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=finish_reason, category=missing)",
+        "custom provider response parse failure (wire=chat_completions, stage=finish_reason, category=missing)",
       )
   }
   let usage : @posoco.Usage? = match root.get("usage") {
     Some(Object(_)) => Some(extract_usage(root))
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible response parse failure (stage=usage, category=wrong_type)",
+        "custom provider response parse failure (wire=chat_completions, stage=usage, category=wrong_type)",
       )
     None => None
   }
@@ -225,7 +225,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "openai-compatible parse failure (stage=usage.prompt_tokens, category=wrong_type)",
+            "custom provider parse failure (wire=chat_completions, stage=usage.prompt_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -233,7 +233,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "openai-compatible parse failure (stage=usage.completion_tokens, category=wrong_type)",
+            "custom provider parse failure (wire=chat_completions, stage=usage.completion_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -241,7 +241,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "openai-compatible parse failure (stage=usage.total_tokens, category=wrong_type)",
+            "custom provider parse failure (wire=chat_completions, stage=usage.total_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -255,11 +255,11 @@ fn extract_usage(
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible parse failure (stage=usage, category=wrong_type)",
+        "custom provider parse failure (wire=chat_completions, stage=usage, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible parse failure (stage=usage, category=missing)",
+        "custom provider parse failure (wire=chat_completions, stage=usage, category=missing)",
       )
   }
 }

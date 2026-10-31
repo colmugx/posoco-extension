@@ -1,13 +1,14 @@
 ///|
-/// Provider-owned configuration source and catalog contribution for any
-/// standard OpenAI-compatible endpoint.
+/// provider_factory.mbt — provider-owned configuration source and catalog
+/// contribution for any endpoint the user declares.
 ///
-/// One `OpenAICompatibleProvider` instance is scoped to exactly one provider
-/// id (set at construction). The host (cetas-core) constructs one instance per
-/// custom settings id.
+/// One `CustomProvider` instance is scoped to exactly one provider id (set at
+/// construction). The host constructs one instance per custom settings id, the
+/// same shape as a static provider extension; the host never reads a setting
+/// and never decides which protocol an id speaks.
 
 ///|
-pub(all) struct OpenAICompatibleProvider {
+pub(all) struct CustomProvider {
   provider_id : String
   ctx : @devkit.ExtContext
   /// Process-local compatibility knowledge for this one custom endpoint.
@@ -16,15 +17,15 @@ pub(all) struct OpenAICompatibleProvider {
 }
 
 ///|
-pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(
+pub fn CustomProvider::CustomProvider(
   provider_id : String,
   ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
-) -> OpenAICompatibleProvider {
+) -> CustomProvider {
   { provider_id, ctx, prompt_cache_key_rejection_state: Ref(false), }
 }
 
 ///|
-fn oai_compat_setting_string(
+fn custom_setting_string(
   source : @llm.ProviderConfigSource,
   key : String,
 ) -> String? raise @posoco.CompositionError {
@@ -33,7 +34,7 @@ fn oai_compat_setting_string(
     Some(Json::String(value)) =>
       if value.length() == 0 {
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="setting must not be empty: " + key,
         )
       } else {
@@ -41,16 +42,16 @@ fn oai_compat_setting_string(
       }
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail="setting must be a string: " + key,
       )
   }
 }
 
 ///|
-/// Optional boolean setting. `None` = false; anything but a boolean is a
-/// typed composition failure.
-fn oai_compat_setting_bool(
+/// Optional boolean setting. `None` = false; anything but a boolean is a typed
+/// composition failure.
+fn custom_setting_bool(
   source : @llm.ProviderConfigSource,
   key : String,
 ) -> Bool raise @posoco.CompositionError {
@@ -60,14 +61,144 @@ fn oai_compat_setting_bool(
     Some(Json::False) => false
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail="setting must be a boolean: " + key,
       )
   }
 }
 
 ///|
-fn oai_compat_parse_image_input(
+/// Parse one protocol id. Unknown values are a typed composition failure: a
+/// misspelled `protocol` must never fall back to the chat wire, because the
+/// fallback would answer 400 on the wrong endpoint shape.
+fn custom_parse_protocol(
+  origin : String,
+  value : String,
+) -> CustomProtocol raise @posoco.CompositionError {
+  match custom_protocol_of_id(value) {
+    Some(protocol) => protocol
+    None =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_custom",
+        detail=origin +
+          " names an unknown protocol: " +
+          value +
+          " (expected one of " +
+          custom_protocol_choices() +
+          ")",
+      )
+  }
+}
+
+///|
+/// Provider-level `protocol`; absent means the chat-completions wire, which is
+/// exactly what a settings entry written before protocols existed means.
+fn custom_setting_protocol(
+  source : @llm.ProviderConfigSource,
+) -> CustomProtocol raise @posoco.CompositionError {
+  match source.setting("protocol") {
+    None => CustomProtocol::ChatCompletions
+    Some(Json::String(value)) =>
+      if value.length() == 0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_custom",
+          detail="setting must not be empty: protocol",
+        )
+      } else {
+        custom_parse_protocol("protocol", value)
+      }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_custom",
+        detail="setting must be a string: protocol",
+      )
+  }
+}
+
+///|
+/// Optional per-model `protocol` override (`models[]` entries only).
+fn custom_entry_protocol(
+  fields : Map[String, Json],
+  model : String,
+) -> CustomProtocol? raise @posoco.CompositionError {
+  match fields.get("protocol") {
+    None => None
+    Some(Json::String(value)) =>
+      if value.length() == 0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_custom",
+          detail="models entry protocol must not be empty: " + model,
+        )
+      } else {
+        Some(
+          custom_parse_protocol("models entry '" + model + "' protocol", value),
+        )
+      }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_custom",
+        detail="models entry protocol must be a string: " + model,
+      )
+  }
+}
+
+///|
+/// Credential placement. `auto` follows the protocol convention; the explicit
+/// values exist for gateways that front a dialect with the other header.
+fn custom_setting_auth(
+  source : @llm.ProviderConfigSource,
+) -> CustomAuth raise @posoco.CompositionError {
+  match source.setting("auth") {
+    None => CustomAuth::Auto
+    Some(Json::String(value)) =>
+      match custom_auth_of_id(value) {
+        Some(auth) => auth
+        None =>
+          raise @posoco.CompositionError::ManifestSchemaError(
+            manifest_id="posoco_ext_custom",
+            detail="setting auth names an unknown style: " +
+              value +
+              " (expected one of " +
+              custom_auth_choices() +
+              ")",
+          )
+      }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_custom",
+        detail="setting must be a string: auth",
+      )
+  }
+}
+
+///|
+/// Optional positive integer setting; `None` = absent.
+fn custom_setting_positive_int(
+  source : @llm.ProviderConfigSource,
+  key : String,
+) -> Int32? raise @posoco.CompositionError {
+  match source.setting(key) {
+    None => None
+    Some(Json::Number(value, ..)) => {
+      let parsed = value.to_int()
+      if parsed.to_double() != value || parsed <= 0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_custom",
+          detail="setting must be a positive integer: " + key,
+        )
+      }
+      Some(parsed)
+    }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_custom",
+        detail="setting must be a positive integer: " + key,
+      )
+  }
+}
+
+///|
+fn custom_parse_image_input(
   fields : Map[String, Json],
   model : String,
 ) -> Bool raise @posoco.CompositionError {
@@ -77,14 +208,14 @@ fn oai_compat_parse_image_input(
     Some(Json::False) => false
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail="models entry image_input must be a boolean: " + model,
       )
   }
 }
 
 ///|
-fn oai_compat_effort_array_value(
+fn custom_effort_array_value(
   key : String,
   values : Array[Json],
 ) -> Array[String] raise @posoco.CompositionError {
@@ -94,7 +225,7 @@ fn oai_compat_effort_array_value(
       Json::String(effort) if effort.length() > 0 => efforts.push(effort)
       _ =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail=key + " entries must be non-empty strings",
         )
     }
@@ -103,14 +234,14 @@ fn oai_compat_effort_array_value(
   for effort in efforts {
     if effort == "off" || effort == "on" {
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail=key +
           " reserves 'off'/'on' for the reasoning selector; declare explicit levels instead",
       )
     }
     if seen.contains(effort) {
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail=key + " entries must be unique: " + effort,
       )
     }
@@ -120,24 +251,23 @@ fn oai_compat_effort_array_value(
 }
 
 ///|
-fn oai_compat_setting_effort_array(
+fn custom_setting_effort_array(
   source : @llm.ProviderConfigSource,
   key : String,
 ) -> Array[String]? raise @posoco.CompositionError {
   match source.setting(key) {
     None => None
-    Some(Json::Array(values)) =>
-      Some(oai_compat_effort_array_value(key, values))
+    Some(Json::Array(values)) => Some(custom_effort_array_value(key, values))
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail=key + " must be an array of strings",
       )
   }
 }
 
 ///|
-fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
+fn custom_slot_efforts(config : CustomConfig) -> Array[String] {
   if config.thinking_efforts.is_empty() {
     return []
   }
@@ -147,7 +277,7 @@ fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
 }
 
 ///|
-fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
+fn custom_effort_label(config : CustomConfig) -> String {
   match config.reasoning_effort {
     Some(effort) => effort
     None => "off"
@@ -155,16 +285,16 @@ fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
 }
 
 ///|
-/// Build one model slot. Cache policy lives in `config`; compatibility
-/// learning lives in the shared Ref and survives every rebuild closure.
-fn oai_compat_catalog_slot(
+/// Build one model slot. Cache policy and protocol live in `config`;
+/// compatibility learning lives in the shared Ref and survives every rebuild.
+fn custom_catalog_slot(
   provider_id : String,
-  config : OpenAICompatibleConfig,
+  config : CustomConfig,
   prompt_cache_key_rejection_state : Ref[Bool],
 ) -> @llm.ModelSlot {
   let slot_id = provider_id + "/" + config.model
   let label = provider_id + " / " + config.model
-  let slot_efforts = oai_compat_slot_efforts(config)
+  let slot_efforts = custom_slot_efforts(config)
   let (default_effort, rebuild_on_effort) : (
     String?,
     ((String) -> @llm.ModelSlot)?,
@@ -172,16 +302,16 @@ fn oai_compat_catalog_slot(
     (None, None)
   } else {
     (
-      Some(oai_compat_effort_label(config)),
+      Some(custom_effort_label(config)),
       Some(fn(effort) {
         let rebuilt_config = config.with_reasoning_effort(effort) catch {
           err =>
             abort(
-              "openai-compatible catalog effort rebuild failed: " +
+              "custom provider catalog effort rebuild failed: " +
               err.to_string(),
             )
         }
-        oai_compat_catalog_slot(
+        custom_catalog_slot(
           provider_id, rebuilt_config, prompt_cache_key_rejection_state,
         )
       }),
@@ -191,10 +321,10 @@ fn oai_compat_catalog_slot(
   if config.supports_images {
     capabilities.push("image_in")
   }
-  let port : &@posoco.ModelPort = oai_compat_model_port_with_prompt_cache_rejection_state(
+  let port : &@posoco.ModelPort = custom_model_port_with_prompt_cache_rejection_state(
     provider_id, config, prompt_cache_key_rejection_state,
   )
-  let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider(provider_id)
+  let api_key : &@llm.ApiKeyFactory = CustomProvider(provider_id)
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
     label~,
@@ -211,19 +341,8 @@ fn oai_compat_catalog_slot(
     default_effort~,
     display_group=Some("custom"),
     rebuild_on_api_key=Some(fn(credential) {
-      let rebuilt_config = OpenAICompatibleConfig(
-        credential.secret,
-        base_url=config.base_url,
-        model=config.model,
-        endpoint_prefix=config.endpoint_prefix,
-        reasoning_effort=config.reasoning_effort,
-        thinking_efforts=config.thinking_efforts,
-        context_window=config.context_window,
-        compact_threshold=config.compact_threshold,
-        supports_images=config.supports_images,
-        send_prompt_cache_key=config.send_prompt_cache_key,
-      )
-      oai_compat_catalog_slot(
+      let rebuilt_config = config.with_api_key(credential.secret)
+      custom_catalog_slot(
         provider_id, rebuilt_config, prompt_cache_key_rejection_state,
       )
     }),
@@ -232,29 +351,30 @@ fn oai_compat_catalog_slot(
 }
 
 ///|
-pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn provider_id(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ProviderFactory for CustomProvider with fn provider_id(
+  self : CustomProvider,
 ) -> String {
   self.provider_id
 }
 
 ///|
-pub extend OpenAICompatibleProvider with @posoco/ext-llm.ProviderFactory::{
+pub extend CustomProvider with @llm.ProviderFactory::{
   credential_id,
   provider_id,
   build,
 }
 
 ///|
-pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn credential_id(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ProviderFactory for CustomProvider with fn credential_id(
+  self : CustomProvider,
 ) -> String {
   self.provider_id
 }
 
 ///|
-priv struct OaiCompatModelEntry {
+priv struct CustomModelEntry {
   model : String
+  protocol : CustomProtocol?
   context_window : Int32?
   compact_threshold : Double?
   declared_efforts : Array[String]
@@ -263,23 +383,23 @@ priv struct OaiCompatModelEntry {
 }
 
 ///|
-fn oai_compat_parse_models(
+fn custom_parse_models(
   values : Array[Json],
-) -> Array[OaiCompatModelEntry] raise @posoco.CompositionError {
+) -> Array[CustomModelEntry] raise @posoco.CompositionError {
   if values.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
-      manifest_id="posoco_ext_openai_compatible",
+      manifest_id="posoco_ext_custom",
       detail="models must not be empty",
     )
   }
-  let entries : Array[OaiCompatModelEntry] = []
+  let entries : Array[CustomModelEntry] = []
   let seen : Map[String, Unit] = Map::from_array([])
   for value in values {
     let fields = match value {
       Json::Object(fields) => fields
       _ =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models entries must be objects with an 'id'",
         )
     }
@@ -287,7 +407,7 @@ fn oai_compat_parse_models(
       Some(Json::String(id)) =>
         if id.length() == 0 {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models entry 'id' must not be empty",
           )
         } else {
@@ -295,18 +415,18 @@ fn oai_compat_parse_models(
         }
       Some(_) =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models entry 'id' must be a string",
         )
       None =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models entry requires an 'id'",
         )
     }
     if seen.contains(model) {
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail="models entries must have unique ids: " + model,
       )
     }
@@ -317,7 +437,7 @@ fn oai_compat_parse_models(
         let window = value.to_int()
         if window.to_double() != value || window <= 0 {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models entry context_window must be a positive integer: " +
               model,
           )
@@ -326,7 +446,7 @@ fn oai_compat_parse_models(
       }
       Some(_) =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models entry context_window must be a positive integer",
         )
     }
@@ -335,14 +455,14 @@ fn oai_compat_parse_models(
       Some(Json::Number(value, ..)) => {
         if value <= 0.0 || value > 1.0 {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models entry compact_threshold must be a fraction in (0, 1] (e.g. 0.85): " +
               model,
           )
         }
         if context_window is None {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models entry compact_threshold requires context_window: " +
               model,
           )
@@ -351,7 +471,7 @@ fn oai_compat_parse_models(
       }
       Some(_) =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models entry compact_threshold must be a number in (0, 1]",
         )
     }
@@ -360,13 +480,13 @@ fn oai_compat_parse_models(
       None => (None, None)
       Some(Json::Array(levels)) =>
         (
-          Some(oai_compat_effort_array_value("models reasoning_effort", levels)),
+          Some(custom_effort_array_value("models reasoning_effort", levels)),
           None,
         )
       Some(Json::String(fixed)) =>
         if fixed.length() == 0 {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models reasoning_effort must not be empty",
           )
         } else {
@@ -374,17 +494,17 @@ fn oai_compat_parse_models(
         }
       Some(_) =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models reasoning_effort must be an array of levels or a single string",
         )
     }
     let plural_array : Array[String]? = match fields.get("reasoning_efforts") {
       None => None
       Some(Json::Array(levels)) =>
-        Some(oai_compat_effort_array_value("models reasoning_efforts", levels))
+        Some(custom_effort_array_value("models reasoning_efforts", levels))
       Some(_) =>
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_openai_compatible",
+          manifest_id="posoco_ext_custom",
           detail="models reasoning_efforts must be an array of strings",
         )
     }
@@ -393,7 +513,7 @@ fn oai_compat_parse_models(
       (Some(singular), Some(plural)) =>
         if singular != plural {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models reasoning_effort and reasoning_efforts declare different level lists; use one key",
           )
         } else {
@@ -405,45 +525,52 @@ fn oai_compat_parse_models(
     }
     entries.push({
       model,
+      protocol: custom_entry_protocol(fields, model),
       context_window,
       compact_threshold,
       declared_efforts,
       fixed_effort,
-      supports_images: oai_compat_parse_image_input(fields, model),
+      supports_images: custom_parse_image_input(fields, model),
     })
   }
   entries
 }
 
 ///|
-fn oai_compat_config_from_selection(
+fn custom_config_from_selection(
   api_key : String,
   base_url~ : String,
   model~ : String,
   endpoint_prefix~ : String,
+  protocol~ : CustomProtocol,
+  auth~ : CustomAuth,
+  max_output_tokens~ : Int32,
   declared_efforts~ : Array[String],
   fixed_effort~ : String? = None,
   context_window~ : Int32? = None,
   compact_threshold~ : Double? = None,
   supports_images~ : Bool = false,
   send_prompt_cache_key~ : Bool = false,
-) -> OpenAICompatibleConfig raise @posoco.CompositionError {
+) -> CustomConfig raise @posoco.CompositionError {
   match fixed_effort {
     Some(fixed) =>
       if fixed == "off" || fixed == "on" {
         if !declared_efforts.is_empty() {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="reasoning_effort '" +
               fixed +
               "' selects the thinking toggle and cannot combine with a declared level list",
           )
         }
-        OpenAICompatibleConfig(
+        CustomConfig(
           api_key,
           base_url~,
           model~,
           endpoint_prefix~,
+          protocol~,
+          auth~,
+          max_output_tokens~,
           context_window~,
           compact_threshold~,
           supports_images~,
@@ -452,15 +579,18 @@ fn oai_compat_config_from_selection(
       } else {
         if !declared_efforts.is_empty() && !declared_efforts.contains(fixed) {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="reasoning_effort is not one of reasoning_efforts: " + fixed,
           )
         }
-        OpenAICompatibleConfig(
+        CustomConfig(
           api_key,
           base_url~,
           model~,
           endpoint_prefix~,
+          protocol~,
+          auth~,
+          max_output_tokens~,
           reasoning_effort=Some(fixed),
           thinking_efforts=if declared_efforts.is_empty() {
             [fixed]
@@ -476,22 +606,28 @@ fn oai_compat_config_from_selection(
     None =>
       match declared_efforts.length() {
         0 =>
-          OpenAICompatibleConfig(
+          CustomConfig(
             api_key,
             base_url~,
             model~,
             endpoint_prefix~,
+            protocol~,
+            auth~,
+            max_output_tokens~,
             context_window~,
             compact_threshold~,
             supports_images~,
             send_prompt_cache_key~,
           )
         _ =>
-          OpenAICompatibleConfig(
+          CustomConfig(
             api_key,
             base_url~,
             model~,
             endpoint_prefix~,
+            protocol~,
+            auth~,
+            max_output_tokens~,
             reasoning_effort=Some(declared_efforts[0]),
             thinking_efforts=declared_efforts,
             context_window~,
@@ -504,35 +640,41 @@ fn oai_compat_config_from_selection(
 }
 
 ///|
-pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ProviderFactory for CustomProvider with fn build(
+  self : CustomProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
   let credential = source.effective_credential(self.provider_id)
   let api_key = match credential {
     Some(@oauth.ProviderCredential::OAuth(_)) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
+        manifest_id="posoco_ext_custom",
         detail="OAuth credential is not supported for provider " +
           self.provider_id,
       )
     Some(@oauth.ProviderCredential::ApiKey(credential)) => credential.secret
     None =>
-      match oai_compat_setting_string(source, "api_key") {
+      match custom_setting_string(source, "api_key") {
         Some(value) => value
         None => return @llm.ProviderBuildResult::Unconfigured
       }
   }
-  let base_url = match oai_compat_setting_string(source, "base_url") {
+  let base_url = match custom_setting_string(source, "base_url") {
     Some(value) => value
     None => return @llm.ProviderBuildResult::Unconfigured
   }
-  let endpoint_prefix = match
-    oai_compat_setting_string(source, "endpoint_prefix") {
+  let endpoint_prefix = match custom_setting_string(source, "endpoint_prefix") {
     Some(value) => value
     None => ""
   }
-  let send_prompt_cache_key = oai_compat_setting_bool(
+  let protocol = custom_setting_protocol(source)
+  let auth = custom_setting_auth(source)
+  let max_output_tokens = match
+    custom_setting_positive_int(source, "max_output_tokens") {
+    Some(value) => value
+    None => CUSTOM_DEFAULT_MAX_OUTPUT_TOKENS
+  }
+  let send_prompt_cache_key = custom_setting_bool(
     source, "send_prompt_cache_key",
   )
   match source.setting("models") {
@@ -540,7 +682,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
       for flat_key in ["model", "reasoning_effort", "reasoning_efforts"] {
         if source.setting(flat_key) is Some(_) {
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="models cannot combine with the flat '" +
               flat_key +
               "' setting; use one style per provider",
@@ -548,12 +690,15 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         }
       }
       let slots : Array[@llm.ModelSlot] = []
-      for entry in oai_compat_parse_models(values) {
-        let config = oai_compat_config_from_selection(
+      for entry in custom_parse_models(values) {
+        let config = custom_config_from_selection(
           api_key,
           base_url~,
           model=entry.model,
           endpoint_prefix~,
+          protocol=entry.protocol.unwrap_or(protocol),
+          auth~,
+          max_output_tokens~,
           declared_efforts=entry.declared_efforts,
           fixed_effort=entry.fixed_effort,
           context_window=entry.context_window,
@@ -562,7 +707,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
           send_prompt_cache_key~,
         )
         slots.push(
-          oai_compat_catalog_slot(
+          custom_catalog_slot(
             self.provider_id,
             config,
             self.prompt_cache_key_rejection_state,
@@ -579,11 +724,11 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
     }
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_openai_compatible",
-        detail="models must be an array of {id, context_window?, compact_threshold?, reasoning_effort?} entries",
+        manifest_id="posoco_ext_custom",
+        detail="models must be an array of {id, protocol?, context_window?, compact_threshold?, reasoning_effort?} entries",
       )
     None => {
-      let model = match oai_compat_setting_string(source, "model") {
+      let model = match custom_setting_string(source, "model") {
         Some(value) => value
         None => return @llm.ProviderBuildResult::Unconfigured
       }
@@ -591,14 +736,11 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         source.setting("reasoning_effort") {
         None => (None, None)
         Some(Json::Array(values)) =>
-          (
-            Some(oai_compat_effort_array_value("reasoning_effort", values)),
-            None,
-          )
+          (Some(custom_effort_array_value("reasoning_effort", values)), None)
         Some(Json::String(fixed)) =>
           if fixed.length() == 0 {
             raise @posoco.CompositionError::ManifestSchemaError(
-              manifest_id="posoco_ext_openai_compatible",
+              manifest_id="posoco_ext_custom",
               detail="setting must not be empty: reasoning_effort",
             )
           } else {
@@ -606,11 +748,11 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
           }
         Some(_) =>
           raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai_compatible",
+            manifest_id="posoco_ext_custom",
             detail="reasoning_effort must be an array of levels or a single string",
           )
       }
-      let plural_array = oai_compat_setting_effort_array(
+      let plural_array = custom_setting_effort_array(
         source, "reasoning_efforts",
       )
       let declared_efforts : Array[String] = match
@@ -618,7 +760,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         (Some(singular), Some(plural)) =>
           if singular != plural {
             raise @posoco.CompositionError::ManifestSchemaError(
-              manifest_id="posoco_ext_openai_compatible",
+              manifest_id="posoco_ext_custom",
               detail="reasoning_effort and reasoning_efforts declare different level lists; use one key",
             )
           } else {
@@ -628,21 +770,24 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         (None, Some(plural)) => plural
         (None, None) => []
       }
-      let config = oai_compat_config_from_selection(
+      let config = custom_config_from_selection(
         api_key,
         base_url~,
         model~,
         endpoint_prefix~,
+        protocol~,
+        auth~,
+        max_output_tokens~,
         declared_efforts~,
         fixed_effort=singular_string,
-        supports_images=oai_compat_setting_bool(source, "image_input"),
+        supports_images=custom_setting_bool(source, "image_input"),
         send_prompt_cache_key~,
       )
       @llm.ProviderBuildResult::Ready(
         @llm.ProviderModelCatalog::ProviderModelCatalog(
           provider_id=self.provider_id,
           slots=[
-            oai_compat_catalog_slot(
+            custom_catalog_slot(
               self.provider_id,
               config,
               self.prompt_cache_key_rejection_state,
@@ -656,14 +801,14 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
 }
 
 ///|
-pub fn OpenAICompatibleModelPort::model_catalog(
-  self : OpenAICompatibleModelPort,
+pub fn CustomModelPort::model_catalog(
+  self : CustomModelPort,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   ignore(self.prompt_cache_key_rejected_now())
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=self.provider_id,
     slots=[
-      oai_compat_catalog_slot(
+      custom_catalog_slot(
         self.provider_id,
         self.config,
         self.prompt_cache_key_rejection_state,
@@ -674,25 +819,25 @@ pub fn OpenAICompatibleModelPort::model_catalog(
 }
 
 ///|
-pub impl @llm.ApiKeyFactory for OpenAICompatibleProvider with fn provider_id(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ApiKeyFactory for CustomProvider with fn provider_id(
+  self : CustomProvider,
 ) -> String {
   self.provider_id
 }
 
 ///|
-pub extend OpenAICompatibleProvider with @posoco/ext-llm.ApiKeyFactory::{login}
+pub extend CustomProvider with @llm.ApiKeyFactory::{login}
 
 ///|
-pub impl @llm.ApiKeyFactory for OpenAICompatibleProvider with fn credential_id(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ApiKeyFactory for CustomProvider with fn credential_id(
+  self : CustomProvider,
 ) -> String {
   self.provider_id
 }
 
 ///|
-pub impl @llm.ApiKeyFactory for OpenAICompatibleProvider with fn login(
-  self : OpenAICompatibleProvider,
+pub impl @llm.ApiKeyFactory for CustomProvider with fn login(
+  self : CustomProvider,
   interaction : &@oauth.AuthPromptInteraction,
 ) -> @oauth.ApiKeyCredential raise @oauth.OAuthError {
   let secret = interaction.prompt(

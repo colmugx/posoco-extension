@@ -1,0 +1,37 @@
+import {
+  "colmugx/posoco",
+  "posoco/devkit",
+  "colmugx/posoco-kit-rate-limit" @ratelimit,
+  "colmugx/posoco-kit-messages" @messages,
+  "colmugx/posoco-kit-responses" @responses,
+  "posoco/ext-llm" @llm,
+  "posoco/ext-oauth" @oauth,
+  "posoco/kit-chat-completions" @chatkit,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_package-unused_value-unused_constructor"
+
+options(
+  targets: {
+    // HTTP-backed ports: native+wasm+js (moonbitlang/async/http is
+    // unavailable on wasm-gc). Config, protocol vocabulary, the chat-wire
+    // codec, the responses/messages request shapes, header construction,
+    // failure classification, the catalog/factory, and provider_config live
+    // in unrestricted core files so the package exports a complete mbti.
+    "port_native_js.mbt": [ "native", "wasm", "js" ],
+    "wire_chat_completions_native_js.mbt": [ "native", "wasm", "js" ],
+    "wire_responses_native_js.mbt": [ "native", "wasm", "js" ],
+    "wire_messages_native_js.mbt": [ "native", "wasm", "js" ],
+    "wire_log.js.mbt": [ "js" ],
+    "wire_log_native.mbt": [ "native", "wasm" ],
+  },
+)
