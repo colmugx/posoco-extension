@@ -45,6 +45,9 @@ pub impl @posoco.Lifecycle for Init with fn on_compose(
 pub extend Init with @posoco.Extension::{extension_id, manifest}
 
 ///|
+pub extend Init with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
+
+///|
 pub extend Init with @posoco.CommandPort::{commands, invoke}
 
 ///|
@@ -115,15 +118,15 @@ fn init_parse_args(args : Json) -> Result[(String, String, String?), String] {
       let parts = raw.trim().split(" ").filter(fn(s) { s != "" }).collect()
       if parts.length() > 0 {
         if parts[0] == "create" || parts[0] == "check" || parts[0] == "refresh" {
-          action = parts[0]
+          action = parts[0].to_owned()
           if parts.length() > 2 {
             return Err("usage: /init [create|check|refresh] [relative-directory]")
           }
           if parts.length() == 2 {
-            path = parts[1]
+            path = parts[1].to_owned()
           }
         } else if parts.length() == 1 {
-          path = parts[0]
+          path = parts[0].to_owned()
         } else {
           return Err("usage: /init [create|check|refresh] [relative-directory]")
         }
@@ -164,7 +167,7 @@ fn init_validate_path(path : String) -> Result[String, String] {
   if path == "" || path == "." {
     return Ok(".")
   }
-  if path.length() > 256 || path.starts_with("/") || path.starts_with("\\") ||
+  if path.length() > 256 || path.has_prefix("/") || path.has_prefix("\\") ||
     path.contains("\\") || path.contains(":") {
     return Err("init: path must be a short repository-relative directory")
   }
