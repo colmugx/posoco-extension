@@ -96,4 +96,3 @@ fn BoardState::clone_detached(self : BoardState) -> BoardState {
   }
   { revision: self.revision, tasks, attempts, expansions, }
 }
-

@@ -1630,7 +1630,16 @@ fn AskingComposer::AskingComposer(
   ask_started~ : @async.Queue[Unit]? = None,
   asks~ : Int32 = 1,
 ) -> AskingComposer {
-  { channel, req, finish_text, ask_delay_ms, ask_started, asks, answers: [], specs: [], }
+  {
+    channel,
+    req,
+    finish_text,
+    ask_delay_ms,
+    ask_started,
+    asks,
+    answers: [],
+    specs: [],
+  }
 }
 
 ///|
