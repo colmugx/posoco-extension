@@ -17,6 +17,7 @@ members = [
   "./posoco-ext-grep",
   "./posoco-ext-handoff",
   "./posoco-ext-herdr",
+  "./posoco-ext-init",
   "./posoco-ext-typesafe",
   "./posoco-ext-kind",
   "./posoco-ext-kimi",
