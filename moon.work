@@ -29,7 +29,7 @@ members = [
   "./posoco-ext-nowledge-mem",
   "./posoco-ext-oauth",
   "./posoco-ext-obsidian",
-  "./posoco-ext-openai-compatible",
+  "./posoco-ext-custom",
   "./posoco-ext-openai",
   "./posoco-ext-opencode-zen",
   "./posoco-ext-opencode-go",
