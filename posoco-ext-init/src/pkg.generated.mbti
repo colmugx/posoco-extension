@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-init"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Init {
+  mut wakeup : @port.WakeupPort?
+  mut session : String?
+}
+pub fn Init::Init() -> Self
+pub fn Init::commands(Self) -> Array[@port.CommandDef]
+pub fn Init::extension_id(Self) -> String
+pub async fn Init::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn Init::manifest(Self) -> @port.ExtensionManifest
+pub fn Init::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn Init::on_shutdown(Self) -> Unit
+pub async fn Init::on_start(Self) -> Unit
+pub fn Init::set_session(Self, String?) -> Unit
+pub impl @port.CommandPort for Init
+pub impl @port.Extension for Init
+pub impl @port.Lifecycle for Init
+
+// Type aliases
+
+// Traits

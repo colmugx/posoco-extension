@@ -30,10 +30,6 @@ priv enum PendingState {
   /// Terminal before injection: the deadline passed and the expiry has not
   /// been drained yet.
   Expired
-  /// The user replied in plain conversation (no id binding). No envelope is
-  /// queued — the reply is already in the model context — but the expiry
-  /// line is suppressed and the host clears its card.
-  Closed
 }
 
 ///|
@@ -207,7 +203,6 @@ pub fn AsyncQuestionRegistry::answer(
   }
   match parked.state {
     Expired => return Err(Expired(id~))
-    Closed => return Err(AlreadyAnswered(id~))
     Open => ()
   }
   if parked.response is Some(_) {
@@ -285,25 +280,6 @@ pub fn AsyncQuestionRegistry::open(
     }
   }
   out
-}
-
-///|
-/// The user sent a plain reply (no id binding): close every open question.
-/// Closing is not answering — no envelope is queued, because the reply is
-/// already in the model context and the model pairs them itself — but the
-/// later expiry line is suppressed. Returns the closed questions in
-/// submission order.
-pub fn AsyncQuestionRegistry::close_open_for_reply(
-  self : AsyncQuestionRegistry,
-) -> Array[AsyncQuestion] {
-  let closed : Array[AsyncQuestion] = []
-  for parked in self.pending.values() {
-    if parked.state is Open && parked.response is None {
-      parked.state = Closed
-      closed.push(parked.question)
-    }
-  }
-  closed
 }
 
 ///|

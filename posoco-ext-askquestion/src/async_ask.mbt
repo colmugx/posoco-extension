@@ -17,12 +17,13 @@
 
 ///|
 /// One question lifecycle fact for host display. Not model input.
+///
+/// Every terminal fact is per-question: answering or settling one question
+/// never withdraws another. Hosts decide what a plain human message means;
+/// the extension never infers that a message answers the outstanding set.
 pub(all) enum QuestionEvent {
   Asked(question~ : AsyncQuestion)
   Answered(question_id~ : String)
-  /// The user replied in plain conversation; no id was bound. The host
-  /// clears its card, and the model reads the reply from its own context.
-  Closed(question_id~ : String)
 } derive(@debug.Debug)
 
 ///|
@@ -125,22 +126,6 @@ pub fn AskQuestionTools::open_questions(
   self : AskQuestionTools,
 ) -> Array[AsyncQuestion] {
   self.registry.open()
-}
-
-///|
-/// The user sent a plain reply (typed normally, no `question_id`): close
-/// every open question. No envelope is queued — the reply is already an
-/// ordinary message in the model context, and the model pairs it with the
-/// question it asked — but the later expiry line is suppressed. The host
-/// learns each close through `QuestionEvent::Closed`.
-pub fn AskQuestionTools::close_open_for_reply(
-  self : AskQuestionTools,
-) -> Array[AsyncQuestion] {
-  let closed = self.registry.close_open_for_reply()
-  for question in closed {
-    self.fire(Closed(question_id=question.id))
-  }
-  closed
 }
 
 ///|

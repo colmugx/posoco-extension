@@ -40,7 +40,6 @@ pub struct AskQuestionTools {
 pub fn AskQuestionTools::AskQuestionTools() -> Self
 pub fn AskQuestionTools::answer_async(Self, question_id~ : String, response~ : @port.UiResponse) -> Result[Unit, AsyncAskError]
 pub async fn AskQuestionTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
-pub fn AskQuestionTools::close_open_for_reply(Self) -> Array[AsyncQuestion]
 pub fn AskQuestionTools::drain_answers_for_test(Self, now~ : Int64) -> Array[AsyncOutcome]
 pub async fn AskQuestionTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn AskQuestionTools::extension_id(Self) -> String
@@ -101,7 +100,6 @@ pub struct AsyncQuestionRegistry {
 }
 pub fn AsyncQuestionRegistry::AsyncQuestionRegistry(timeout_ms? : Int64) -> Self
 pub fn AsyncQuestionRegistry::answer(Self, id~ : String, response~ : @port.UiResponse, now~ : Int64) -> Result[Unit, AsyncAskError]
-pub fn AsyncQuestionRegistry::close_open_for_reply(Self) -> Array[AsyncQuestion]
 pub fn AsyncQuestionRegistry::drain(Self, now~ : Int64) -> Array[AsyncOutcome]
 pub fn AsyncQuestionRegistry::has_undelivered(Self) -> Bool
 pub fn AsyncQuestionRegistry::open(Self) -> Array[AsyncQuestion]
@@ -116,7 +114,6 @@ pub enum QuestionAudience {
 pub(all) enum QuestionEvent {
   Asked(question~ : AsyncQuestion)
   Answered(question_id~ : String)
-  Closed(question_id~ : String)
 } derive(@debug.Debug)
 pub fn QuestionEvent::to_repr(Self) -> @debug.Repr
 

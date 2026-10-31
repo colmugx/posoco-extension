@@ -355,14 +355,16 @@ async test "notify_user_degrades_without_wakeup_and_clears_on_shutdown" {
 }
 
 ///|
-/// A plain reply (no id binding) closes every open question: no envelope,
-/// no later expiry, and a late id-bound answer is refused.
-async test "notify_user_plain_reply_closes_questions" {
+/// Answering one question settles exactly that question. There is no
+/// "plain input" hook that could withdraw the rest, so a host that submits
+/// ordinary text merely to carry an id-bound reply cannot lose the other
+/// questions the user still owes.
+async test "notify_user_answer_leaves_other_questions_open" {
   let tools = AskQuestionTools()
-  let closed : Array[String] = []
+  let answered : Array[String] = []
   tools.subscribe(fn(event) {
     match event {
-      Closed(question_id~) => closed.push(question_id)
+      Answered(question_id~) => answered.push(question_id)
       _ => ()
     }
   })
@@ -384,20 +386,37 @@ async test "notify_user_plain_reply_closes_questions" {
     ),
   )
   assert_eq(tools.open_questions().length(), 2)
-  // The human typed a reply: the host closes what is open.
-  assert_eq(tools.close_open_for_reply().length(), 2)
-  assert_eq(closed, ["question-1", "question-2"])
-  assert_eq(tools.open_questions().length(), 0)
-  // No envelope is queued for a closed question, and nothing expires later.
-  assert_eq(tools.drain_answers_for_test(now=99_999_999L).length(), 0)
-  assert_eq(@posoco.PipelineHook::before_model(tools, []).length(), 0)
-  // The closed question is settled: an id-bound answer cannot revive it.
   match
     tools.answer_async(
       question_id="question-1",
       response=@posoco.UiResponse::Selected(0),
     ) {
-    Err(AsyncAskError::AlreadyAnswered(..)) => ()
-    _ => fail("expected the closed question to stay settled")
+    Ok(_) => ()
+    Err(error) =>
+      fail("expected the first answer to be accepted: \{error.to_string()}")
   }
+  // Only the answered id leaves the open set.
+  assert_eq(answered, ["question-1"])
+  let open = tools.open_questions()
+  assert_eq(open.length(), 1)
+  assert_eq(open[0].id, "question-2")
+  // The pending answer envelope names q1 only.
+  let outcomes = tools.drain_answers_for_test(now=2L)
+  assert_eq(outcomes.length(), 1)
+  match outcomes[0] {
+    Answered(question~, ..) => assert_eq(question.id, "question-1")
+    _ => fail("expected one answered outcome")
+  }
+  // The second question is still answerable, and that answer is its own.
+  match
+    tools.answer_async(
+      question_id="question-2",
+      response=@posoco.UiResponse::Text("22"),
+    ) {
+    Ok(_) => ()
+    Err(error) =>
+      fail("expected the second answer to be accepted: \{error.to_string()}")
+  }
+  assert_eq(tools.open_questions().length(), 0)
+  assert_eq(answered, ["question-1", "question-2"])
 }
