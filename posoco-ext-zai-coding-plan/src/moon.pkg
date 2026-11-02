@@ -1,6 +1,9 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco/kernel",
   "colmugx/posoco-ext-zai" @zai,
+  "colmugx/mcp/client",
+  "colmugx/mcp/protocol/types",
   "posoco/devkit",
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
@@ -11,7 +14,10 @@ import {
 
 import {
   "colmugx/posoco",
+  "colmugx/posoco-ext-zai" @zai,
+  "posoco/devkit",
   "moonbitlang/async",
+  "moonbitlang/core/json",
 } for "wbtest"
 
 options(

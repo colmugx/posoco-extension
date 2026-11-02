@@ -131,7 +131,10 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
 ///|
 /// Effective coding-plan config from settings + credential; `None` when no
 /// API key is present anywhere.
-fn zai_coding_plan_build_config(
+/// The single settings interpretation point: the model port, the quota probe,
+/// and the tools companion all build their config here, so they can never
+/// disagree about the key, host, or profile.
+pub fn zai_coding_plan_build_config(
   source : @llm.ProviderConfigSource,
 ) -> @zai.ZaiConfig? raise @posoco.CompositionError {
   let api_key = match zai_coding_plan_api_key(source) {

@@ -2,12 +2,15 @@
 package "colmugx/posoco-ext-zai-coding-plan"
 
 import {
+  "colmugx/mcp/client",
   "colmugx/posoco-ext-zai",
   "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
   "posoco/devkit",
   "posoco/ext-oauth",
 }
@@ -17,13 +20,55 @@ pub async fn fetch_zai_coding_plan_quota(String, String, now_ms? : () -> Int64) 
 
 pub fn parse_zai_coding_plan_quota(Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
 
+pub fn zai_coding_plan_build_config(@posoco-kit-provider.ProviderConfigSource) -> @posoco-ext-zai.ZaiConfig? raise @error.CompositionError
+
+pub fn zai_coding_plan_declared_groups(model~ : String, host~ : String) -> Array[ZaiToolGroup]
+
+pub fn zai_coding_plan_mcp_group_names() -> Array[String]
+
+pub fn zai_coding_plan_owns_slot(String) -> Bool
+
 pub fn zai_coding_plan_profile_endpoint(String) -> (String, String)?
 
+pub fn zai_coding_plan_profile_host(String) -> String?
+
+pub fn zai_coding_plan_provider_id() -> String
+
 pub fn zai_coding_plan_quota_url(String) -> String
+
+pub fn zai_coding_plan_tools_owner() -> String
+
+pub fn zai_mcp_namespaced_tool(String, String) -> String
+
+pub async fn zai_mcp_open(api_key~ : String, groups~ : Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise
+
+pub async fn zai_mcp_open_default(String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise
+
+pub fn zai_mcp_route(String) -> ZaiMcpRoute?
+
+pub fn zai_mcp_segment_text(String) -> String
 
 // Errors
 
 // Types and methods
+pub(all) struct HttpZaiMcp {
+  api_key : String
+  client_name : String
+  client_version : String
+  mut clients : Map[String, @client.MCPClient]
+  mut defs : Array[@kernel.ToolDef]
+  mut connected : Int32
+  mut failures : Array[String]
+  mut closed : Bool
+}
+pub fn HttpZaiMcp::HttpZaiMcp(api_key~ : String, client_name? : String, client_version? : String) -> Self
+pub async fn HttpZaiMcp::call(Self, String, Json) -> Result[String, String] noraise
+pub async fn HttpZaiMcp::close(Self) -> Unit noraise
+pub fn HttpZaiMcp::connected_groups(Self) -> Int32
+pub fn HttpZaiMcp::failures(Self) -> Array[String]
+pub fn HttpZaiMcp::tools(Self) -> Array[@kernel.ToolDef]
+pub impl ZaiMcpConnection for HttpZaiMcp
+
 pub(all) struct ZaiCodingPlanModelPort {
   inner : @posoco-ext-zai.ZaiModelPort
 }
@@ -57,6 +102,92 @@ pub fn ZaiCodingPlanQuotaSource::ZaiCodingPlanQuotaSource(base_url? : String, ap
 pub async fn ZaiCodingPlanQuotaSource::read(Self) -> Result[Array[@devkit.QuotaReading], String]
 pub impl @devkit.QuotaSource for ZaiCodingPlanQuotaSource
 
+pub(all) struct ZaiCodingPlanTools {
+  config : @posoco-ext-zai.ZaiConfig
+  bus : @devkit.EventBus
+  group : @async.TaskGroup[Unit]
+  initial_slot_id : String
+  open_plane : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise
+  mut contributions : @port.ToolContributions?
+  mut log : &@port.LogPort?
+  mut ui : &@port.UiPort?
+  mut state : ZaiToolsState
+  mut live : ZaiLivePlane?
+  mut generation : Int32
+  mut active_model : String
+}
+pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(config~ : @posoco-ext-zai.ZaiConfig, bus~ : @devkit.EventBus, group~ : @async.TaskGroup[Unit], initial_slot_id? : String, open_plane? : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise) -> Self
+pub fn ZaiCodingPlanTools::extension_id(Self) -> String
+pub fn ZaiCodingPlanTools::manifest(Self) -> @port.ExtensionManifest
+pub fn ZaiCodingPlanTools::on_bus_event(Self, @devkit.BusEvent) -> Unit
+pub fn ZaiCodingPlanTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn ZaiCodingPlanTools::on_shutdown(Self) -> Unit
+pub async fn ZaiCodingPlanTools::on_start(Self) -> Unit
+pub fn ZaiCodingPlanTools::owns_slot(Self, String) -> Bool
+pub impl @port.Extension for ZaiCodingPlanTools
+pub impl @port.Lifecycle for ZaiCodingPlanTools
+pub impl @devkit.BusSubscriber for ZaiCodingPlanTools
+
+pub(all) struct ZaiLivePlane {
+  connection : &ZaiMcpConnection
+  provider : ZaiMcpToolProvider
+}
+
+pub(all) struct ZaiMcpOpen {
+  tools : Array[@kernel.ToolDef]
+  connected : Int32
+  failures : Array[String]
+} derive(@debug.Debug)
+pub fn ZaiMcpOpen::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ZaiMcpRoute {
+  group : String
+  tool : String
+} derive(Eq, @debug.Debug)
+pub fn ZaiMcpRoute::equal(Self, Self) -> Bool
+pub fn ZaiMcpRoute::not_equal(Self, Self) -> Bool
+pub fn ZaiMcpRoute::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ZaiMcpToolProvider {
+  connection : &ZaiMcpConnection
+}
+pub fn ZaiMcpToolProvider::ZaiMcpToolProvider(connection~ : &ZaiMcpConnection) -> Self
+pub async fn ZaiMcpToolProvider::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn ZaiMcpToolProvider::list_tools(Self) -> Array[@kernel.ToolDef]
+pub impl @port.ToolProvider for ZaiMcpToolProvider
+
+pub(all) struct ZaiToolGroup {
+  group : String
+  title : String
+  endpoint : String
+} derive(Eq, @debug.Debug)
+pub fn ZaiToolGroup::equal(Self, Self) -> Bool
+pub fn ZaiToolGroup::not_equal(Self, Self) -> Bool
+pub fn ZaiToolGroup::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ZaiToolsState {
+  Inactive
+  Connecting(connected~ : Int32, total~ : Int32)
+  Ready(total~ : Int32)
+  Degraded(connected~ : Int32, total~ : Int32)
+  Withdrawing(total~ : Int32)
+} derive(Eq, @debug.Debug)
+pub fn ZaiToolsState::connected(Self) -> Int32
+pub fn ZaiToolsState::equal(Self, Self) -> Bool
+pub fn ZaiToolsState::not_equal(Self, Self) -> Bool
+pub fn ZaiToolsState::segment_color(Self) -> String?
+pub fn ZaiToolsState::segment_value(Self) -> String?
+pub fn ZaiToolsState::settled(connected~ : Int32, total~ : Int32) -> Self
+pub fn ZaiToolsState::to_repr(Self) -> @debug.Repr
+pub fn ZaiToolsState::total(Self) -> Int32
+
 // Type aliases
 
 // Traits
+pub(open) trait ZaiMcpConnection {
+  fn tools(Self) -> Array[@kernel.ToolDef]
+  fn connected_groups(Self) -> Int32
+  fn failures(Self) -> Array[String]
+  async fn call(Self, String, Json) -> Result[String, String] noraise
+  async fn close(Self) -> Unit noraise
+}
