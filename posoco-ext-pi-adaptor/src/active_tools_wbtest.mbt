@@ -124,7 +124,9 @@ test "setActiveTools shrink keeps every catalog accessor in lockstep" {
     content="true",
   )
   let catalog = parse_json_or_null(js_catalog_json(adaptor.host))
-  guard catalog is Json::Array(entries) else { abort("catalog must be an array") }
+  guard catalog is Json::Array(entries) else {
+    abort("catalog must be an array")
+  }
   inspect(entries.length(), content="1")
   let tool = match entries[0] {
     Json::Object(tool_fields) => tool_fields
@@ -136,7 +138,9 @@ test "setActiveTools shrink keeps every catalog accessor in lockstep" {
   }
   inspect(name, content="beta")
   let snapshot = parse_json_or_null(js_catalog_snapshot_json(adaptor.host))
-  guard snapshot is Json::Object(fields) else { abort("snapshot must be an object") }
+  guard snapshot is Json::Object(fields) else {
+    abort("snapshot must be an object")
+  }
   guard fields.get("tools") is Some(Json::Array(items)) else {
     abort("missing snapshot tools")
   }
@@ -148,7 +152,10 @@ test "inactive tools contribute no prompt snippet" {
   let adaptor = pi_adaptor_new()
   wbtest_api_register_tool_with_snippet(adaptor.host, "alpha", "Use alpha.")
   wbtest_api_register_tool_with_snippet(adaptor.host, "beta", "Use beta.")
-  inspect(js_prompt_snippets_json(adaptor.host).contains("Use beta."), content="true")
+  inspect(
+    js_prompt_snippets_json(adaptor.host).contains("Use beta."),
+    content="true",
+  )
   wbtest_api_set_active_tools(adaptor.host, "[\"alpha\"]")
   let snippets = js_prompt_snippets_json(adaptor.host)
   inspect(snippets.contains("Use alpha."), content="true")
