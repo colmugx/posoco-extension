@@ -56,6 +56,10 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     uiOnRender: null,
   #|     uiSeq: 0,
   #|     catalogVersion: 0,
+  #|     // Active-set semantics: null means every registered tool is active
+  #|     // (pi's default); otherwise it holds exactly the active names.
+  #|     activeTools: null,
+  #|     onCatalogChange: null,
   #|   };
   #|
   #|   const renderContent = (blocks) =>
@@ -210,6 +214,23 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     })().catch(() => {});
   #|   };
   #|
+  #|   // One filtered view of the registry consulted by every catalog accessor
+  #|   // (count/name/description/schema/catalog JSONs) so their indices stay in
+  #|   // lockstep: null keeps all registered tools visible, an active set keeps
+  #|   // only the tools whose name it holds. Registration order is preserved.
+  #|   const visibleTools = () =>
+  #|     state.activeTools === null
+  #|       ? state.tools
+  #|       : state.tools.filter((tool) => state.activeTools.has(tool.name));
+  #|
+  #|   // Registration and visibility changes both bump the catalog version and
+  #|   // notify the MoonBit side, whose dirty flag drives republishing at the
+  #|   // next model call.
+  #|   const bumpCatalog = () => {
+  #|     state.catalogVersion += 1;
+  #|     state.onCatalogChange?.();
+  #|   };
+  #|
   #|   const registerTool = (tool) => {
   #|     if (!tool || typeof tool !== "object") throw new TypeError("registerTool expects an object");
   #|     if (typeof tool.name !== "string" || tool.name.length === 0) throw new TypeError("Pi tool name must be non-empty");
@@ -222,7 +243,11 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     };
   #|     state.tools.push(normalized);
   #|     state.byName.set(normalized.name, normalized);
-  #|     state.catalogVersion += 1;
+  #|     // pi parity (_refreshToolRegistry): a tool registered after an
+  #|     // explicit setActiveTools call still joins the active set; the null
+  #|     // default already shows everything.
+  #|     if (state.activeTools !== null) state.activeTools.add(normalized.name);
+  #|     bumpCatalog();
   #|   };
   #|
   #|   const on = (event, handler) => {
@@ -351,6 +376,32 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     registerToolRenderer(name, renderer) {
   #|       state.toolRenderers.push({ name, hasRenderer: typeof renderer === "function" });
   #|     },
+  #|     // pi 0.84.x ExtensionAPI parity. getAllTools projects the full
+  #|     // registry and ignores the active set; setActiveTools follows pi's
+  #|     // setActiveToolsByName — names absent from the registry are silently
+  #|     // ignored (so an all-unknown list deactivates everything), duplicates
+  #|     // collapse, and the change takes effect at the next model call.
+  #|     getAllTools() {
+  #|       return state.tools.map((tool) => ({
+  #|         name: tool.name,
+  #|         label: tool.label ?? tool.name,
+  #|         description: tool.description,
+  #|       }));
+  #|     },
+  #|     getActiveTools() {
+  #|       return visibleTools().map((tool) => tool.name);
+  #|     },
+  #|     setActiveTools(names) {
+  #|       if (!Array.isArray(names)) {
+  #|         throw new TypeError("setActiveTools expects an array of tool names");
+  #|       }
+  #|       const next = new Set();
+  #|       for (const name of names) {
+  #|         if (typeof name === "string" && state.byName.has(name)) next.add(name);
+  #|       }
+  #|       state.activeTools = next;
+  #|       bumpCatalog();
+  #|     },
   #|   };
   #|
   #|   const executeAsync = async (name, callId, argumentsJson, effectId = null) => {
@@ -400,7 +451,7 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     }
   #|   };
   #|
-  #|   return { state, api, makeContext, executeAsync, normalizePiResult, errorResult, renderContent, emitFireAndForget };
+  #|   return { state, api, makeContext, visibleTools, executeAsync, normalizePiResult, errorResult, renderContent, emitFireAndForget };
   #| }
 
 ///|
@@ -427,24 +478,28 @@ extern "js" fn js_host_set_project_trusted(
   #| (host, trusted) => { host.state.projectTrusted = trusted }
 
 ///|
+/// Catalog accessors over the host's active tool view (visibleTools): the
+/// count and the per-index readers must agree on the same filtered array or
+/// list_tools indexes shift. Inactive tools stay registered and executable
+/// (visibility-only, like hidden tools).
 extern "js" fn js_tool_count(host : JsPiHost) -> Int32 =
-  #| (host) => host.state.tools.length
+  #| (host) => host.visibleTools().length
 
 ///|
 extern "js" fn js_tool_name(host : JsPiHost, index : Int32) -> String =
-  #| (host, index) => host.state.tools[index]?.name ?? ""
+  #| (host, index) => host.visibleTools()[index]?.name ?? ""
 
 ///|
 extern "js" fn js_tool_description(host : JsPiHost, index : Int32) -> String =
-  #| (host, index) => host.state.tools[index]?.description ?? ""
+  #| (host, index) => host.visibleTools()[index]?.description ?? ""
 
 ///|
 extern "js" fn js_tool_schema_json(host : JsPiHost, index : Int32) -> String =
-  #| (host, index) => JSON.stringify(host.state.tools[index]?.parameters ?? { type: "object", properties: {} })
+  #| (host, index) => JSON.stringify(host.visibleTools()[index]?.parameters ?? { type: "object", properties: {} })
 
 ///|
 extern "js" fn js_catalog_json(host : JsPiHost) -> String =
-  #| (host) => JSON.stringify(host.state.tools.map((tool) => ({
+  #| (host) => JSON.stringify(host.visibleTools().map((tool) => ({
   #|   name: tool.name,
   #|   label: tool.label ?? tool.name,
   #|   description: tool.description,
@@ -456,7 +511,7 @@ extern "js" fn js_catalog_json(host : JsPiHost) -> String =
 extern "js" fn js_catalog_snapshot_json(host : JsPiHost) -> String =
   #| (host) => JSON.stringify({
   #|   version: host.state.catalogVersion,
-  #|   tools: host.state.tools.map((tool) => ({
+  #|   tools: host.visibleTools().map((tool) => ({
   #|     name: tool.name,
   #|     label: tool.label ?? tool.name,
   #|     description: tool.description,
@@ -468,11 +523,12 @@ extern "js" fn js_catalog_snapshot_json(host : JsPiHost) -> String =
 ///|
 /// Live prompt self-description of the currently registered Pi tools: one
 /// JSON entry per tool carrying a non-empty promptSnippet or
-/// promptGuidelines, in registration order. Hidden tools (base wins) never
-/// contribute — the model must not see a snippet for a tool it cannot call.
-/// Read fresh on every call so the dynamic catalog is always reflected.
+/// promptGuidelines, in registration order. Hidden tools (base wins) and
+/// tools outside the active set never contribute — the model must not see a
+/// snippet for a tool it cannot call. Read fresh on every call so the dynamic
+/// catalog is always reflected.
 extern "js" fn js_prompt_snippets_json(host : JsPiHost) -> String =
-  #| (host) => JSON.stringify(host.state.tools
+  #| (host) => JSON.stringify(host.visibleTools()
   #|   .filter((tool) => !(host.state.hiddenTools?.has(tool.name) ?? false))
   #|   .map((tool) => ({
   #|     name: tool.name,
@@ -773,9 +829,10 @@ extern "js" fn js_host_set_custom_entry_callback(
   #| (host, callback) => { host.state.customEmit = callback }
 
 ///|
-/// Install the callback fired whenever the JS host's tool registration
-/// changes (registerTool). The MoonBit side only flips a dirty flag; the
-/// actual re-publication runs at the next model call.
+/// Install the callback fired whenever the JS host's catalog changes:
+/// registerTool and setActiveTools both call bumpCatalog(). The MoonBit side
+/// only flips a dirty flag; the actual re-publication runs at the next model
+/// call.
 extern "js" fn js_host_set_on_catalog_change(
   host : JsPiHost,
   callback : () -> Unit,
