@@ -11,12 +11,3 @@ pub extend HerdrReporter with @posoco.Lifecycle::{on_shutdown}
 
 ///|
 pub extend HerdrReporter with @posoco.Extension::{extension_id, manifest}
-
-///|
-pub extend HerdrDelegate with @posoco.ToolProvider::{execute}
-
-///|
-pub extend HerdrDelegate with @posoco.SystemPromptContributor::{system_prompt}
-
-///|
-pub extend HerdrDelegate with @posoco.Extension::{extension_id, manifest}

@@ -1,22 +1,16 @@
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
-  "moonbitlang/async/process",
-  "moonbitlang/async/js_async",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
 }
 
 import {
   "moonbitlang/async",
-  "colmugx/posoco/kernel",
 } for "wbtest"
 
 // @env and @utf8 are used by herdr_native.mbt only but must stay imported
-// package-wide; js and wasm legitimately see them as unused. @process and
-// @js_async are likewise backend-only (native / js respectively). @async is
-// used by the background runner's cancellation guard (herdr_delegate.mbt).
+// package-wide; js and wasm legitimately see them as unused. The wbtest
+// import is for `async test` on the shutdown-release case.
 
 warnings = "-unused_package"
 
@@ -28,12 +22,5 @@ options(
     "herdr_gate_wbtest.mbt": [ "native", "js" ],
     "herdr_shell_quote_wbtest.mbt": [ "native" ],
     "herdr_windows_wbtest.mbt": [ "native" ],
-    "herdr_channel_native.mbt": [ "native", "wasm" ],
-    "herdr_channel_js.mbt": [ "js" ],
-    "herdr_delegate_native.mbt": [ "native", "wasm" ],
-    "herdr_delegate_js.mbt": [ "js" ],
-    "herdr_channel_wbtest.mbt": [ "native", "js" ],
-    "herdr_delegate_wbtest.mbt": [ "native", "js" ],
-    "background_wbtest.mbt": [ "native", "js" ],
   },
 )
