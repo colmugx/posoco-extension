@@ -2,7 +2,7 @@
 // Test fakes + helpers for the `agent` tool (whitebox).
 //
 // The fake composer builds a real child Agent from testkit fakes
-// (ScriptedModel + RecordingSessionStore) and records every ChildSpec it
+// (ScriptedModel + RecordingSessionPort) and records every ChildSpec it
 // receives.
 // ---------------------------------------------------------------------------
 
@@ -13,7 +13,7 @@ priv struct FakeComposer {
   /// (used by the timeout test).
   slow_model : &@posoco.ModelPort?
   child_recorder : @posoco.RecordingObserver
-  store : @posoco.RecordingSessionStore
+  store : @posoco.RecordingSessionPort
   specs : Array[ChildSpec]
   fail_with : String?
 }
@@ -28,7 +28,7 @@ fn FakeComposer::FakeComposer(
     response_text,
     slow_model,
     child_recorder: @posoco.RecordingObserver::RecordingObserver(),
-    store: @posoco.RecordingSessionStore::RecordingSessionStore(),
+    store: @posoco.RecordingSessionPort::RecordingSessionPort(),
     specs: [],
     fail_with,
   }
@@ -62,7 +62,7 @@ impl ChildComposer for FakeComposer with fn compose(
       @posoco.tk_ext(id="model", model=Some(model)),
       @posoco.tk_ext(
         id="io",
-        sessions=[self.store as &@posoco.SessionStore],
+        sessions=[self.store as &@posoco.SessionPort],
         observers~,
       ),
     ],
@@ -274,7 +274,7 @@ fn args_object(pairs : Array[(String, Json)]) -> Json {
 
 ///|
 fn store_contains_user_text(
-  store : @posoco.RecordingSessionStore,
+  store : @posoco.RecordingSessionPort,
   session_id : String,
   needle : String,
 ) -> Bool {
