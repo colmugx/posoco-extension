@@ -16,7 +16,7 @@ fn memoh_tool_loop_final_text(result : @posoco.TurnResult) -> String {
 }
 
 ///|
-/// Memoh's no-op SessionStore must not erase the in-memory transcript that
+/// Memoh's no-op SessionPort must not erase the in-memory transcript that
 /// Posoco carries inside one turn. A real tool round proves the model can see
 /// the tool result path and continue to a second model call before anything is
 /// durably persisted.
