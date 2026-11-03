@@ -380,7 +380,7 @@ async test "profiles_command_without_ui_fails" {
 ///|
 priv struct RecordingActivationSink {
   calls : Array[(String, @posoco.Message)]
-  mut failure : String?
+  failure : String?
 }
 
 ///|
