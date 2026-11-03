@@ -15,7 +15,7 @@ fn mem_agent(
   mem_agent_store(
     ext,
     model,
-    @posoco.RecordingSessionStore::RecordingSessionStore(),
+    @posoco.RecordingSessionPort::RecordingSessionPort(),
   )
 }
 
@@ -25,7 +25,7 @@ fn mem_agent(
 fn mem_agent_store(
   ext : NowledgeMem,
   model : @posoco.ScriptedModel,
-  store : @posoco.RecordingSessionStore,
+  store : @posoco.RecordingSessionPort,
 ) -> @posoco.Agent raise {
   @posoco.Agent(
     exts=[
@@ -146,7 +146,7 @@ async test "e2e: same-turn second model call does not re-read and keeps the inje
       @posoco.tk_ext(id="tools", tools=[tools]),
       @posoco.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionStore::RecordingSessionStore()],
+        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
         observers=[@posoco.RecordingObserver::RecordingObserver()],
       ),
     ],
@@ -198,7 +198,7 @@ async test "e2e: composition carries core's builtin memory tools without collisi
       ),
       @posoco.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionStore::RecordingSessionStore()],
+        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
         observers=[@posoco.RecordingObserver::RecordingObserver()],
       ),
     ],
@@ -268,7 +268,7 @@ async test "e2e B: add-delete round trip drains both ops to the server" {
 /// derived under that injection, so it is never swapped for a newer one.
 /// Both compositions attach (the read slot is attach-gated).
 async test "e2e: a resumed process keeps the persisted injection and reads nothing" {
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let mcp1 = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       (
