@@ -33,6 +33,7 @@ fn HerdrAgentState::cli_value(self : HerdrAgentState) -> String {
 }
 
 ///|
+#warnings("-struct_never_constructed")
 priv struct HerdrConfig {
   pane : String
   bin : String
@@ -56,7 +57,7 @@ fn HerdrReporter::from_config(cfg : HerdrConfig) -> HerdrReporter {
 /// and HERDR_PANE_ID must be present and non-empty; HERDR_BIN_PATH defaults
 /// to "herdr" when absent or blank. Pure, so native and js share one
 /// detection decision.
-#cfg(any(target="native", target="wasm", target="js"))
+#cfg(target="js")
 fn herdr_gate(marker : String?, pane : String?, bin : String?) -> HerdrConfig? {
   match (marker, pane) {
     (Some(marker), Some(pane)) if marker != "" && pane != "" => {
