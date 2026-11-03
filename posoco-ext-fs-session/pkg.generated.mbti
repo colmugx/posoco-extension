@@ -102,7 +102,7 @@ pub async fn JsonlSessionStore::summary(Self, String) -> SessionSummary raise @e
 pub async fn JsonlSessionStore::truncate(Self, String, Int32) -> Unit raise @error.SessionError
 pub impl @port.CommandPort for JsonlSessionStore
 pub impl @port.Extension for JsonlSessionStore
-pub impl @port.SessionStore for JsonlSessionStore
+pub impl @port.SessionPort for JsonlSessionStore
 
 pub(all) struct SessionSelectionV2 {
   owner : String

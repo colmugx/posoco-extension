@@ -1,6 +1,6 @@
 # posoco-ext-fs-session
 
-A [Posoco](https://mooncakes.io/docs/colmugx/posoco) `SessionStore` that
+A [Posoco](https://mooncakes.io/docs/colmugx/posoco) `SessionPort` that
 persists sessions as deterministic JSONL files — one `<session-id>.jsonl`
 per session under a root directory.
 
@@ -8,7 +8,7 @@ per session under a root directory.
 
 | Port | Contribution |
 |------|--------------|
-| `SessionStore` | `load` / `save` / `append_messages`, async, raising typed `SessionError` values |
+| `SessionPort` | `load` / `save` / `append_messages`, async, raising typed `SessionError` values |
 | `Extension` | composes into `Agent(exts=[...])` as a session extension |
 
 ## Usage

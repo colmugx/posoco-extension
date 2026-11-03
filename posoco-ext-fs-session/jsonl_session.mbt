@@ -146,7 +146,7 @@ async fn JsonlSessionStore::raw_dir_entries(
 
 ///|
 /// Missing file → empty session (not an error). Parse failure → SessionError::Load.
-pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
@@ -168,7 +168,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
 }
 
 ///|
-pub extend JsonlSessionStore with @posoco.SessionStore::{
+pub extend JsonlSessionStore with @posoco.SessionPort::{
   save,
   append_messages,
   load,
@@ -177,11 +177,11 @@ pub extend JsonlSessionStore with @posoco.SessionStore::{
 }
 
 ///|
-/// SessionStore::save — serialise session and replace the file contents.
+/// SessionPort::save — serialise session and replace the file contents.
 /// Directory is created lazily. The persisted metadata line is decorated
 /// with the latest observed model selection so the file remembers the
 /// model/effort behind its transcript tail.
-pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn save(
   self,
   id : String,
   session : @posoco.Session,
@@ -212,10 +212,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 }
 
 ///|
-/// SessionStore::append_messages — append just the new JSONL message lines to
+/// SessionPort::append_messages — append just the new JSONL message lines to
 /// the file. If the session file does not exist yet, write a full JSONL file
 /// (metadata + messages) so the first append behaves like a save.
-pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
   self,
   id : String,
   from_index : Int32,

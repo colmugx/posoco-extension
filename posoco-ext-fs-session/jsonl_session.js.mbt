@@ -166,7 +166,7 @@ fn js_save_session_path(
 }
 
 ///|
-pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
@@ -187,7 +187,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
 }
 
 ///|
-pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn save(
   self,
   id : String,
   session : @posoco.Session,
@@ -228,7 +228,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 /// lines. A selection change since the last persist is recorded by rewriting
 /// only the metadata line; unchanged selections keep the pure-append fast
 /// path.
-pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
+pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
   self,
   id : String,
   from_index : Int32,
@@ -331,7 +331,7 @@ fn JsonlSessionStore::refresh_metadata_selection(
 }
 
 ///|
-pub extend JsonlSessionStore with @posoco.SessionStore::{
+pub extend JsonlSessionStore with @posoco.SessionPort::{
   checkpoint,
   save,
   append_messages,
