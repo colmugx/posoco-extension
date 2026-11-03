@@ -2,6 +2,9 @@ name: posoco-extension ci
 
 on:
   pull_request:
+  push:
+    branches:
+      - migrate/sessionport-integration-check-20261103
 
 jobs:
   checks:
