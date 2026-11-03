@@ -13,7 +13,7 @@ keywords = [ "posoco", "init", "agents-md", "coding-agent", "slash-command" ]
 description = "Evidence-first /init command for generating concise, maintainable AGENTS.md project guidance"
 
 import {
-  "colmugx/posoco@0.23.1",
+  "colmugx/posoco@0.23.2",
   "moonbitlang/async@0.22.5",
 }
 
