@@ -1,7 +1,7 @@
 ///|
 /// Slash surface. `/profiles` is the manual activation fallback: it
 /// mirrors the meta tool through the SAME activation-message constructor,
-/// appending via the SessionStore port. `/profile save` persists the session's
+/// submitting through a host-owned activation sink. `/profile save` persists the session's
 /// observed tool usage as a new profile. The composed UiPort is wired once at
 /// `on_compose`.
 
@@ -155,55 +155,38 @@ async fn Profiles::invoke_select_profiles(
 }
 
 ///|
-/// Manual activation — the same injection template as the meta-tool path
-/// using one shared template and invariant. Appends directly through the
-/// SessionStore port at the current transcript tail, then fires the same
-/// bus event the hook path fires.
+/// Manual activation must enter through the host's Agent turn path. Writing
+/// directly to a SessionPort no longer updates the Agent's authoritative
+/// in-process session snapshot. The sink submits this exact activation message
+/// via an ordinary Agent turn (or equivalent host-owned input admission).
 async fn Profiles::manual_activate(
   self : Profiles,
   id : String,
   args : Json,
 ) -> @posoco.CommandOutcome {
-  let wiring_failure = "manual activation requires host wiring: pass {\"session_id\": ...} in args and inject a session store at composition"
-  let store = match self.session_store {
-    Some(store) => store
+  let wiring_failure = "manual activation requires host wiring: pass {\"session_id\": ...} in args and supply an Agent-backed activation sink"
+  let sink = match self.activation_sink {
+    Some(sink) => sink
     None => return @posoco.CommandOutcome::Failure(reason=wiring_failure)
   }
   let session_id = match json_string_field(args, "session_id") {
-    Some(session_id) => session_id
-    None => return @posoco.CommandOutcome::Failure(reason=wiring_failure)
+    Some(session_id) if session_id != "" => session_id
+    _ => return @posoco.CommandOutcome::Failure(reason=wiring_failure)
   }
-  let message = self.activation_message(id)
-  let loaded : Result[@posoco.Session, @posoco.SessionError] = Ok(
-    store.load(session_id),
-  ) catch {
-    error => Err(error)
-  }
-  let from_index = match loaded {
-    Ok(session) => session.messages.length()
-    Err(error) =>
-      return @posoco.CommandOutcome::Failure(
-        reason="manual activation failed to load session '\{session_id}': \{error.to_string()}",
+  match sink.submit(session_id, self.activation_message(id)) {
+    Ok(_) => {
+      self.publish_activated(id)
+      @posoco.CommandOutcome::Success(
+        feedback="activated profile: \{id}",
+        structured=None,
+        ui_hint=None,
+      )
+    }
+    Err(reason) =>
+      @posoco.CommandOutcome::Failure(
+        reason="manual activation failed for session '\{session_id}': \{reason}",
       )
   }
-  let appended : Result[Unit, @posoco.SessionError] = Ok(
-    store.append_messages(session_id, from_index, [message][:]),
-  ) catch {
-    error => Err(error)
-  }
-  match appended {
-    Ok(_) => ()
-    Err(error) =>
-      return @posoco.CommandOutcome::Failure(
-        reason="manual activation failed to append to session '\{session_id}': \{error.to_string()}",
-      )
-  }
-  self.publish_activated(id)
-  @posoco.CommandOutcome::Success(
-    feedback="activated profile: \{id}",
-    structured=None,
-    ui_hint=None,
-  )
 }
 
 ///|

@@ -378,19 +378,36 @@ async test "profiles_command_without_ui_fails" {
 }
 
 ///|
-async test "profiles_command_select_appends_activation_message" {
-  let store = @posoco.RecordingSessionStore()
-  store.seed("s1", {
-    messages: [user_msg("hi")],
-    metadata: Map::from_array([]),
-  })
+priv struct RecordingActivationSink {
+  calls : Array[(String, @posoco.Message)]
+  mut failure : String?
+}
+
+///|
+impl ProfileActivationSink for RecordingActivationSink with fn submit(
+  self : RecordingActivationSink,
+  session_id : String,
+  message : @posoco.Message,
+) -> Result[Unit, String] {
+  match self.failure {
+    Some(reason) => Err(reason)
+    None => {
+      self.calls.push((session_id, message))
+      Ok(())
+    }
+  }
+}
+
+///|
+async test "profiles_command_select_submits_through_host_sink" {
+  let sink = RecordingActivationSink::{ calls: [], failure: None, }
   let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit", exts=["nmem"])],
     defer_set=["nmem"],
     captured_prompts=Map::from_array([("nmem", "NMem manual.")]),
     attribution=Map::from_array([]),
-    session_store=Some(store),
+    activation_sink=Some(sink),
   )
   profiles.on_compose(
     @posoco.tk_view(
@@ -408,30 +425,54 @@ async test "profiles_command_select_appends_activation_message" {
       assert_eq(feedback, "activated profile: moonbit")
     _ => fail("selection must activate")
   }
-  // The activation message — the same template the hook injects — was
-  // appended at the transcript tail.
-  let mut saw_append = false
-  for op in store.ops() {
-    match op {
-      @posoco.SessionOp::OpAppend(id="s1", messages~, ..) => {
-        saw_append = true
-        assert_eq(messages.length(), 1)
-        match messages[0] {
-          @posoco.Message::UserMessage(content~) =>
-            match content {
-              [@posoco.Content::Text(text), ..] => {
-                assert_true(text.has_prefix("profile moonbit activated\n\n"))
-                assert_true(text.contains("NMem manual."))
-              }
-              _ => fail("expected a Text payload")
-            }
-          _ => fail("expected UserMessage")
+  assert_eq(sink.calls.length(), 1)
+  let (session_id, message) = sink.calls[0]
+  assert_eq(session_id, "s1")
+  match message {
+    @posoco.Message::UserMessage(content~) =>
+      match content {
+        [@posoco.Content::Text(text), ..] => {
+          assert_true(text.has_prefix("profile moonbit activated\\n\\n"))
+          assert_true(text.contains("NMem manual."))
         }
+        _ => fail("expected a Text payload")
       }
-      _ => ()
-    }
+    _ => fail("expected UserMessage")
   }
-  assert_true(saw_append)
+}
+
+///|
+async test "profiles_command_sink_failure_does_not_publish_activation" {
+  let sink = RecordingActivationSink::{ calls: [], failure: Some("busy"), }
+  let bus = @devkit.EventBus::EventBus()
+  let recorder = RecordingBus::RecordingBus()
+  bus.subscribe(recorder)
+  let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
+  let profiles = Profiles::build(
+    manifests=[parsed_manifest("moonbit")],
+    defer_set=[],
+    captured_prompts=Map::from_array([]),
+    attribution=Map::from_array([]),
+    bus=Some(bus),
+    activation_sink=Some(sink),
+  )
+  profiles.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=@posoco.ScriptedModel::ScriptedModel([]),
+      ui~,
+    ),
+  )
+  match profiles.invoke(
+    "profiles",
+    Json::object(Map::from_array([("session_id", Json::string("s1"))])),
+  ) {
+    @posoco.CommandOutcome::Failure(reason~) =>
+      assert_true(reason.contains("busy"))
+    _ => fail("rejected host submission must fail")
+  }
+  assert_eq(sink.calls.length(), 0)
+  assert_eq(recorder.events.length(), 0)
 }
 
 ///|
@@ -463,7 +504,7 @@ async test "profiles_command_cancelled_fails" {
 ///|
 async test "profiles_command_selection_without_wiring_fails" {
   let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
-  // No session store wired at all.
+  // No activation sink wired at all.
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
@@ -484,17 +525,17 @@ async test "profiles_command_selection_without_wiring_fails" {
     ) {
     @posoco.CommandOutcome::Failure(reason~) =>
       assert_true(reason.contains("host wiring"))
-    _ => fail("selection without a store must fail")
+    _ => fail("selection without a sink must fail")
   }
-  // Store wired, but args carry no session_id.
-  let store = @posoco.RecordingSessionStore()
+  // Sink wired, but args carry no session_id.
+  let sink = RecordingActivationSink::{ calls: [], failure: None, }
   let ui2 = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles2 = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
     captured_prompts=Map::from_array([]),
     attribution=Map::from_array([]),
-    session_store=Some(store),
+    activation_sink=Some(sink),
   )
   profiles2.on_compose(
     @posoco.tk_view(

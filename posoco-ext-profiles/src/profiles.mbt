@@ -47,7 +47,8 @@ pub struct Profiles {
   priv dangling_warnings : Array[String]
   priv bus : @devkit.EventBus?
   priv store : &ProfileStore?
-  priv session_store : &@posoco.SessionStore?
+  /// Host-owned submission through an ordinary Agent turn, never direct store mutation.
+  priv activation_sink : &ProfileActivationSink?
   priv summarizer : ((Array[(String, Int32)]) -> (String, String))?
   /// Composed UiPort, wired once at `on_compose`. Composition wiring,
   /// not activation state.
@@ -71,7 +72,7 @@ pub fn Profiles::build(
   attribution~ : Map[String, String],
   bus~ : @devkit.EventBus? = None,
   store~ : &ProfileStore? = None,
-  session_store~ : &@posoco.SessionStore? = None,
+  activation_sink~ : &ProfileActivationSink? = None,
   summarizer~ : ((Array[(String, Int32)]) -> (String, String))? = None,
 ) -> Profiles {
   let deferred = defer_set.copy()
@@ -112,7 +113,7 @@ pub fn Profiles::build(
     dangling_warnings: warnings,
     bus,
     store,
-    session_store,
+    activation_sink,
     summarizer,
     ui: None,
     usage: Map::from_array([]),
