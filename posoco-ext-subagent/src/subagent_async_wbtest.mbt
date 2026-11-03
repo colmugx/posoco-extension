@@ -302,7 +302,7 @@ async test "parallel_subagent_failure_does_not_poison_sibling_or_parent" {
       @posoco.tk_stop_response("parent recovered after sibling failure"),
     ),
   ])
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let result = parent.run_scoped(async fn(agent) {
     agent.run_turn(
@@ -552,7 +552,7 @@ async test "unbound_kind_face_inherits_default_as_none" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_face")
@@ -983,7 +983,7 @@ impl @posoco.ModelPort for BgParentModel with fn provider_config(
 fn build_parent_agent(
   tools : SubagentTools,
   model : &@posoco.ModelPort,
-  store : @posoco.RecordingSessionStore,
+  store : @posoco.RecordingSessionPort,
 ) -> @posoco.Agent raise @error.CompositionError {
   @posoco.Agent::with_runtime(
     exts=[
@@ -1014,7 +1014,7 @@ async test "background_child_holds_global_slot_until_task_exit" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
 
   parent.run_scoped(async fn(agent) {
@@ -1072,7 +1072,7 @@ async test "background_cancellation_releases_global_slot" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
 
   parent.run_scoped(async fn(agent) {
@@ -1103,7 +1103,7 @@ async test "background_completed_delivers_on_next_turn_and_records_terminal" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
@@ -1180,7 +1180,7 @@ async test "background_timeout_maps_to_timed_out_via_delivery" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
@@ -1218,7 +1218,7 @@ async test "subscribe_receives_spawned_and_terminal_events" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionStore::RecordingSessionStore(),
+    @posoco.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
@@ -1325,7 +1325,7 @@ async test "background_exit_declares_completed_at_task_exit" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionStore::RecordingSessionStore(),
+    @posoco.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
@@ -1406,7 +1406,7 @@ async test "background_exit_declares_failed_on_child_error" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg")
@@ -1467,7 +1467,7 @@ async test "background_timeout_exits_cancelled_then_records_timed_out" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionStore::RecordingSessionStore(),
+    @posoco.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
@@ -1706,8 +1706,8 @@ impl ChildComposer for AskingComposer with fn compose(
     @posoco.tk_ext(
       id="io",
       sessions=[
-        @posoco.RecordingSessionStore::RecordingSessionStore()
-        as &@posoco.SessionStore,
+        @posoco.RecordingSessionPort::RecordingSessionPort()
+        as &@posoco.SessionPort,
       ],
       observers~,
     ),
@@ -1883,7 +1883,7 @@ async test "interactive_child_roundtrip_input_question" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_scene")
@@ -1973,7 +1973,7 @@ async test "interactive_child_select_validation_and_double_answer" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_select")
@@ -2030,7 +2030,7 @@ async test "two_interactive_children_same_wave_no_deadlock" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_wave")
@@ -2082,7 +2082,7 @@ async test "interactive_child_answer_deadline_times_out" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_timeout")
@@ -2131,7 +2131,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
     steps=[@posoco.tk_stop_response("parent done")],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let scope : @posoco.EventScope = {
     session_id: @posoco.SessionId::unchecked("parent_cancel"),
@@ -2272,7 +2272,7 @@ async test "background_child_question_roundtrip_lazy_injection" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_ask")
@@ -2351,7 +2351,7 @@ async test "two_background_children_questions_do_not_cross" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_two")
@@ -2421,7 +2421,7 @@ async test "interactive_child_second_question_flows_through_queue" {
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_second_q")
