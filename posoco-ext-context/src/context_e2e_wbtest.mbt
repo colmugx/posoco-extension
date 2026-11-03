@@ -14,7 +14,7 @@ async test "e2e: context contributor injects configured envelope into model requ
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let observer = @posoco.RecordingObserver::RecordingObserver()
   let agent = @posoco.Agent(
     exts=[
@@ -55,7 +55,7 @@ async test "e2e: empty bundle contributes no configured envelope" {
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let observer = @posoco.RecordingObserver::RecordingObserver()
   let agent = @posoco.Agent(
     exts=[

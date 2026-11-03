@@ -403,7 +403,7 @@ pub fn session_to_jsonl(session : @posoco.Session) -> String {
 ///
 /// Rules:
 /// - Empty / whitespace-only input → empty session (no error). This matches
-///   SessionStore::load's "file does not exist → empty session" contract.
+///   SessionPort::load's "file does not exist → empty session" contract.
 /// - First non-empty line must be the metadata object.
 /// - Subsequent lines are parsed as messages; a malformed complete line aborts
 ///   with `Err(Load(...))` so the caller can surface real corruption loudly.

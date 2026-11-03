@@ -5,7 +5,7 @@
 /// independently for each turn. Returning a previous Posoco transcript here
 /// would create a second conversation authority and make retry/edit/restart
 /// semantics diverge from the host.
-pub impl @posoco.SessionStore for Memoh with fn load(
+pub impl @posoco.SessionPort for Memoh with fn load(
   _self : Memoh,
   _id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
@@ -14,7 +14,7 @@ pub impl @posoco.SessionStore for Memoh with fn load(
 
 ///|
 /// Ignore whole-session saves. Memoh persists the conversation itself.
-pub impl @posoco.SessionStore for Memoh with fn save(
+pub impl @posoco.SessionPort for Memoh with fn save(
   _self : Memoh,
   _id : String,
   _session : @posoco.Session,
@@ -25,7 +25,7 @@ pub impl @posoco.SessionStore for Memoh with fn save(
 ///|
 /// Ignore append saves explicitly rather than falling back to the generic
 /// load-concatenate-save implementation.
-pub impl @posoco.SessionStore for Memoh with fn append_messages(
+pub impl @posoco.SessionPort for Memoh with fn append_messages(
   _self : Memoh,
   _id : String,
   _from_index : Int32,
@@ -37,7 +37,7 @@ pub impl @posoco.SessionStore for Memoh with fn append_messages(
 ///|
 /// Ignore transcript truncation explicitly. Retry/edit/reset semantics are
 /// owned by Memoh, not by a local Posoco transcript.
-pub impl @posoco.SessionStore for Memoh with fn truncate(
+pub impl @posoco.SessionPort for Memoh with fn truncate(
   _self : Memoh,
   _id : String,
   _from_index : Int32,
@@ -46,7 +46,7 @@ pub impl @posoco.SessionStore for Memoh with fn truncate(
 }
 
 ///|
-pub extend Memoh with @posoco.SessionStore::{
+pub extend Memoh with @posoco.SessionPort::{
   checkpoint,
   load,
   save,

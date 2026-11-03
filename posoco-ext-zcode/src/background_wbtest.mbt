@@ -145,7 +145,7 @@ async test "background receipt accepted and outcome delivered next turn" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("receipt ok")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("outcome seen")),
   ])
-  let store = @posoco.RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort()
   let ext = zcode_ext(
     run=Some(fn(_args : ZcodeTaskArgs) {
       runs.val = runs.val + 1
@@ -170,7 +170,7 @@ async test "background receipt accepted and outcome delivered next turn" {
   // Turn 1 ended with a Success receipt and the delegation actually ran.
   assert_eq(runs.val, 1)
   assert_eq(model.call_count(), 3)
-  let persisted = (store as &@posoco.SessionStore).load("sess_1")
+  let persisted = (store as &@posoco.SessionPort).load("sess_1")
   guard background_success_tool_text(persisted.messages) is Some(receipt) else {
     fail("expected the receipt as a Success tool result in the transcript")
   }
@@ -211,7 +211,7 @@ async test "background timeout survives cancellation masked as a return" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("receipt ok")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("outcome seen")),
   ])
-  let store = @posoco.RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort()
   let ext = zcode_ext(
     config={ ..zcode_config(), timeout_ms: 150, },
     run=Some(async fn(_args : ZcodeTaskArgs) {
@@ -239,7 +239,7 @@ async test "background timeout survives cancellation masked as a return" {
   )
   // The delegation actually started before the timer fired.
   assert_eq(runs.val, 1)
-  let persisted = (store as &@posoco.SessionStore).load("sess_1")
+  let persisted = (store as &@posoco.SessionPort).load("sess_1")
   guard background_user_envelope(persisted.messages) is Some(envelope) else {
     fail("expected a [posoco-task-outcome] user envelope in the transcript")
   }

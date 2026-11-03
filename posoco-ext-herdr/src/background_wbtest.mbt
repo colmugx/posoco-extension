@@ -177,7 +177,7 @@ async test "background receipt accepted and channel outcome delivered next turn"
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("receipt ok")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("outcome seen")),
   ])
-  let store = @posoco.RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort()
   let agent = @posoco.Agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
@@ -196,7 +196,7 @@ async test "background receipt accepted and channel outcome delivered next turn"
   // The runner executed the full channel flow through the fake CLI.
   assert_eq(fake.received.length(), 6)
   assert_eq(model.call_count(), 3)
-  let persisted = (store as &@posoco.SessionStore).load("sess_1")
+  let persisted = (store as &@posoco.SessionPort).load("sess_1")
   guard bg_success_tool_text(persisted.messages) is Some(receipt) else {
     fail("expected the receipt as a Success tool result in the transcript")
   }

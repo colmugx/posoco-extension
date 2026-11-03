@@ -9,7 +9,7 @@ semantics themselves.
 
 ## Foundation contract
 
-The `Memoh` value is an intentionally ephemeral `SessionStore`: `load`
+The `Memoh` value is an intentionally ephemeral `SessionPort`: `load`
 always returns an empty Posoco session and `save`, `append_messages`, and
 `truncate` are explicit no-ops. Memoh remains the durable conversation
 authority.

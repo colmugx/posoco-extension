@@ -107,7 +107,7 @@ touches a session (src/defer_view.mbt, src/profiles.mbt):
   host's policy (typically the union of loaded profiles' exts; hosts may
   protect never-defer extensions by leaving them out).
 - `Profiles::build(manifests~, defer_set~, captured_prompts~, attribution~,
-  bus?, store?, session_store?, summarizer?)` — every input is a
+  bus?, store?, activation_sink?, summarizer?)` — every input is a
   composition-time constant. The host resolves the two-level manifest
   directory before calling (project overrides user on id collisions; the
   reserved `all` and path separators are rejected by
@@ -133,6 +133,7 @@ let profiles = Profiles::build(
   attribution=tool_catalog,
   bus=Some(devkit_bus),
   store=Some(host_profile_store),
+  activation_sink=Some(host_agent_activation_sink),
 )
 
 // 3. Register before lazytools; swap member originals for views.
@@ -142,13 +143,26 @@ let agent = @posoco.Agent(
 )
 ```
 
+## Manual activation and Posoco 0.23.2
+
+`/profiles` is submitted through an injected `ProfileActivationSink` instead
+of writing directly to `SessionPort`. Since the Agent owns the in-process
+session snapshot after initial hydration, external persistence mutations
+cannot reliably activate a profile for an existing Agent. The host's sink
+must admit the generated user message through `Agent::run_turn` when idle
+(or a host-owned equivalent), honor Agent Busy/rejection results, and reject
+failed submissions; Profiles emits its activation event only on success.
+The same frozen `profile <id> activated` header contract remains in effect.
+An implementation may deduplicate an already activated profile before
+submitting; the package's model-driven hook already provides idempotence.
+
 ## Host integration limits
 
 - **Cetas host integration is partial.** Current cetas hosts do not (a) pass
-  `session_id` in command invoke args, (b) inject a `SessionStore` at build,
-  or (c) apply the deep-deferred views. Consequences inside the package:
+  `session_id` in command invoke args, (b) supply a host-owned
+  `ProfileActivationSink`, or (c) apply the deep-deferred views. Consequences inside the package:
   `/profiles` selection reaches `manual_activate` and returns an explicit
-  `Failure` naming the missing wiring when the store or the `session_id`
+  `Failure` naming the missing wiring when the activation sink or the `session_id`
   argument is absent; `/profile save` fails explicitly on a missing
   `session_id`, on empty usage, or when a wired `ProfileStore` rejects the
   write — with no store wired it still succeeds, but catalog-only

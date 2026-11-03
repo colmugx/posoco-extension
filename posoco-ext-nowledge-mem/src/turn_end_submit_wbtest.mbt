@@ -29,7 +29,7 @@ fn turn_end_agent(
       ),
       @posoco.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionStore::RecordingSessionStore()],
+        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
         observers=[@posoco.RecordingObserver::RecordingObserver()],
       ),
     ],

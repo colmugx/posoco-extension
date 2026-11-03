@@ -4,7 +4,7 @@ pub impl @posoco.Extension for Memoh with fn extension_id(_self : Memoh) -> Stri
 }
 
 ///|
-/// Memoh contributes an intentionally ephemeral SessionStore plus the
+/// Memoh contributes an intentionally ephemeral SessionPort plus the
 /// current-turn context PipelineHook. Later Memoh-specific surfaces grow on
 /// this same adapter object.
 pub impl @posoco.Extension for Memoh with fn manifest(self : Memoh) -> @posoco.ExtensionManifest {
