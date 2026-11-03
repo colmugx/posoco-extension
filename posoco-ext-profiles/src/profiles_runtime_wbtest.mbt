@@ -432,7 +432,7 @@ async test "profiles_command_select_submits_through_host_sink" {
     @posoco.Message::UserMessage(content~) =>
       match content {
         [@posoco.Content::Text(text), ..] => {
-          assert_true(text.has_prefix("profile moonbit activated\\n\\n"))
+          assert_true(text.has_prefix("profile moonbit activated\n\n"))
           assert_true(text.contains("NMem manual."))
         }
         _ => fail("expected a Text payload")
