@@ -15,7 +15,7 @@ and is not reinserted on resume.
 moon add colmugx/posoco-ext-goal
 ```
 
-Compose a goal together with a ModelPort and a SessionStore:
+Compose a goal together with a ModelPort and a SessionPort:
 
 ```moonbit nocheck
 let goal = @goal.goal_extension(goal_condition="make the failing tests pass")

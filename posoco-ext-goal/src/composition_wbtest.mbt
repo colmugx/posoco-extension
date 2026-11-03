@@ -16,7 +16,7 @@ fn cw_compose_agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
       @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionStore::RecordingSessionStore(),
+        @posoco.RecordingSessionPort::RecordingSessionPort(),
       ]),
       @posoco.tk_ext(id="obs", observers~),
       goal,

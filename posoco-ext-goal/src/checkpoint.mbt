@@ -138,7 +138,7 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
 ///|
 /// Restore a completed-turn snapshot into a fresh Idle runner. All fields
 /// are checked before any state mutation. The caller supplies the matching
-/// durable SessionStore; this API does not store the transcript itself.
+/// durable SessionPort; this API does not store the transcript itself.
 pub fn GoalRunner::restore_checkpoint(
   self : GoalRunner,
   snapshot : Json,
