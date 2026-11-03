@@ -8,6 +8,7 @@
 /// `select_model`; no provider, manager, or `provider/model` slash shape is
 /// assumed. A missing fact stays missing: an unknown context window is
 /// `None`, never a fabricated default.
+#derive(Eq, Debug)
 pub(all) struct ManagerModelInfo {
   /// Opaque manager-local selection key.
   model_id : String
@@ -26,7 +27,7 @@ pub(all) struct ManagerModelInfo {
   default_effort : String?
   /// Optional display grouping for pickers; `None` = group by provider.
   display_group : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ManagerModelInfo with Eq::{not_equal, equal}
@@ -36,6 +37,7 @@ pub extend ManagerModelInfo with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// The manager's current logical selection.
+#derive(Eq, Debug)
 pub(all) struct ManagerSelection {
   /// Selected model id, exactly as persisted. It may be absent from the
   /// current catalog — see `pending`.
@@ -48,7 +50,7 @@ pub(all) struct ManagerSelection {
   /// Pending selections are reported as-is, never silently rewritten to a
   /// fabricated default; requests against them fail visibly until they heal.
   pending : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ManagerSelection with Eq::{not_equal, equal}
@@ -60,6 +62,7 @@ pub extend ManagerSelection with @moonbitlang/core/debug.Debug::{to_repr}
 /// Typed failures of the manager control contract. A failed call never
 /// mutates state: the previous selection, effort, and catalog stay exactly
 /// as they were.
+#derive(Debug)
 pub(all) suberror ModelManagerError {
   /// The target model id is absent from the manager's catalog. Also raised
   /// when an effort is applied to a pending active selection.
@@ -68,7 +71,7 @@ pub(all) suberror ModelManagerError {
   UnsupportedEffort(String)
   /// The model advertises efforts but the manager cannot apply one.
   EffortNotApplicable(String)
-} derive(Debug)
+}
 
 ///|
 pub extend ModelManagerError with @moonbitlang/core/debug.Debug::{to_repr}

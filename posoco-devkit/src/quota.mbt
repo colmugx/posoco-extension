@@ -12,6 +12,7 @@
 /// semantics are "remaining funds", not "fraction of a window used".
 /// `available` is the provider's own yes/no on whether the account can
 /// currently serve requests, when it states one.
+#derive(Eq, @debug.Debug)
 pub(all) struct QuotaReading {
   window : String
   used_percent : Double?
@@ -19,7 +20,7 @@ pub(all) struct QuotaReading {
   available : Bool?
   reset_at_ms : Int64?
   fetched_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend QuotaReading with Eq::{not_equal, equal}

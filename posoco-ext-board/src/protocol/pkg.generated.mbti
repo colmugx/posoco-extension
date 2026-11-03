@@ -4,10 +4,11 @@ package "colmugx/posoco-ext-board/protocol"
 import {
   "colmugx/posoco-ext-board/domain",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn attempt_to_json(@domain.Attempt) -> Json
+pub fn attempt_to_json(@domain.Attempt) -> @json.Json
 
 pub fn decode_board_command(BoardClientCommand, Int64) -> Result[@domain.BoardCommand, BoardCommandDecodeError]
 
@@ -23,112 +24,122 @@ pub fn project_event(@domain.BoardStateSnapshot, @domain.BoardEvent) -> BoardWir
 
 pub fn protocol_version() -> Int32
 
-pub fn snapshot_to_json(@domain.BoardStateSnapshot) -> Json
+pub fn snapshot_to_json(@domain.BoardStateSnapshot) -> @json.Json
 
-pub fn task_to_json(@domain.BoardTask) -> Json
+pub fn task_to_json(@domain.BoardTask) -> @json.Json
 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardClientCommand {
   command_id : String
   name : String
   expected_revision : Int64
-  args : Json
-} derive(Eq, @debug.Debug)
+  args : @json.Json
+}
 pub fn BoardClientCommand::equal(Self, Self) -> Bool
 pub fn BoardClientCommand::not_equal(Self, Self) -> Bool
-pub fn BoardClientCommand::to_json(Self) -> Json
+pub fn BoardClientCommand::to_json(Self) -> @json.Json
 pub fn BoardClientCommand::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardClientFrame {
   Hello(BoardHello)
   Command(BoardClientCommand)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardClientFrame::equal(Self, Self) -> Bool
 pub fn BoardClientFrame::not_equal(Self, Self) -> Bool
 pub fn BoardClientFrame::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardCommandDecodeError {
   InvalidCommand(command_id~ : String, reason~ : String)
   InvalidArguments(command_id~ : String, name~ : String, reason~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardCommandDecodeError::code(Self) -> String
 pub fn BoardCommandDecodeError::equal(Self, Self) -> Bool
 pub fn BoardCommandDecodeError::not_equal(Self, Self) -> Bool
 pub fn BoardCommandDecodeError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardCommandResult {
   command_id : String
   accepted : Bool
   error : String?
   current_revision : Int64?
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardCommandResult::equal(Self, Self) -> Bool
 pub fn BoardCommandResult::not_equal(Self, Self) -> Bool
-pub fn BoardCommandResult::to_json(Self) -> Json
+pub fn BoardCommandResult::to_json(Self) -> @json.Json
 pub fn BoardCommandResult::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardEventScope {
   session_id : String?
   run_id : String?
   turn_id : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardEventScope::equal(Self, Self) -> Bool
 pub fn BoardEventScope::not_equal(Self, Self) -> Bool
 pub fn BoardEventScope::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardHello {
   last_seq : Int64
   protocol_version : Int32
   has_board_snapshot : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardHello::equal(Self, Self) -> Bool
 pub fn BoardHello::not_equal(Self, Self) -> Bool
-pub fn BoardHello::to_json(Self) -> Json
+pub fn BoardHello::to_json(Self) -> @json.Json
 pub fn BoardHello::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardProtocolError {
   InvalidJson(String)
   InvalidFrame(String)
   UnsupportedVersion(expected~ : Int32, got~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardProtocolError::equal(Self, Self) -> Bool
 pub fn BoardProtocolError::not_equal(Self, Self) -> Bool
 pub fn BoardProtocolError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardServerFrame {
   CommandResult(BoardCommandResult)
   Event(BoardWireEvent)
   Snapshot(BoardSnapshot)
   ResyncRequired(reason~ : String, current_seq~ : Int64)
   Error(code~ : String, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardServerFrame::equal(Self, Self) -> Bool
 pub fn BoardServerFrame::not_equal(Self, Self) -> Bool
 pub fn BoardServerFrame::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardSnapshot {
   protocol_version : Int32
   last_seq : Int64
   board_revision : Int64
-  payload : Json
-} derive(Eq, @debug.Debug)
+  payload : @json.Json
+}
 pub fn BoardSnapshot::equal(Self, Self) -> Bool
 pub fn BoardSnapshot::not_equal(Self, Self) -> Bool
-pub fn BoardSnapshot::to_json(Self) -> Json
+pub fn BoardSnapshot::to_json(Self) -> @json.Json
 pub fn BoardSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardWireEvent {
   seq : Int64
   board_revision : Int64
   kind : String
   scope : BoardEventScope?
-  payload : Json
-} derive(Eq, @debug.Debug)
+  payload : @json.Json
+}
 pub fn BoardWireEvent::equal(Self, Self) -> Bool
 pub fn BoardWireEvent::not_equal(Self, Self) -> Bool
-pub fn BoardWireEvent::to_json(Self) -> Json
+pub fn BoardWireEvent::to_json(Self) -> @json.Json
 pub fn BoardWireEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases

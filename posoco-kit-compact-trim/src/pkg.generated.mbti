@@ -14,11 +14,12 @@ pub fn trim_fallback(Array[@kernel.Message], Int32) -> Result[@kernel.CompactRes
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum TrimError {
   AlreadyWithinBudget
   NoProgress
   EmptyInput
-} derive(Eq, @debug.Debug)
+}
 pub fn TrimError::equal(Self, Self) -> Bool
 pub fn TrimError::not_equal(Self, Self) -> Bool
 pub fn TrimError::to_repr(Self) -> @debug.Repr

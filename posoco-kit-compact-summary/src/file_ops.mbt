@@ -3,10 +3,11 @@
 /// modifications. Deduplicated, in first-occurrence order; empty lists are
 /// valid. Feeds the summary's file manifest and the progressive stage's
 /// cumulative file tracking.
+#derive(Eq, Debug)
 pub(all) struct FileOps {
   read_files : Array[String]
   modified_files : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend FileOps with Eq::{not_equal, equal}

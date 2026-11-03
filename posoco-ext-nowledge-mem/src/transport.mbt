@@ -3,10 +3,11 @@
 /// a body that fails to decode or parse is reported as `Json::null()` so a
 /// non-JSON error page still reaches the status-based predicates in acks.mbt
 /// instead of failing the request outright.
+#derive(Debug)
 pub(all) struct NmemResponse {
   status : Int32
   body : Json
-} derive(Debug)
+}
 
 ///|
 pub extend NmemResponse with @moonbitlang/core/debug.Debug::{to_repr}

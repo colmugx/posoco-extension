@@ -7,6 +7,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
 }
 
@@ -17,22 +18,23 @@ pub fn deep_defer_extensions(exts~ : Array[&@port.Extension]) -> (Map[String, St
 
 pub fn find_pending_activations(Array[@kernel.Message]) -> Array[String]
 
-pub fn parse_profile_manifest(Json) -> Result[ProfileManifest, String]
+pub fn parse_profile_manifest(@json.Json) -> Result[ProfileManifest, String]
 
 pub fn scan_activated_profiles(Array[@kernel.Message]) -> Array[String]
 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ProfileManifest {
   id : String
   name : String
   description : String
   exts : Array[String]
-} derive(Eq, @debug.Debug)
+}
 pub fn ProfileManifest::equal(Self, Self) -> Bool
 pub fn ProfileManifest::not_equal(Self, Self) -> Bool
-pub fn ProfileManifest::to_json(Self) -> Json
+pub fn ProfileManifest::to_json(Self) -> @json.Json
 pub fn ProfileManifest::to_repr(Self) -> @debug.Repr
 
 pub struct Profiles {
@@ -44,7 +46,7 @@ pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[S
 pub fn Profiles::commands(Self) -> Array[@port.CommandDef]
 pub async fn Profiles::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn Profiles::extension_id(Self) -> String
-pub async fn Profiles::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn Profiles::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Profiles::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn Profiles::manifest(Self) -> @port.ExtensionManifest
 pub fn Profiles::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
@@ -70,6 +72,7 @@ pub impl @port.ToolProvider for Profiles
 pub(open) trait ProfileActivationSink {
   async fn submit(Self, String, @kernel.Message) -> Result[Unit, String]
 }
+
 pub(open) trait ProfileStore {
   fn read_all(Self) -> Result[Array[(String, String)], String]
   fn write(Self, String, ProfileManifest) -> Result[Unit, String]

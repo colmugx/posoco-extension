@@ -19,6 +19,7 @@
 
 ///|
 /// The wire structure a model is served on.
+#derive(Eq, Debug)
 pub(all) enum WireKind {
   ChatCompletions
   Messages
@@ -26,7 +27,7 @@ pub(all) enum WireKind {
   GoogleGenai
   SystemOne
   MistralDialect
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WireKind with Eq::{not_equal, equal}

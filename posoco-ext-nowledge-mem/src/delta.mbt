@@ -1,12 +1,13 @@
 ///|
 /// Acknowledged sync cursor for one lane: the
 /// prefix of a transcript the server has confirmed persisted.
+#derive(Debug, Eq)
 pub(all) struct AckedCursor {
   count : Int32
   remote_count : Int32
   last_external_id : String?
   prefix_fingerprint : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend AckedCursor with Eq::{not_equal, equal}
@@ -19,13 +20,14 @@ pub extend AckedCursor with @moonbitlang/core/debug.Debug::{to_repr}
 /// `stop` is the exclusive end index and always equals the current
 /// transcript length; `reset` marks a full resend after the acknowledged
 /// prefix diverged.
+#derive(Debug)
 pub(all) struct AckedDelta {
   start : Int32
   stop : Int32
   messages : Array[NmemThreadMessage]
   next : AckedCursor
   reset : Bool
-} derive(Debug)
+}
 
 ///|
 pub extend AckedDelta with @moonbitlang/core/debug.Debug::{to_repr}

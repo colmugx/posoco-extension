@@ -27,11 +27,12 @@ const TERMINAL_POLL_INTERVAL_MS = 25
 /// Failures an `AcpTerminal` run can end with. `method_name` carries the
 /// wire method that failed; timeout and cancellation carry the partial
 /// output received so far.
+#derive(Eq, Debug)
 pub(all) suberror AcpTerminalError {
   HostCallFailed(method_name~ : String, cause~ : @acp.AgentContextError)
   TerminalTimedOut(timeout_ms~ : Int32, partial_output~ : String)
   TerminalCancelled(partial_output~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AcpTerminalError with Eq::{not_equal, equal}
@@ -42,10 +43,11 @@ pub extend AcpTerminalError with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Outcome of a completed run: the process exit code (absent when the
 /// command died by signal) and the output captured when it exited.
+#derive(Eq, Debug)
 pub(all) struct AcpTerminalResult {
   exit_code : Int32?
   output : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AcpTerminalResult with Eq::{not_equal, equal}

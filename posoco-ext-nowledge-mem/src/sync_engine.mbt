@@ -46,6 +46,7 @@ pub fn resolve_thread_sync_timeout_ms(raw : String?) -> Int32 {
 /// One staged flush of a lane: the latest transcript snapshot plus everything
 /// needed to send it (`config` replaces the payload's
 /// destination reference). Assembled by build_sync_request.
+#derive(Debug)
 pub(all) struct SyncRequest {
   lane_key : String
   thread_id : String
@@ -54,7 +55,7 @@ pub(all) struct SyncRequest {
   messages : Array[NmemThreadMessage]
   config : NmemConfig
   sync_reason : String
-} derive(Debug)
+}
 
 ///|
 pub extend SyncRequest with @moonbitlang/core/debug.Debug::{to_repr}
@@ -63,12 +64,13 @@ pub extend SyncRequest with @moonbitlang/core/debug.Debug::{to_repr}
 /// Per-lane sync state. `pending` holds the newest
 /// not-yet-flushed request — coalescing keeps only
 /// the latest payload while a flush is in flight.
+#derive(Debug)
 pub(all) struct LaneState {
   created : Bool
   acknowledged : AckedCursor?
   last_error : String?
   pending : SyncRequest?
-} derive(Debug)
+}
 
 ///|
 pub extend LaneState with @moonbitlang/core/debug.Debug::{to_repr}

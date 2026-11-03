@@ -2,6 +2,7 @@
 /// oauth_error.mbt — OAuth flow errors.
 
 ///|
+#derive(Eq, Debug)
 pub(all) suberror OAuthError {
   AuthPending // device flow: user hasn't authorized yet
   SlowDown // device flow: poll too fast
@@ -11,7 +12,7 @@ pub(all) suberror OAuthError {
   HttpError(String) // network or HTTP error
   ParseError(String) // response JSON parse failure
   Cancelled // user cancelled via AuthInteraction
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OAuthError with Eq::{not_equal, equal}

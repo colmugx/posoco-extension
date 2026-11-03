@@ -8,11 +8,12 @@
 /// - `KimiXml` — Kimi CLI style: six compression priorities, MUST
 ///   KEEP/MERGE/REMOVE/CONDENSE rules, XML-tagged output.
 /// - `CodexHandoff` — one-paragraph minimal handoff for another LLM.
+#derive(Debug)
 pub(all) enum SummaryTemplate {
   StructuredMd
   KimiXml
   CodexHandoff
-} derive(Debug)
+}
 
 ///|
 pub extend SummaryTemplate with @moonbitlang/core/debug.Debug::{to_repr}

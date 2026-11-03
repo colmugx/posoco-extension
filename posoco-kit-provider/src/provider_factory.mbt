@@ -166,10 +166,11 @@ pub(open) trait OAuthFactory {
 
 ///|
 /// Provider-neutral authentication method advertised by a model catalog.
+#derive(Eq, Debug)
 pub(all) enum AuthMethod {
   ApiKey
   OAuth
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AuthMethod with Eq::{not_equal, equal}

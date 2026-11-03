@@ -2,6 +2,7 @@
 /// KindSpec — one subagent kind: identity, tool face, and the system-prompt
 /// template. Parsed from `<kind>.md` frontmatter files or built in (see
 /// `KindCatalog::builtin`).
+#derive(Eq, Debug)
 pub(all) struct KindSpec {
   /// Kind id used as the catalog key; must match the file stem when loaded
   /// from disk.
@@ -20,7 +21,7 @@ pub(all) struct KindSpec {
   mode : @permission.PermissionMode
   /// System-prompt template body with the `{{instructions}}` fill-in slot.
   body : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend KindSpec with Eq::{not_equal, equal}

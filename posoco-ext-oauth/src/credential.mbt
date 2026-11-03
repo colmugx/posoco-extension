@@ -99,10 +99,11 @@ pub fn Credential::from_json(json : Json) -> Credential? {
 
 ///|
 /// How to apply the credential to an HTTP request.
+#derive(Eq, Debug)
 pub(all) enum AuthHeader {
   Bearer(String) // Authorization: Bearer <token>
   Header(Map[String, String]) // custom headers
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AuthHeader with Eq::{not_equal, equal}

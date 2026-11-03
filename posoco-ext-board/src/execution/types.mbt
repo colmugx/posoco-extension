@@ -10,34 +10,38 @@ pub(all) struct BoardExecutionRequest {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct BoardExecutionRun {
   session_id : String
   run_id : String
   turn_id : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Outcomes describe terminated execution, not task stage or review decision.
+#derive(Eq, Debug)
 pub(all) enum BoardExecutionOutcome {
   Completed
   Failed
   Cancelled
   TimedOut
   Interrupted
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum BoardExecutionPhase {
   Reserved
   Running
   Finished
   Settled
   Unresolved
-} derive(Eq, Debug)
+}
 
 ///|
 /// Separate versioned journal metadata; never contains input or Agent output.
 /// Unresolved records are evidence of ambiguity, not permission to execute again.
+#derive(Eq, Debug)
 pub(all) struct BoardExecutionBinding {
   task_id : String
   attempt_id : String
@@ -46,9 +50,10 @@ pub(all) struct BoardExecutionBinding {
   run : BoardExecutionRun?
   phase : BoardExecutionPhase
   outcome : BoardExecutionOutcome?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum BoardExecutionError {
   NotReady
   Closed
@@ -58,7 +63,7 @@ pub(all) enum BoardExecutionError {
   DuplicateIdentity
   StoreUnavailable
   WrongExecution
-} derive(Eq, Debug)
+}
 
 ///|
 /// One owner must exclusively own one journal. Errors, including ambiguous

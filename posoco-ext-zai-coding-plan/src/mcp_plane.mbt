@@ -33,10 +33,11 @@ pub fn zai_mcp_namespaced_tool(group : String, tool : String) -> String {
 
 ///|
 /// One decoded namespaced tool name.
+#derive(Eq, Debug)
 pub(all) struct ZaiMcpRoute {
   group : String
   tool : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZaiMcpRoute with Eq::{not_equal, equal}
@@ -68,11 +69,12 @@ pub fn zai_mcp_route(tool : String) -> ZaiMcpRoute? {
 /// not. A partial plane is a first-class result — publishing two of three
 /// servers is better than publishing none, as long as the missing one stays
 /// visible.
+#derive(Debug)
 pub(all) struct ZaiMcpOpen {
   tools : Array[@posoco.ToolDef]
   connected : Int32
   failures : Array[String]
-} derive(Debug)
+}
 
 ///|
 pub extend ZaiMcpOpen with Debug::{to_repr}

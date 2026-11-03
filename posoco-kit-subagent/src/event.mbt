@@ -4,6 +4,7 @@
 /// with the child session and kind before pushing it onto the extension's
 /// internal multicast channel; hosts subscribe with
 /// `subagents.subscribe(fn(SubagentEvent))`.
+#derive(@debug.Debug)
 pub(all) struct SubagentEvent {
   /// Session id of the child run that produced the event (resume key).
   child_session : String
@@ -14,7 +15,7 @@ pub(all) struct SubagentEvent {
   parent_call : String
   /// The unmodified kernel event from the child run.
   event : @posoco.TurnEvent
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend SubagentEvent with @moonbitlang/core/debug.Debug::{to_repr}

@@ -11,12 +11,13 @@
 /// work; `model` optionally pins the child's model; `prompt` is the full
 /// instruction handed to the delegated session when it differs from the
 /// one-line goal.
+#derive(Eq, Debug)
 pub(all) struct DelegationIntent {
   task : String
   cwd : String?
   model : String?
   prompt : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DelegationIntent with Eq::{not_equal, equal}
@@ -26,10 +27,11 @@ pub extend DelegationIntent with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One concrete MCP tool invocation against the delegated-work host.
+#derive(Eq, Debug)
 pub(all) struct DelegationCall {
   tool : String
   arguments : Json
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DelegationCall with Eq::{not_equal, equal}
@@ -40,13 +42,14 @@ pub extend DelegationCall with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Unified delegation phase for dispatchers: every host kit decodes its own
 /// (deliberately disjoint) status vocabularies onto this single view.
+#derive(Eq, Debug)
 pub(all) enum DelegationPhase {
   Queued
   Running
   Succeeded
   Failed
   Lost
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DelegationPhase with Eq::{not_equal, equal}

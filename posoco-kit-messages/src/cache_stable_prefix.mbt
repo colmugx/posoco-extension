@@ -3,10 +3,11 @@
 /// guess that a changing system block is stable. Mark the last tool definition
 /// or last system text block, so the provider caches precisely the stable
 /// tools -> system prefix rather than a per-turn volatile tail.
+#derive(Eq, Debug)
 pub(all) enum MessagesStablePrefix {
   StableTools
   StableSystem
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesStablePrefix with Eq::{equal, not_equal}

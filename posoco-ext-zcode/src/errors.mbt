@@ -3,6 +3,7 @@
 /// paths, statuses, and server messages — never credential values; the
 /// provider registry that does carry api keys stays plain Json with no
 /// derives at all (see registry.mbt).
+#derive(Debug)
 pub(all) suberror ZcodeError {
   /// config.bin, ZCODE_BIN, PATH lookup, and platform bundle candidates all
   /// missed.
@@ -22,7 +23,7 @@ pub(all) suberror ZcodeError {
   ZcodeTimeout
   /// The app-server process exited before the turn reached a terminal event.
   ZcodeProcessDied(detail~ : String)
-} derive(Debug)
+}
 
 ///|
 pub extend ZcodeError with @moonbitlang/core/debug.Debug::{to_repr}

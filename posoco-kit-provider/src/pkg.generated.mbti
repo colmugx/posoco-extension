@@ -5,30 +5,33 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/ext-oauth",
 }
 
 // Values
-pub fn cached_provider_context_window(Json?, String, metadata_provider_id? : String) -> Int32?
+pub fn cached_provider_context_window(@json.Json?, String, metadata_provider_id? : String) -> Int32?
 
-pub fn context_window_integer(Json?) -> Int32?
+pub fn context_window_integer(@json.Json?) -> Int32?
 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum AuthMethod {
   ApiKey
   OAuth
-} derive(Eq, @debug.Debug)
+}
 pub fn AuthMethod::equal(Self, Self) -> Bool
 pub fn AuthMethod::not_equal(Self, Self) -> Bool
 pub fn AuthMethod::to_id(Self) -> String
 pub fn AuthMethod::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ModelKind {
   Chat
   Decision
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelKind::equal(Self, Self) -> Bool
 pub fn ModelKind::not_equal(Self, Self) -> Bool
 pub fn ModelKind::parse(String) -> Self?
@@ -66,18 +69,18 @@ pub(all) enum ProviderBuildResult {
 }
 
 pub(all) struct ProviderConfigSource {
-  settings : Json?
+  settings : @json.Json?
   provider_credential : @ext-oauth.ProviderCredential?
   credential : @ext-oauth.Credential?
   api_key_credential : @ext-oauth.ApiKeyCredential?
-  cached_models : Json?
+  cached_models : @json.Json?
   credential_store : &@ext-oauth.ProviderCredentialStore?
 }
-pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @ext-oauth.ProviderCredential?, credential? : @ext-oauth.Credential?, api_key_credential? : @ext-oauth.ApiKeyCredential?, cached_models? : Json?, credential_store? : &@ext-oauth.ProviderCredentialStore?) -> Self
+pub fn ProviderConfigSource::ProviderConfigSource(settings? : @json.Json?, provider_credential? : @ext-oauth.ProviderCredential?, credential? : @ext-oauth.Credential?, api_key_credential? : @ext-oauth.ApiKeyCredential?, cached_models? : @json.Json?, credential_store? : &@ext-oauth.ProviderCredentialStore?) -> Self
 pub fn ProviderConfigSource::context_window_setting(Self, manifest_id~ : String) -> Int32? raise @error.CompositionError
 pub fn ProviderConfigSource::effective_credential(Self, String) -> @ext-oauth.ProviderCredential? raise @error.CompositionError
 pub fn ProviderConfigSource::has_settings(Self) -> Bool
-pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError
+pub fn ProviderConfigSource::setting(Self, String) -> @json.Json? raise @error.CompositionError
 
 pub(all) struct ProviderModelCatalog {
   provider_id : String
@@ -89,7 +92,7 @@ pub fn ProviderModelCatalog::auth_methods(Self) -> Array[AuthMethod]
 pub fn ProviderModelCatalog::capabilities(Self) -> Array[String]
 pub fn ProviderModelCatalog::provider_id(Self) -> String
 pub fn ProviderModelCatalog::slots(Self) -> Array[ModelSlot]
-pub fn ProviderModelCatalog::with_cached_context_windows(Self, Json?) -> Self
+pub fn ProviderModelCatalog::with_cached_context_windows(Self, @json.Json?) -> Self
 
 // Type aliases
 

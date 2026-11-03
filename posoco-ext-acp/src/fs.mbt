@@ -16,9 +16,10 @@
 /// ("read_text_file" / "write_text_file"); `cause` preserves the underlying
 /// `AgentContextError`, whose variants carry the wire method names
 /// ("fs/read_text_file" / "fs/write_text_file").
+#derive(Eq, Debug)
 pub(all) suberror AcpHostFsError {
   HostFsCallFailed(method_name~ : String, cause~ : @acp.AgentContextError)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AcpHostFsError with Eq::{not_equal, equal}

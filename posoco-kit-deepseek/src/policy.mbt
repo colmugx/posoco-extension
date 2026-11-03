@@ -13,6 +13,7 @@
 /// order, tail convergence guidance, request-aware reasoning replay) are not
 /// configurable here: they are what keeps the prefix stable and the decode
 /// bounded, so `deepseek_policy_port` always applies them.
+#derive(Eq, Debug)
 pub(all) struct DeepSeekPolicy {
   /// Fail-closed ceiling on accumulated streamed reasoning characters. Not a
   /// token budget; `None` disables the guard.
@@ -23,7 +24,7 @@ pub(all) struct DeepSeekPolicy {
   /// Retry a non-streaming response once at low effort when it stopped at
   /// length with no answer text and no tool calls.
   recover_on_reasoning_exhaustion : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DeepSeekPolicy with Eq::{not_equal, equal}

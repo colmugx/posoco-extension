@@ -11,6 +11,7 @@
 /// sentence, so the UI decides placement and wording.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ZaiToolsState {
   /// No provider tool group is announced (another model is active, or the
   /// plane was never started). The segment is hidden.
@@ -25,7 +26,7 @@ pub(all) enum ZaiToolsState {
   /// The group was withdrawn (soft) and the connections are waiting for the
   /// last operation reference to be released; the segment is hidden.
   Withdrawing(total~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZaiToolsState with Eq::{not_equal, equal}

@@ -1,12 +1,13 @@
 ///|
 /// Tool arguments parsed from call.arguments (pure, for tests).
+#derive(Eq, Debug)
 pub(all) struct ZcodeTaskArgs {
   task : String
   cwd : String?
   session_id : String?
   mode : String?
   background : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZcodeTaskArgs with Eq::{not_equal, equal}

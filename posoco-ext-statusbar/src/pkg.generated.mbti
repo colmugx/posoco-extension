@@ -5,6 +5,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
 }
 
@@ -13,6 +14,7 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct SegmentInfo {
   segment : String
   owner : String
@@ -20,7 +22,7 @@ pub(all) struct SegmentInfo {
   priority : Int32
   value : String?
   color : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn SegmentInfo::equal(Self, Self) -> Bool
 pub fn SegmentInfo::not_equal(Self, Self) -> Bool
 pub fn SegmentInfo::to_repr(Self) -> @debug.Repr
@@ -32,7 +34,7 @@ pub fn StatusBar::StatusBar(bus? : @devkit.EventBus?) -> Self
 pub fn StatusBar::clear_segment(Self, source~ : String, segment~ : String) -> Unit
 pub fn StatusBar::commands(Self) -> Array[@port.CommandDef]
 pub fn StatusBar::extension_id(Self) -> String
-pub async fn StatusBar::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn StatusBar::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
 pub fn StatusBar::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn StatusBar::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError

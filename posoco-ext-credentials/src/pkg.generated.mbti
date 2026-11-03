@@ -4,13 +4,14 @@ package "colmugx/posoco-ext-credentials"
 import {
   "colmugx/posoco-ext-workspace",
   "colmugx/posoco/error",
+  "moonbitlang/core/json",
   "posoco/ext-oauth",
 }
 
 // Values
 pub fn encode_provider_credential(@ext-oauth.ProviderCredential) -> String
 
-pub fn parse_provider_credential(Json, String) -> @ext-oauth.ProviderCredential raise @error.CompositionError
+pub fn parse_provider_credential(@json.Json, String) -> @ext-oauth.ProviderCredential raise @error.CompositionError
 
 pub fn parse_provider_credential_text(String, String) -> @ext-oauth.ProviderCredential raise @error.CompositionError
 

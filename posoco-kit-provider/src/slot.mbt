@@ -4,10 +4,11 @@
 /// selection (`/decision`). The two kinds are different models: a provider
 /// advertises a slot as decision only when its extension also serves the
 /// `DecisionPort` for it.
+#derive(Eq, Debug)
 pub(all) enum ModelKind {
   Chat
   Decision
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelKind with Eq::{not_equal, equal}

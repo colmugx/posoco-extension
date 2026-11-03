@@ -10,20 +10,22 @@
 /// struct (`NativeWorkspaceFs`, `JsWorkspaceFs`) in a target-scoped file.
 
 ///|
+#derive(Debug)
 pub(all) enum WorkspaceFileKind {
   File
   Dir
   Symlink
   Other
-} derive(Debug)
+}
 
 ///|
 pub extend WorkspaceFileKind with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) suberror WorkspaceFsError {
   WorkspaceFsError(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WorkspaceFsError with Eq::{not_equal, equal}
@@ -75,11 +77,12 @@ pub(open) trait WorkspaceFs {
 /// optional source may be treated as "not configured". Permission, directory,
 /// and other filesystem failures must remain observable at the composition
 /// boundary.
+#derive(Debug)
 pub(all) enum FileReadResult {
   Missing
   Content(String)
   Failed(String)
-} derive(Debug)
+}
 
 ///|
 pub extend FileReadResult with @moonbitlang/core/debug.Debug::{to_repr}

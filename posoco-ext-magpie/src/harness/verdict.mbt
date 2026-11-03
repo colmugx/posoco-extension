@@ -6,12 +6,13 @@
 /// The harness main only *feeds* observations in and prints what comes out.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Verdict {
   VPass
   VFail
   VSkip
   VUnsupported
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Verdict::label(self : Verdict) -> String {
@@ -26,6 +27,7 @@ pub fn Verdict::label(self : Verdict) -> String {
 ///|
 /// One auditable outcome. `required` checks gate the production verdict;
 /// optional checks record capability absence without failing the run.
+#derive(Debug)
 pub(all) struct CheckOutcome {
   area : String
   capability : String
@@ -34,7 +36,7 @@ pub(all) struct CheckOutcome {
   /// Sanitized, length-capped observation; never keys, bodies, accounts,
   /// session identifiers or raw model output.
   detail : String
-} derive(Debug)
+}
 
 ///|
 pub fn CheckOutcome::row(self : CheckOutcome) -> String {
@@ -47,10 +49,11 @@ pub fn CheckOutcome::row(self : CheckOutcome) -> String {
 /// ModelPort-driven executions go through `pay`; unsuccessful attempts are
 /// counted by the caller before issuing anything, and once exhausted no
 /// further paid request is issued.
+#derive(Debug)
 pub(all) struct Budget {
   mut spent : Int32
   limit : Int32
-} derive(Debug)
+}
 
 ///|
 pub fn Budget::Budget(limit~ : Int32) -> Budget {
@@ -79,6 +82,7 @@ pub fn Budget::remaining(self : Budget) -> Int32 {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum OverallVerdict {
   /// Every check passed.
   AllPassed
@@ -88,7 +92,7 @@ pub(all) enum OverallVerdict {
   Failed
   /// The gateway was not configured; nothing ran.
   SkippedRun
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn OverallVerdict::label(self : OverallVerdict) -> String {

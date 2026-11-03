@@ -18,6 +18,7 @@ pub fn encode_execution_journal(Array[BoardExecutionBinding]) -> Result[String, 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardExecutionBinding {
   task_id : String
   attempt_id : String
@@ -26,11 +27,12 @@ pub(all) struct BoardExecutionBinding {
   run : BoardExecutionRun?
   phase : BoardExecutionPhase
   outcome : BoardExecutionOutcome?
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionBinding::equal(Self, Self) -> Bool
 pub fn BoardExecutionBinding::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionBinding::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardExecutionError {
   NotReady
   Closed
@@ -40,7 +42,7 @@ pub(all) enum BoardExecutionError {
   DuplicateIdentity
   StoreUnavailable
   WrongExecution
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionError::equal(Self, Self) -> Bool
 pub fn BoardExecutionError::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionError::to_repr(Self) -> @debug.Repr
@@ -51,13 +53,14 @@ pub struct BoardExecutionHandle {
 pub fn BoardExecutionHandle::execution_id(Self) -> String
 pub async fn BoardExecutionHandle::wait(Self) -> BoardExecutionBinding
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardExecutionOutcome {
   Completed
   Failed
   Cancelled
   TimedOut
   Interrupted
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionOutcome::equal(Self, Self) -> Bool
 pub fn BoardExecutionOutcome::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionOutcome::to_repr(Self) -> @debug.Repr
@@ -76,6 +79,7 @@ pub fn BoardExecutionOwner::status(Self) -> BoardExecutionOwnerStatus
 pub fn BoardExecutionOwner::uses_backend(Self, @backend.BoardBackend) -> Bool
 pub fn BoardExecutionOwner::with_slots(backend~ : @backend.BoardBackend, store~ : &BoardExecutionStore, adapter_factory~ : (Int32) -> &BoardExecutionAdapter, max_concurrency? : Int32) -> Result[Self, BoardExecutionError]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardExecutionOwnerStatus {
   attached : Bool
   closed : Bool
@@ -86,18 +90,19 @@ pub(all) struct BoardExecutionOwnerStatus {
   capacity : Int32
   active_bindings : Array[BoardExecutionBinding]
   available_slots : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionOwnerStatus::equal(Self, Self) -> Bool
 pub fn BoardExecutionOwnerStatus::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionOwnerStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardExecutionPhase {
   Reserved
   Running
   Finished
   Settled
   Unresolved
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionPhase::equal(Self, Self) -> Bool
 pub fn BoardExecutionPhase::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionPhase::to_repr(Self) -> @debug.Repr
@@ -119,19 +124,21 @@ pub fn BoardExecutionResultChannel::discard(Self) -> Unit
 pub fn BoardExecutionResultChannel::set_strategy(Self, ExecutionCaptureStrategy) -> Bool
 pub fn BoardExecutionResultChannel::take(Self, BoardExecutionBinding) -> String?
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardExecutionRun {
   session_id : String
   run_id : String
   turn_id : String
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardExecutionRun::equal(Self, Self) -> Bool
 pub fn BoardExecutionRun::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionRun::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExecutionCaptureStrategy {
   ToolFreeFinal
   FinalAfterSuccessfulTools
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionCaptureStrategy::equal(Self, Self) -> Bool
 pub fn ExecutionCaptureStrategy::not_equal(Self, Self) -> Bool
 pub fn ExecutionCaptureStrategy::to_repr(Self) -> @debug.Repr

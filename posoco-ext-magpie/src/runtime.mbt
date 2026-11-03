@@ -7,13 +7,14 @@
 /// Unknown keys are ignored; wrong-typed known keys raise
 /// `MagpieGatewayError::InvalidConfig` — activation recovers by falling
 /// back to defaults and recording the reason.
+#derive(Eq, Debug)
 pub(all) struct MagpieRuntimeSettings {
   base_url : String?
   gateway_key : String?
   enabled : Bool?
   model : String?
   effort : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRuntimeSettings with Eq::{not_equal, equal}

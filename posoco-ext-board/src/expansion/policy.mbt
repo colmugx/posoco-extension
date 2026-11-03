@@ -136,6 +136,7 @@ pub fn ExpansionPolicy::max_workflow_tasks(self : ExpansionPolicy) -> Int32 {
 ///|
 /// Immutable value snapshot of every bound. Previews embed it so an approval
 /// binds the exact policy, not a mutable configuration cell.
+#derive(Eq, Debug)
 pub(all) struct ExpansionPolicySnapshot {
   max_tasks : Int32
   max_edges : Int32
@@ -149,7 +150,7 @@ pub(all) struct ExpansionPolicySnapshot {
   max_depth : Int32
   max_workflow_expansions : Int32
   max_workflow_tasks : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ExpansionPolicySnapshot with Eq::{equal, not_equal}
@@ -180,12 +181,13 @@ pub fn ExpansionPolicy::snapshot(
 ///|
 /// Committed workflow usage from durable expansion history. Rejected proposals
 /// consume their authorization capability but add no generated-task usage.
+#derive(Eq, Debug)
 pub(all) struct ExpansionBudgetSnapshot {
   expansions_used : Int32
   max_expansions : Int32
   cumulative_tasks : Int32
   max_cumulative_tasks : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ExpansionBudgetSnapshot with Eq::{equal, not_equal}

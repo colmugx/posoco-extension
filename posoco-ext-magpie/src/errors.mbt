@@ -6,6 +6,7 @@
 /// distinct situation so hosts can phrase recovery precisely. Error text is
 /// structural only: it never carries response bodies, authorization headers,
 /// or credentials.
+#derive(Debug)
 pub(all) suberror MagpieGatewayError {
   /// The module's own configuration is unusable (bad base URL, an effort
   /// seeded without a model). Raised at construction, never by the gateway.
@@ -24,7 +25,7 @@ pub(all) suberror MagpieGatewayError {
   /// The gateway answered but its payload is not a valid Magpie response
   /// (non-2xx status, unparsable JSON, malformed required fields).
   InvalidResponse(String)
-} derive(Debug)
+}
 
 ///|
 pub extend MagpieGatewayError with @moonbitlang/core/debug.Debug::{to_repr}

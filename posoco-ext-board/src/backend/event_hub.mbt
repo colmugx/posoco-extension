@@ -80,6 +80,7 @@ priv struct BoardEventHub {
 /// registration. The hub never fabricates a snapshot: a cursor that
 /// retained history cannot serve plans `SnapshotRequired`, and the caller
 /// decides where the authoritative snapshot comes from.
+#derive(Eq, Debug)
 pub(all) enum BoardSubscriptionPlan {
   /// The cursor equals the current stream head — including the empty `0/0`
   /// case — so only live frames follow.
@@ -91,7 +92,7 @@ pub(all) enum BoardSubscriptionPlan {
   /// history, inside a gap, or ahead of the head: an authoritative
   /// snapshot is required before any frame is sent.
   SnapshotRequired
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardSubscriptionPlan with Eq::{equal, not_equal}

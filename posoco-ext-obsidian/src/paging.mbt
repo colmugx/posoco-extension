@@ -71,12 +71,13 @@ fn parse_file_meta(output : String) -> @devkit.FileStamp? {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct OutlineEntry {
   level : Int32
   heading : String
   /// 1-based line in the full file text (frontmatter included).
   line : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend OutlineEntry with Eq::{not_equal, equal}
@@ -113,11 +114,12 @@ fn parse_outline_json(output : String) -> Array[OutlineEntry] {
 }
 
 ///|
+#derive(Debug)
 pub(all) struct SearchHit {
   file : String
   line : Int32
   text : String
-} derive(Debug)
+}
 
 ///|
 pub extend SearchHit with @moonbitlang/core/debug.Debug::{to_repr}

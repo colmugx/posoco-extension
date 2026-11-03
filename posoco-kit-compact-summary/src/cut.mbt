@@ -14,12 +14,13 @@
 /// cased in this stage: they count as ordinary content in both the budget
 /// walk and the head range. Anchored re-summarization from the latest
 /// summary is left to the progressive stage.
+#derive(Eq, Debug)
 pub(all) struct CutPoint {
   head_end : Int32
   kept_from : Int32
   is_split_turn : Bool
   turn_start_index : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CutPoint with Eq::{not_equal, equal}

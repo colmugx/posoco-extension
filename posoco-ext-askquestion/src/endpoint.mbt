@@ -2,12 +2,13 @@
 /// Error surface of an injected question endpoint. Distinct from
 /// `@posoco.UiError`: it must carry `TimedOut` for parent-agent answers
 /// that never arrive inside the configured deadline.
+#derive(Eq, Debug)
 pub(all) suberror QuestionError {
   Unsupported(String)
   Cancelled
   TimedOut
   Io(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend QuestionError with Eq::{not_equal, equal}

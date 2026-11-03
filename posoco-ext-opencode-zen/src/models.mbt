@@ -17,6 +17,7 @@
 
 ///|
 /// One model entry decoded from Zen's `/models` response.
+#derive(Eq, Debug)
 pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
@@ -30,7 +31,7 @@ pub(all) struct ZenModelInfo {
   /// Declared image input. Live path: models.dev `attachment`; cache path:
   /// the host record's `image_in` marker.
   supports_images : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZenModelInfo with Eq::{not_equal, equal}

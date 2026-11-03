@@ -19,12 +19,13 @@ pub(all) suberror ComposerError {
   Failed(String)
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror QuestionError {
   Unsupported(String)
   Cancelled
   TimedOut
   Io(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn QuestionError::equal(Self, Self) -> Bool
 pub fn QuestionError::not_equal(Self, Self) -> Bool
 pub fn QuestionError::to_repr(Self) -> @debug.Repr
@@ -57,12 +58,13 @@ pub fn QuestionBroker::QuestionBroker(answer_timeout_ms? : Int64) -> Self
 pub fn QuestionBroker::channel(Self) -> ParentQuestionChannel
 pub fn QuestionBroker::on_queued(Self, (QuestionInfo) -> Unit) -> Unit
 
+#derive(@debug.Debug)
 pub(all) struct QuestionInfo {
   id : String
   child_session : String
   origin_call : String
   req : @port.UiRequest
-} derive(@debug.Debug)
+}
 pub fn QuestionInfo::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubagentTools {

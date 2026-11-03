@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async/http",
+  "moonbitlang/core/json",
   "posoco/devkit",
   "posoco/ext-oauth",
 }
@@ -35,15 +36,15 @@ pub fn intelligence_metrics_source() -> &@devkit.ModelMetricsSource
 
 pub fn openai_codex_models_client_version() -> String
 
-pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
+pub fn parse_codex_models(@json.Json) -> Array[CodexModelInfo] raise @error.ModelError
 
 pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@devkit.QuotaReading]
 
-pub fn parse_codex_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
+pub fn parse_codex_usage(@json.Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
 
 pub fn parse_intelligence_metrics(String) -> Result[Array[@devkit.MetricsPoint], String]
 
-pub fn parse_openai_models(Json) -> Array[OpenAIModelInfo] raise @error.ModelError
+pub fn parse_openai_models(@json.Json) -> Array[OpenAIModelInfo] raise @error.ModelError
 
 // Errors
 

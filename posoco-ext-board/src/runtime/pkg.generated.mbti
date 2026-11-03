@@ -6,6 +6,7 @@ import {
   "colmugx/posoco-ext-board/protocol",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -14,10 +15,11 @@ pub fn default_board_runtime(Int32, client_queue_depth? : Int32) -> BoardRuntime
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardEndpoint {
   host : String
   port : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardEndpoint::base_url(Self) -> String
 pub fn BoardEndpoint::equal(Self, Self) -> Bool
 pub fn BoardEndpoint::not_equal(Self, Self) -> Bool
@@ -38,21 +40,22 @@ pub async fn BoardRuntime::ensure_server(Self) -> Result[BoardEndpoint, String]
 pub fn BoardRuntime::event_history(Self) -> Array[@protocol.BoardWireEvent]
 pub async fn BoardRuntime::handle_command(Self, @protocol.BoardClientCommand) -> @protocol.BoardCommandResult
 pub async fn BoardRuntime::open_board(Self) -> Result[BoardEndpoint, String]
-pub fn BoardRuntime::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : Json) -> @protocol.BoardWireEvent
+pub fn BoardRuntime::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : @json.Json) -> @protocol.BoardWireEvent
 pub async fn BoardRuntime::shutdown(Self) -> Unit
 pub fn BoardRuntime::status(Self) -> BoardServerStatus
 pub fn BoardRuntime::with_adapters(backend~ : @backend.BoardBackend, server~ : &BoardWebServer, opener~ : &BrowserOpener) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardServerStatus {
   Stopped
   Starting
   Running(BoardEndpoint)
   Stopping
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardServerStatus::equal(Self, Self) -> Bool
 pub fn BoardServerStatus::not_equal(Self, Self) -> Bool
-pub fn BoardServerStatus::to_json(Self) -> Json
+pub fn BoardServerStatus::to_json(Self) -> @json.Json
 pub fn BoardServerStatus::to_repr(Self) -> @debug.Repr
 
 pub struct UnsupportedBoardWebServer {

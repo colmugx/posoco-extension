@@ -5,13 +5,14 @@
 /// once in latency, once in the wasted window it must then compact. Both
 /// breaches are fail-closed: the caller closes the connection and raises a
 /// transport error rather than turning a truncated stream into a completion.
+#derive(Eq, Debug)
 pub(all) enum ReasoningBreach {
   /// The accumulated reasoning passed `max_reasoning_chars`.
   BudgetExceeded
   /// The streamed reasoning ended in three identical, long suffixes — a
   /// deterministic degeneracy signal, not a semantic one.
   RepetitionDetected
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReasoningBreach with Eq::{not_equal, equal}

@@ -2,10 +2,11 @@
 /// One workspace change captured at handoff time. The probe owns the status
 /// vocabulary (for example `modified`, `staged`, `untracked`); the handoff
 /// renderer treats it as an opaque factual label.
+#derive(Eq, Debug)
 pub(all) struct WorkspaceChange {
   path : String
   status : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WorkspaceChange with Eq::{not_equal, equal}
@@ -17,12 +18,13 @@ pub extend WorkspaceChange with @moonbitlang/core/debug.Debug::{to_repr}
 /// Deterministic project facts captured by the host. The handoff extension
 /// deliberately does not know how Git, a VCS, or another workspace backend
 /// obtains these values.
+#derive(Eq, Debug)
 pub(all) struct WorkspaceSnapshot {
   root : String
   branch : String?
   head : String?
   changes : Array[WorkspaceChange]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WorkspaceSnapshot with Eq::{not_equal, equal}
@@ -37,6 +39,7 @@ pub extend WorkspaceSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 ///
 /// `next_action` is singular by design: a handoff must identify one immediate
 /// executable continuation. Later actions belong in `queue`.
+#derive(Eq, Debug)
 pub(all) struct WorkSnapshot {
   objective : String?
   done_when : Array[String]
@@ -51,7 +54,7 @@ pub(all) struct WorkSnapshot {
   validation_passed : Array[String]
   validation_failed : Array[String]
   validation_not_run : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WorkSnapshot with Eq::{not_equal, equal}

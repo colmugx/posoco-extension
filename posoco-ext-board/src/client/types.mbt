@@ -1,5 +1,6 @@
 ///|
 /// Client-owned wire stage, independent of domain transition rules.
+#derive(Eq)
 pub(all) enum ClientBoardStage {
   Created
   Refining
@@ -10,54 +11,59 @@ pub(all) enum ClientBoardStage {
   Done
   Suspended
   Cancelled
-} derive(Eq)
+}
 
 ///|
 pub extend ClientBoardStage with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientBoardPriority {
   Low
   Normal
   High
   Critical
-} derive(Eq)
+}
 
 ///|
 pub extend ClientBoardPriority with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientTeamRole {
   PO
   SM
   RD
   SET
   TE
-} derive(Eq)
+}
 
 ///|
 pub extend ClientTeamRole with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct ClientTeamAssignment {
   role : ClientTeamRole
   member_id : String
-} derive(Eq)
+}
 
 ///|
 pub extend ClientTeamAssignment with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientAttemptKind {
   Discuss
   Execute
   Review
-} derive(Eq)
+}
 
 ///|
 pub extend ClientAttemptKind with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientAttemptStatus {
   Queued
   Running
@@ -65,30 +71,32 @@ pub(all) enum ClientAttemptStatus {
   Failed
   Cancelled
   Interrupted
-} derive(Eq)
+}
 
 ///|
 pub extend ClientAttemptStatus with Eq::{equal, not_equal}
 
 ///|
 /// Terminal outcome a caller explicitly requests for a running attempt.
+#derive(Eq)
 pub(all) enum ClientAttemptOutcome {
   Succeeded
   Failed
   Cancelled
   Interrupted
-} derive(Eq)
+}
 
 ///|
 pub extend ClientAttemptOutcome with Eq::{equal, not_equal}
 
 ///|
 /// Absence is Option::None, not an additional review enum case.
+#derive(Eq)
 pub(all) enum ClientReviewDecision {
   Pending
   Approved
   ChangesRequested
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewDecision with Eq::{equal, not_equal}
@@ -97,20 +105,22 @@ pub extend ClientReviewDecision with Eq::{equal, not_equal}
 /// Decision a caller can explicitly record. Pending is deliberately not a
 /// case: it is the implicit state when a review attempt starts running, so
 /// it never appears in a wire command.
+#derive(Eq)
 pub(all) enum ClientRecordableReviewDecision {
   Approved
   ChangesRequested
-} derive(Eq)
+}
 
 ///|
 pub extend ClientRecordableReviewDecision with Eq::{equal, not_equal}
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+#derive(Eq)
 pub struct ClientModelSelection {
   slot : String
   effort : String?
-} derive(Eq)
+}
 
 ///|
 pub extend ClientModelSelection with Eq::{equal, not_equal}
@@ -126,47 +136,51 @@ pub fn ClientModelSelection::ClientModelSelection(
 ///|
 /// Client-owned evidence kind. Wire strings are stable
 /// (`command`, `test`, `manual`, `artifact`).
+#derive(Eq)
 pub(all) enum ClientReviewEvidenceKind {
   Command
   Test
   Manual
   Artifact
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewEvidenceKind with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientReviewEvidenceResult {
   Passed
   Failed
   NotRun
   Unknown
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewEvidenceResult with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientReviewArtifactKind {
   File
   Diff
   Log
   Screenshot
   Url
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewArtifactKind with Eq::{equal, not_equal}
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+#derive(Eq)
 pub struct ClientReviewEvidence {
   kind : ClientReviewEvidenceKind
   label : String
   result : ClientReviewEvidenceResult
   detail : String
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewEvidence with Eq::{equal, not_equal}
@@ -183,11 +197,12 @@ pub fn ClientReviewEvidence::ClientReviewEvidence(
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+#derive(Eq)
 pub struct ClientReviewArtifact {
   kind : ClientReviewArtifactKind
   label : String
   uri_or_digest : String
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewArtifact with Eq::{equal, not_equal}
@@ -203,6 +218,7 @@ pub fn ClientReviewArtifact::ClientReviewArtifact(
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+#derive(Eq)
 pub struct ClientReviewReport {
   outcome : String
   summary : String
@@ -212,7 +228,7 @@ pub struct ClientReviewReport {
   notes : Array[String]
   open_questions : Array[String]
   artifacts : Array[ClientReviewArtifact]
-} derive(Eq)
+}
 
 ///|
 pub extend ClientReviewReport with Eq::{equal, not_equal}
@@ -242,6 +258,7 @@ pub fn ClientReviewReport::ClientReviewReport(
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+#derive(Eq)
 pub struct ClientBoardTask {
   id : String
   title : String
@@ -262,12 +279,13 @@ pub struct ClientBoardTask {
   /// Durable reviewer feedback of the latest request-changes decision;
   /// `None` when no decision ever requested changes.
   review_feedback : String?
-} derive(Eq)
+}
 
 ///|
 pub extend ClientBoardTask with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct ClientAttempt {
   id : String
   task_id : String
@@ -278,7 +296,7 @@ pub struct ClientAttempt {
   started_at_ms : Int64?
   finished_at_ms : Int64?
   updated_at_ms : Int64
-} derive(Eq)
+}
 
 ///|
 pub extend ClientAttempt with Eq::{equal, not_equal}
@@ -286,21 +304,23 @@ pub extend ClientAttempt with Eq::{equal, not_equal}
 ///|
 /// Validated authoritative projection. The transport suffix is validated but
 /// deliberately not retained or replayed into these records.
+#derive(Eq)
 pub struct DecodedBoardSnapshot {
   revision : Int64
   last_seq : Int64
   tasks : Array[ClientBoardTask]
   attempts : Array[ClientAttempt]
-} derive(Eq)
+}
 
 ///|
 pub extend DecodedBoardSnapshot with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum ClientError {
   InvalidData(String)
   UnsupportedProtocolVersion
-} derive(Eq)
+}
 
 ///|
 pub extend ClientError with Eq::{equal, not_equal}
@@ -308,13 +328,14 @@ pub extend ClientError with Eq::{equal, not_equal}
 ///|
 /// A command settlement never projects optimistic state. NeedsSnapshot means
 /// the old baseline was discarded. Terminal errors carry stable codes only.
+#derive(Eq)
 pub(all) enum ApplyOutcome {
   Applied
   Duplicate
   CommandSettled(@protocol.BoardCommandResult)
   NeedsSnapshot(String)
   TerminalProtocolError(String)
-} derive(Eq)
+}
 
 ///|
 pub extend ApplyOutcome with Eq::{equal, not_equal}
@@ -322,13 +343,14 @@ pub extend ApplyOutcome with Eq::{equal, not_equal}
 ///|
 /// Private mutable state; use the detached accessors and `copy` for
 /// clone-on-update rendering, never shared collections.
+#derive(Eq)
 pub struct BoardReplica {
   priv mut task_records : Array[ClientBoardTask]
   priv mut attempt_records : Array[ClientAttempt]
   priv mut board_revision : Int64
   priv mut sequence : Int64
   priv mut baseline : Bool
-} derive(Eq)
+}
 
 ///|
 pub extend BoardReplica with Eq::{equal, not_equal}

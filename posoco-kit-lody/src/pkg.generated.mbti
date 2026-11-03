@@ -5,6 +5,7 @@ import {
   "colmugx/lody",
   "colmugx/posoco-kit-delegation",
   "colmugx/posoco/kernel",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -26,9 +27,9 @@ pub fn lody_create_call(@posoco-kit-delegation.DelegationIntent, task_id~ : Stri
 
 pub fn lody_server_names() -> Array[String]
 
-pub fn parse_subagent_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
+pub fn parse_subagent_phase(@json.Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
 
-pub fn parse_task_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase?, String]
+pub fn parse_task_phase(@json.Json) -> Result[@posoco-kit-delegation.DelegationPhase?, String]
 
 pub fn phase_of_session_meta(@lody.LodySessionMeta) -> @posoco-kit-delegation.DelegationPhase?
 

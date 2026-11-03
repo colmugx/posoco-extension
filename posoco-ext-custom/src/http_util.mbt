@@ -9,12 +9,13 @@
 /// setting is visible in the failure itself.
 
 ///|
+#derive(Eq, Debug)
 priv enum CustomErrorBody {
   BodyText(String)
   BodyBytesInvalidUtf8(Int32)
   BodyReadFailed
   BodyUnavailable
-} derive(Eq, Debug)
+}
 
 ///|
 extend CustomErrorBody with Eq::{not_equal, equal}
@@ -104,11 +105,12 @@ fn classify_custom_http_status(
 ///|
 /// Used by the HTTP loops and offline tests so EOF is never inferred from
 /// accumulated content. `wire` names the dialect in the raised message.
+#derive(Eq, Debug)
 priv enum CustomStreamTermination {
   ExplicitTerminal
   CleanEof
   TransportFailure
-} derive(Eq, Debug)
+}
 
 ///|
 extend CustomStreamTermination with Eq::{not_equal, equal}

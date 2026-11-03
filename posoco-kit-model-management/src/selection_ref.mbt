@@ -2,13 +2,14 @@
 /// Versioned, manager-qualified logical selection. IDs are opaque: no
 /// provider/ or model-name parsing belongs in callers of this contract.
 /// The revision is scoped to the owning runtime generation.
+#derive(Eq, Debug)
 pub(all) struct SelectionRef {
   owner : String
   model_id : String
   effort : String?
   pending : Bool
   revision : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend SelectionRef with Eq::{not_equal, equal}

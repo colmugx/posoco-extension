@@ -15,6 +15,7 @@
 ///|
 /// Observability of one completed execution. The session identity itself is
 /// never reported — only whether affinity was attached.
+#derive(Eq, Debug)
 pub(all) struct MagpieExecutionReport {
   /// The opaque model ID the execution asked for (the active selection).
   requested_model : String
@@ -37,7 +38,7 @@ pub(all) struct MagpieExecutionReport {
   lossy_opt_in : Bool
   /// Whether the X-Magpie-Session affinity header was attached.
   session_identified : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieExecutionReport with Eq::{not_equal, equal}

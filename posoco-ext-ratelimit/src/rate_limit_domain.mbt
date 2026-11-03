@@ -59,15 +59,17 @@ priv struct RecoveryEntry {
 ///|
 /// Stamp carried by every async recovery effect. Epoch invalidation makes
 /// late completions structural no-ops.
+#derive(Eq)
 priv struct RecoveryTicket {
   session_id : String
   epoch : Int32
   attempt : Int32
-} derive(Eq)
+}
 
 ///|
 /// Read-only compatibility view for hosts and tests. This is a projection,
 /// never an alias to the actor-owned RecoveryEntry array.
+#derive(Eq, Debug)
 pub(all) struct RateLimitPending {
   session_id : String
   encountered_at_ms : Int64
@@ -75,7 +77,7 @@ pub(all) struct RateLimitPending {
   resume_at_ms : Int64
   attempts : Int32
   provider_code : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend RateLimitPending with Eq::{equal, not_equal}

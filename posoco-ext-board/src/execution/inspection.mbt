@@ -2,6 +2,7 @@
 /// Point-in-time detached owner facts, not a reservation or termination
 /// confirmation. `active` keeps the first occupied slot's binding for
 /// single-slot compatibility; `active_bindings` lists every occupied slot.
+#derive(Eq, Debug)
 pub(all) struct BoardExecutionOwnerStatus {
   attached : Bool
   closed : Bool
@@ -12,7 +13,7 @@ pub(all) struct BoardExecutionOwnerStatus {
   capacity : Int32
   active_bindings : Array[BoardExecutionBinding]
   available_slots : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Metadata only; querying status never starts or repairs execution.

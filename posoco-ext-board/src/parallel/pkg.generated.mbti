@@ -14,19 +14,21 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ParallelBlockCount {
   reason : @orchestration.ExecutionBlockReason
   count : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ParallelBlockCount::equal(Self, Self) -> Bool
 pub fn ParallelBlockCount::not_equal(Self, Self) -> Bool
 pub fn ParallelBlockCount::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ParallelFailurePolicy {
   StopOnFailure
   ContinueOnConfirmedFailure
   CancelRemainingOnFailure
-} derive(Eq, @debug.Debug)
+}
 pub fn ParallelFailurePolicy::equal(Self, Self) -> Bool
 pub fn ParallelFailurePolicy::not_equal(Self, Self) -> Bool
 pub fn ParallelFailurePolicy::to_repr(Self) -> @debug.Repr
@@ -51,6 +53,7 @@ pub fn ParallelWorkflowRunner::status(Self) -> ParallelWorkflowStatus
 pub fn ParallelWorkflowRunner::stop_after_wave(Self) -> Bool
 pub async fn ParallelWorkflowRunner::wait(Self) -> ParallelWorkflowStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ParallelWorkflowSpec {
   run_id : String
   scope : @workflow.WorkflowScope
@@ -59,13 +62,14 @@ pub(all) struct ParallelWorkflowSpec {
   max_elapsed_ms : Int32
   execution_timeout_ms : Int32
   failure_policy : ParallelFailurePolicy
-} derive(Eq, @debug.Debug)
+}
 pub fn ParallelWorkflowSpec::ParallelWorkflowSpec(run_id~ : String, scope~ : @workflow.WorkflowScope, max_executions~ : Int32, max_elapsed_ms~ : Int32, execution_timeout_ms~ : Int32, max_concurrency? : Int32, failure_policy? : ParallelFailurePolicy) -> Self
 pub fn ParallelWorkflowSpec::equal(Self, Self) -> Bool
 pub fn ParallelWorkflowSpec::not_equal(Self, Self) -> Bool
 pub fn ParallelWorkflowSpec::to_repr(Self) -> @debug.Repr
 pub fn ParallelWorkflowSpec::validate(Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ParallelWorkflowStatus {
   run_id : String?
   phase : @workflow.WorkflowPhase
@@ -87,7 +91,7 @@ pub(all) struct ParallelWorkflowStatus {
   blocked_count : Int32
   blocked_reason_counts : Array[ParallelBlockCount]
   reason : @workflow.WorkflowStopReason?
-} derive(Eq, @debug.Debug)
+}
 pub fn ParallelWorkflowStatus::equal(Self, Self) -> Bool
 pub fn ParallelWorkflowStatus::not_equal(Self, Self) -> Bool
 pub fn ParallelWorkflowStatus::to_repr(Self) -> @debug.Repr

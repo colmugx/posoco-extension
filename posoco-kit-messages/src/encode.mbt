@@ -20,9 +20,10 @@
 /// `{"type": "ephemeral"}` with an optional lifetime; `ttl` accepts the
 /// documented lifetimes ("5m", "1h") and rejects anything else so a typo
 /// becomes a local error instead of a remote 400.
+#derive(Eq, Debug)
 pub(all) struct CacheControl {
   ttl : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CacheControl with @moonbitlang/core/debug.Debug::{to_repr}
@@ -81,6 +82,7 @@ pub fn attach_cache_control(
 ///|
 /// Tool-choice configuration: `auto` / `any` (must use a tool) / `none` /
 /// a forced specific tool.
+#derive(Eq, Debug)
 pub(all) enum MessagesToolChoice {
   Auto
   Any
@@ -88,7 +90,7 @@ pub(all) enum MessagesToolChoice {
   /// variant never collides with `Option::None` in JSON literals.)
   Forbid
   Tool(name~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesToolChoice with @moonbitlang/core/debug.Debug::{to_repr}
@@ -123,12 +125,13 @@ fn MessagesToolChoice::to_wire(
 /// least 1024 and below `max_tokens` per the protocol; `Enabled(None)` emits
 /// `{"type":"enabled"}` without a budget — the budget-free enabled dialect
 /// used by endpoints that scale thinking through their own effort controls.
+#derive(Eq, Debug)
 pub(all) enum ThinkingConfig {
   Enabled(budget_tokens~ : Int32?)
   Adaptive
   BetweenTools
   Disabled
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ThinkingConfig with @moonbitlang/core/debug.Debug::{to_repr}
@@ -166,6 +169,7 @@ fn ThinkingConfig::to_wire(
 /// Protocol-specific request settings. Deliberately separate from the
 /// canonical `ChatOptions` (which only carries what every provider shares):
 /// vendor tuning never leaks into the common type.
+#derive(Debug)
 pub(all) struct MessagesRequestOptions {
   temperature : Double?
   stop_sequences : Array[String]
@@ -185,7 +189,7 @@ pub(all) struct MessagesRequestOptions {
   stable_prefix_ttl : String
   stable_history_messages : Int32?
   stable_history_ttl : String
-} derive(Debug)
+}
 
 ///|
 pub extend MessagesRequestOptions with @moonbitlang/core/debug.Debug::{to_repr}

@@ -21,6 +21,7 @@
 
 ///|
 /// Requested functionality for one planning decision.
+#derive(Eq, Debug)
 pub(all) struct MagpieRequirements {
   tools : Bool
   streaming : Bool
@@ -32,7 +33,7 @@ pub(all) struct MagpieRequirements {
   native_prompt_caching : Bool
   token_usage_integrity : Bool
   cancellation : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRequirements with Eq::{not_equal, equal}
@@ -68,6 +69,7 @@ pub fn MagpieRequirements::MagpieRequirements(
 ///|
 /// Gateway translation policy. Lossy translation is only ever chosen when
 /// the caller names it here explicitly.
+#derive(Eq, Debug)
 pub(all) enum MagpieTranslationPolicy {
   /// Only endpoints the gateway declares native for the model; a required
   /// feature that cannot be guaranteed yields an explicit incompatibility.
@@ -79,7 +81,7 @@ pub(all) enum MagpieTranslationPolicy {
   /// Gateway-translated execution is acceptable even when fidelity is not
   /// guaranteed; the plan keeps the risks visible and is marked lossy.
   AllowTranslated
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieTranslationPolicy with Eq::{not_equal, equal}
@@ -103,12 +105,13 @@ pub extend MagpieTranslationPolicy with Show::{to_string, output}
 
 ///|
 /// Caller protocol preference.
+#derive(Eq, Debug)
 pub(all) enum MagpiePreference {
   /// No preference; selection follows the default rules.
   Any
   /// Prefer this protocol whenever it is eligible.
   Prefer(MagpieProtocol)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpiePreference with Eq::{not_equal, equal}
@@ -119,6 +122,7 @@ pub extend MagpiePreference with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// The fidelity features planning reasons about, in the fixed order used
 /// by every capability list.
+#derive(Eq, Debug)
 pub(all) enum MagpieFeature {
   Tools
   Streaming
@@ -129,7 +133,7 @@ pub(all) enum MagpieFeature {
   NativePromptCaching
   TokenUsageIntegrity
   Cancellation
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieFeature with Eq::{not_equal, equal}
@@ -157,6 +161,7 @@ pub extend MagpieFeature with Show::{to_string, output}
 
 ///|
 /// Where a capability's evidence comes from.
+#derive(Eq, Debug)
 pub(all) enum MagpieCapabilitySource {
   /// Inherent to the protocol shape itself.
   ProtocolNative
@@ -166,7 +171,7 @@ pub(all) enum MagpieCapabilitySource {
   GatewayLevel
   /// No evidence either way.
   Unknown
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieCapabilitySource with Eq::{not_equal, equal}
@@ -190,12 +195,13 @@ pub impl Show for MagpieCapabilitySource with fn to_string(
 pub extend MagpieCapabilitySource with Show::{to_string, output}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum MagpieCapabilityStatus {
   /// Usable with the stated source.
   Available
   /// Ruled out by declared facts.
   Unsupported
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieCapabilityStatus with Eq::{not_equal, equal}
@@ -218,12 +224,13 @@ pub extend MagpieCapabilityStatus with Show::{to_string, output}
 
 ///|
 /// One evaluated feature for one protocol.
+#derive(Eq, Debug)
 pub(all) struct MagpieCapability {
   feature : MagpieFeature
   status : MagpieCapabilityStatus
   source : MagpieCapabilitySource
   detail : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieCapability with Eq::{not_equal, equal}
@@ -236,6 +243,7 @@ pub extend MagpieCapability with @moonbitlang/core/debug.Debug::{to_repr}
 /// evidence, per-feature capabilities, declared blockers (facts no
 /// translation can repair), and risks. The three protocols are evaluated
 /// independently by `evaluate_protocol`; `plan_protocol` composes them.
+#derive(Eq, Debug)
 pub(all) struct MagpieProtocolEvaluation {
   protocol : MagpieProtocol
   /// Declared native endpoint path, when the catalog declares one for a
@@ -249,7 +257,7 @@ pub(all) struct MagpieProtocolEvaluation {
   /// decides whether they are acceptable.
   unguaranteed : Array[String]
   risks : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieProtocolEvaluation with Eq::{not_equal, equal}
@@ -261,12 +269,13 @@ pub extend MagpieProtocolEvaluation with @moonbitlang/core/debug.Debug::{
 
 ///|
 /// How the selected endpoint will actually be reached.
+#derive(Eq, Debug)
 pub(all) enum MagpieEndpointKind {
   /// The gateway declares this protocol natively for this model.
   Native
   /// Execution passes through gateway translation or dynamic routing.
   GatewayTranslated
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieEndpointKind with Eq::{not_equal, equal}
@@ -289,12 +298,13 @@ pub extend MagpieEndpointKind with Show::{to_string, output}
 
 ///|
 /// Confidence of the selected plan.
+#derive(Eq, Debug)
 pub(all) enum MagpiePlanConfidence {
   /// Backed by a declared native endpoint on a concrete model.
   DeclaredNative
   /// No native declaration; viability inferred from model-level evidence.
   Inferred
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpiePlanConfidence with Eq::{not_equal, equal}
@@ -317,6 +327,7 @@ pub extend MagpiePlanConfidence with Show::{to_string, output}
 
 ///|
 /// A protocol execution plan, including evidence and fidelity risks.
+#derive(Eq, Debug)
 pub(all) struct MagpieProtocolPlan {
   model_id : String
   protocol : MagpieProtocol
@@ -333,7 +344,7 @@ pub(all) struct MagpieProtocolPlan {
   reasons : Array[String]
   /// True only when the caller explicitly opted into lossy translation.
   lossy_opt_in : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieProtocolPlan with Eq::{not_equal, equal}
@@ -343,10 +354,11 @@ pub extend MagpieProtocolPlan with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Per-protocol blockers of an incompatibility.
+#derive(Eq, Debug)
 pub(all) struct MagpieProtocolBlocker {
   protocol : MagpieProtocol
   reasons : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieProtocolBlocker with Eq::{not_equal, equal}
@@ -358,12 +370,13 @@ pub extend MagpieProtocolBlocker with @moonbitlang/core/debug.Debug::{to_repr}
 /// Explicit incompatibility: no protocol satisfies the requirements under
 /// the given policy. The message names each protocol's blockers, so hosts
 /// can phrase recovery precisely.
+#derive(Eq, Debug)
 pub(all) struct MagpieIncompatibility {
   model_id : String
   requirements : MagpieRequirements
   policy : MagpieTranslationPolicy
   blockers : Array[MagpieProtocolBlocker]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieIncompatibility with Eq::{not_equal, equal}
@@ -372,10 +385,11 @@ pub extend MagpieIncompatibility with Eq::{not_equal, equal}
 pub extend MagpieIncompatibility with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum MagpiePlanOutcome {
   Planned(MagpieProtocolPlan)
   Incompatible(MagpieIncompatibility)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpiePlanOutcome with Eq::{not_equal, equal}

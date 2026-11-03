@@ -1,9 +1,10 @@
 ///|
 /// Nominal Board identifiers. Task and attempt ids are distinct types, so
 /// neither can be confused with the other or with a raw string.
+#derive(Eq, Hash, Debug)
 pub struct BoardTaskId {
   value : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn BoardTaskId::BoardTaskId(value : String) -> BoardTaskId {
@@ -24,9 +25,10 @@ pub extend BoardTaskId with @moonbitlang/core/debug.Debug::{to_repr}
 /// distinct from task and attempt ids and are never reused: a committed
 /// expansion id rejects every later reuse, so it can anchor idempotence
 /// decisions without replaying anything.
+#derive(Eq, Hash, Debug)
 pub struct ExpansionId {
   value : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ExpansionId::ExpansionId(value : String) -> ExpansionId {
@@ -43,9 +45,10 @@ pub extend ExpansionId with Hash::{hash, hash_combine}
 pub extend ExpansionId with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Hash, Debug)
 pub struct AttemptId {
   value : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn AttemptId::AttemptId(value : String) -> AttemptId {

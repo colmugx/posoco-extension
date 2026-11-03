@@ -1,10 +1,11 @@
 ///|
 /// Resolve a complete MoonBit runner for MBTX without relying on application
 /// code to install the toolchain. The user's toolchain always has priority.
+#derive(Debug, Eq)
 pub(all) enum ToolchainOrigin {
   System
   Managed
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ToolchainOrigin with Eq::{equal, not_equal}

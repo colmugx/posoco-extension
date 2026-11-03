@@ -46,11 +46,12 @@ fn zai_coding_plan_mcp_group_title(group : String) -> String {
 /// plan key. The declaration carries no credential: the key travels as the
 /// `Authorization` header at connect time and never becomes part of a value
 /// that could be logged.
+#derive(Eq, Debug)
 pub(all) struct ZaiToolGroup {
   group : String
   title : String
   endpoint : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZaiToolGroup with Eq::{not_equal, equal}

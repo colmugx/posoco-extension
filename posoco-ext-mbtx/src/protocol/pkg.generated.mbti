@@ -3,26 +3,29 @@ package "colmugx/posoco-ext-mbtx/protocol"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn encode_frame(Json, max_frame_bytes? : Int32) -> Bytes raise ProtocolError
+pub fn encode_frame(@json.Json, max_frame_bytes? : Int32) -> Bytes raise ProtocolError
 
 pub let version : Int32
 
 // Errors
+#derive(@debug.Debug)
 pub suberror ProtocolError {
   Invalid(String)
-} derive(@debug.Debug)
+}
 pub fn ProtocolError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) enum Action {
   Ready
-  Call(id~ : Int32, name~ : String, arguments~ : Json)
+  Call(id~ : Int32, name~ : String, arguments~ : @json.Json)
   Diagnostic(level~ : String, content~ : String)
   Closing
-} derive(@debug.Debug)
+}
 pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub struct Decoder {
@@ -30,7 +33,7 @@ pub struct Decoder {
   max_frame_bytes : Int32
 }
 pub fn Decoder::Decoder(max_frame_bytes? : Int32) -> Self
-pub fn Decoder::feed(Self, Bytes) -> Array[Json] raise ProtocolError
+pub fn Decoder::feed(Self, Bytes) -> Array[@json.Json] raise ProtocolError
 pub fn Decoder::finish(Self) -> Unit raise ProtocolError
 
 pub struct HostSession {
@@ -42,29 +45,31 @@ pub fn HostSession::finish(Self, Int32) -> Outcome raise ProtocolError
 pub fn HostSession::receive(Self, Message) -> Action raise ProtocolError
 pub fn HostSession::reply(Self, Int32, Outcome) -> Message raise ProtocolError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Message {
   Hello(protocol~ : Int32)
-  Invoke(input~ : Json, tools~ : Array[String], max_pending~ : Int32, max_frame_bytes~ : Int32)
-  Request(id~ : Int32, name~ : String, arguments~ : Json)
+  Invoke(input~ : @json.Json, tools~ : Array[String], max_pending~ : Int32, max_frame_bytes~ : Int32)
+  Request(id~ : Int32, name~ : String, arguments~ : @json.Json)
   Reply(id~ : Int32, outcome~ : Outcome)
   Log(level~ : String, content~ : String)
   Result(outcome~ : Outcome)
   Cancel(reason~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn Message::equal(Self, Self) -> Bool
-pub fn Message::from_json(Json) -> Self raise ProtocolError
+pub fn Message::from_json(@json.Json) -> Self raise ProtocolError
 pub fn Message::not_equal(Self, Self) -> Bool
-pub fn Message::to_json(Self) -> Json
+pub fn Message::to_json(Self) -> @json.Json
 pub fn Message::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Outcome {
-  Success(content~ : String, structured~ : Json?)
-  Failure(code~ : String, content~ : String, structured~ : Json?)
-} derive(Eq, @debug.Debug)
+  Success(content~ : String, structured~ : @json.Json?)
+  Failure(code~ : String, content~ : String, structured~ : @json.Json?)
+}
 pub fn Outcome::equal(Self, Self) -> Bool
-pub fn Outcome::from_json(Json) -> Self raise ProtocolError
+pub fn Outcome::from_json(@json.Json) -> Self raise ProtocolError
 pub fn Outcome::not_equal(Self, Self) -> Bool
-pub fn Outcome::to_json(Self) -> Json
+pub fn Outcome::to_json(Self) -> @json.Json
 pub fn Outcome::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -2,6 +2,7 @@
 /// One shaped child story: the concrete create request of a split or of the
 /// shaper itself. Everything is already trimmed and validated by the parsers
 /// below, so the Board create command never sees a blank required field.
+#derive(Eq, Debug)
 pub(all) struct ShapeChild {
   title : String
   user_story : String
@@ -10,7 +11,7 @@ pub(all) struct ShapeChild {
   definition_of_done : Array[String]
   priority : String
   required_roles : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ShapeChild with Eq::{equal, not_equal}

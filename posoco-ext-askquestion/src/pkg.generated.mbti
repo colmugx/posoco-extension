@@ -18,12 +18,13 @@ pub fn async_env_lines(Array[AsyncOutcome]) -> String?
 pub fn question_prompt(@port.UiRequest) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror QuestionError {
   Unsupported(String)
   Cancelled
   TimedOut
   Io(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn QuestionError::equal(Self, Self) -> Bool
 pub fn QuestionError::not_equal(Self, Self) -> Bool
 pub fn QuestionError::to_repr(Self) -> @debug.Repr
@@ -62,13 +63,14 @@ pub impl @port.Lifecycle for AskQuestionTools
 pub impl @port.SystemPromptContributor for AskQuestionTools
 pub impl @port.ToolProvider for AskQuestionTools
 
+#derive(Eq, @debug.Debug)
 pub enum AsyncAskError {
   Unknown(id~ : String)
   AlreadyAnswered(id~ : String)
   Expired(id~ : String)
   WrongAnswerKind(id~ : String, expected~ : String)
   IndexOutOfRange(id~ : String, index~ : Int32, options~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn AsyncAskError::equal(Self, Self) -> Bool
 pub fn AsyncAskError::not_equal(Self, Self) -> Bool
 pub fn AsyncAskError::output(Self, &Logger) -> Unit
@@ -76,19 +78,21 @@ pub fn AsyncAskError::to_repr(Self) -> @debug.Repr
 pub fn AsyncAskError::to_string(Self) -> String
 pub impl Show for AsyncAskError
 
+#derive(@debug.Debug)
 pub enum AsyncOutcome {
   Answered(question~ : AsyncQuestion, response~ : @port.UiResponse)
   Expired(question~ : AsyncQuestion)
-} derive(@debug.Debug)
+}
 pub fn AsyncOutcome::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct AsyncQuestion {
   id : String
   req : @port.UiRequest
   origin_call : String
   asked_at : Int64
   deadline_at : Int64
-} derive(@debug.Debug)
+}
 pub fn AsyncQuestion::options(Self) -> Array[String]
 pub fn AsyncQuestion::prompt(Self) -> String
 pub fn AsyncQuestion::short_id(Self) -> String
@@ -111,10 +115,11 @@ pub enum QuestionAudience {
   ParentAgent
 }
 
+#derive(@debug.Debug)
 pub(all) enum QuestionEvent {
   Asked(question~ : AsyncQuestion)
   Answered(question_id~ : String)
-} derive(@debug.Debug)
+}
 pub fn QuestionEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases

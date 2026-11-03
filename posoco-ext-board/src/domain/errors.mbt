@@ -1,5 +1,6 @@
 ///|
 /// Typed domain rejection. Every failed propose leaves the state untouched.
+#derive(Eq, Debug)
 pub(all) enum BoardError {
   /// The command's optimistic-concurrency expectation lost the race.
   RevisionConflict(expected~ : Int64, actual~ : Int64)
@@ -40,7 +41,7 @@ pub(all) enum BoardError {
   /// Structurally malformed input: empty identifiers, negative timestamps,
   /// empty titles or DoD items, no-op updates, unrecordable decisions.
   InvalidInput(reason~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardError with Eq::{equal, not_equal}

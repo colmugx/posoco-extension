@@ -19,24 +19,27 @@ pub async fn recover_expansion(@backend.BoardBackend, String) -> Result[@domain.
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum ApprovalDecision {
   Grant
   Deny
-} derive(Eq, @debug.Debug)
+}
 pub fn ApprovalDecision::equal(Self, Self) -> Bool
 pub fn ApprovalDecision::not_equal(Self, Self) -> Bool
 pub fn ApprovalDecision::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DraftExpansion {
   proposal_id : String
   parent_task_id : String
   base_revision : Int64
   tasks : Array[DraftTask]
-} derive(Eq, @debug.Debug)
+}
 pub fn DraftExpansion::equal(Self, Self) -> Bool
 pub fn DraftExpansion::not_equal(Self, Self) -> Bool
 pub fn DraftExpansion::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DraftTask {
   key : String
   title : String
@@ -44,11 +47,12 @@ pub(all) struct DraftTask {
   priority : @domain.BoardPriority
   definition_of_done : Array[String]
   depends_on : Array[ExpansionRefResolution]
-} derive(Eq, @debug.Debug)
+}
 pub fn DraftTask::equal(Self, Self) -> Bool
 pub fn DraftTask::not_equal(Self, Self) -> Bool
 pub fn DraftTask::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicPlanContext {
   workflow_parent : String
   workflow : String?
@@ -58,22 +62,24 @@ pub(all) struct DynamicPlanContext {
   max_new_edges : Int32
   max_payload_bytes : Int32
   deadline_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicPlanContext::equal(Self, Self) -> Bool
 pub fn DynamicPlanContext::not_equal(Self, Self) -> Bool
 pub fn DynamicPlanContext::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicPlanReply {
   payload : String
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicPlanReply::equal(Self, Self) -> Bool
 pub fn DynamicPlanReply::not_equal(Self, Self) -> Bool
 pub fn DynamicPlanReply::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DynamicPlanSourceError {
   Unavailable
   Denied
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicPlanSourceError::equal(Self, Self) -> Bool
 pub fn DynamicPlanSourceError::not_equal(Self, Self) -> Bool
 pub fn DynamicPlanSourceError::to_repr(Self) -> @debug.Repr
@@ -105,16 +111,18 @@ pub struct ExpansionAuthorization {
 }
 pub fn ExpansionAuthorization::ExpansionAuthorization(authorization_id~ : String, workflow~ : String, workflow_parent~ : String, workflow_task_scope~ : Array[String], permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int32, max_edges? : Int32) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ExpansionBudgetSnapshot {
   expansions_used : Int32
   max_expansions : Int32
   cumulative_tasks : Int32
   max_cumulative_tasks : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionBudgetSnapshot::equal(Self, Self) -> Bool
 pub fn ExpansionBudgetSnapshot::not_equal(Self, Self) -> Bool
 pub fn ExpansionBudgetSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExpansionDecodeError {
   MalformedJson(offset~ : Int32, reason~ : String)
   UnsupportedEncoding(offset~ : Int32, reason~ : String)
@@ -127,11 +135,12 @@ pub(all) enum ExpansionDecodeError {
   InvalidPriority(path~ : String, value~ : String)
   InvalidString(path~ : String, reason~ : String)
   ExceedsLimit(path~ : String, limit~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionDecodeError::equal(Self, Self) -> Bool
 pub fn ExpansionDecodeError::not_equal(Self, Self) -> Bool
 pub fn ExpansionDecodeError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExpansionError {
   DefaultDenied
   InvalidAuthorization(String)
@@ -150,7 +159,7 @@ pub(all) enum ExpansionError {
   AllocationFailed
   DuplicateProposal
   DigestConflict
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionError::equal(Self, Self) -> Bool
 pub fn ExpansionError::not_equal(Self, Self) -> Bool
 pub fn ExpansionError::to_repr(Self) -> @debug.Repr
@@ -169,6 +178,7 @@ pub async fn ExpansionHost::prepare(Self, String, authorization? : ExpansionAuth
 pub async fn ExpansionHost::preview(Self) -> Result[ExpansionApprovalPreview, ExpansionError]
 pub async fn ExpansionHost::reconcile(Self) -> Result[Bool, ExpansionError]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExpansionPhase {
   Empty
   Validated
@@ -179,7 +189,7 @@ pub(all) enum ExpansionPhase {
   Rejected
   Conflict
   Uncertain
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionPhase::equal(Self, Self) -> Bool
 pub fn ExpansionPhase::not_equal(Self, Self) -> Bool
 pub fn ExpansionPhase::to_repr(Self) -> @debug.Repr
@@ -202,6 +212,7 @@ pub fn ExpansionPolicy::max_workflow_expansions(Self) -> Int32
 pub fn ExpansionPolicy::max_workflow_tasks(Self) -> Int32
 pub fn ExpansionPolicy::snapshot(Self) -> ExpansionPolicySnapshot
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ExpansionPolicySnapshot {
   max_tasks : Int32
   max_edges : Int32
@@ -215,19 +226,21 @@ pub(all) struct ExpansionPolicySnapshot {
   max_depth : Int32
   max_workflow_expansions : Int32
   max_workflow_tasks : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionPolicySnapshot::equal(Self, Self) -> Bool
 pub fn ExpansionPolicySnapshot::not_equal(Self, Self) -> Bool
 pub fn ExpansionPolicySnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExpansionRefResolution {
   NewTask(key~ : String)
   ExistingTask(id~ : @domain.BoardTaskId)
-} derive(Eq, @debug.Debug)
+}
 pub fn ExpansionRefResolution::equal(Self, Self) -> Bool
 pub fn ExpansionRefResolution::not_equal(Self, Self) -> Bool
 pub fn ExpansionRefResolution::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GeneratedTaskOutlook {
   key : String
   task_id : String
@@ -236,16 +249,17 @@ pub(all) struct GeneratedTaskOutlook {
   queued_execute_attempts : Int32
   class : GeneratedTaskOutlookClass
   unexpected_state : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn GeneratedTaskOutlook::equal(Self, Self) -> Bool
 pub fn GeneratedTaskOutlook::not_equal(Self, Self) -> Bool
 pub fn GeneratedTaskOutlook::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GeneratedTaskOutlookClass {
   Eligible
   Blocked(reasons~ : Array[@orchestration.ExecutionBlockReason])
   OutOfScope
-} derive(Eq, @debug.Debug)
+}
 pub fn GeneratedTaskOutlookClass::equal(Self, Self) -> Bool
 pub fn GeneratedTaskOutlookClass::not_equal(Self, Self) -> Bool
 pub fn GeneratedTaskOutlookClass::to_repr(Self) -> @debug.Repr

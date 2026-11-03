@@ -16,12 +16,13 @@ let reserved_profile_id : String = "all"
 ///   menu shows; one content, two uses (menu + save flow).
 /// - `exts` is the member extension id list, deduplicated preserving first
 ///   occurrence. An empty list is legal: a profile that activates nothing.
+#derive(Eq, Debug)
 pub(all) struct ProfileManifest {
   id : String
   name : String
   description : String
   exts : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ProfileManifest with Eq::{not_equal, equal}

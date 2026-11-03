@@ -16,10 +16,11 @@
 /// One framed SSE event. `name` is the `event:` field when the transport
 /// surfaced it; Messages events also repeat the type inside the JSON
 /// payload, and the payload wins when both exist.
+#derive(Eq, Debug)
 pub(all) struct SseEvent {
   name : String?
   data : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend SseEvent with @moonbitlang/core/debug.Debug::{to_repr}
@@ -35,11 +36,12 @@ pub extend SseEvent with Eq::{not_equal, equal}
 /// dispatches the event; an incomplete trailing event is held for the next
 /// push and discarded at `flush` per the SSE spec (a truncated stream is
 /// then caught by the terminal check, never by guessed content).
+#derive(Debug)
 pub struct SseDecoder {
   priv buf : StringBuilder
   priv mut data_lines : Array[String]
   priv mut event_name : String?
-} derive(Debug)
+}
 
 ///|
 pub extend SseDecoder with @moonbitlang/core/debug.Debug::{to_repr}
@@ -139,6 +141,7 @@ pub fn SseDecoder::flush(self : SseDecoder) -> Unit {
 
 ///|
 /// Internal per-content-block builder, correlated by wire index.
+#derive(Debug)
 priv struct BlockAccum {
   kind : String
   text : StringBuilder
@@ -147,7 +150,7 @@ priv struct BlockAccum {
   mut tool_name : String
   arguments : StringBuilder
   mut stopped : Bool
-} derive(Debug)
+}
 
 ///|
 fn BlockAccum::BlockAccum(kind~ : String) -> BlockAccum {
@@ -168,17 +171,19 @@ fn BlockAccum::BlockAccum(kind~ : String) -> BlockAccum {
 /// the (growing) output side. Per dimension the LATEST report wins —
 /// snapshots are never summed, so the final reading is exactly one value
 /// per dimension.
+#derive(Debug)
 priv struct UsageSnapshot {
   input_tokens : Int32?
   output_tokens : Int32?
   cache_creation : Int32?
   cache_read : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Mutable per-stream state: one instance per streamed response. Never
 /// share across concurrent streams — isolation is by construction (no
 /// global state anywhere in the kit; each decoder owns its maps).
+#derive(Debug)
 pub(all) struct MessagesSseState {
   priv mut started : Bool
   priv mut stopped : Bool
@@ -196,7 +201,7 @@ pub(all) struct MessagesSseState {
   priv mut cache_creation_split : MessagesCacheCreation?
   priv mut stop_reason : String
   priv mut stop_sequence : String?
-} derive(Debug)
+}
 
 ///|
 pub extend MessagesSseState with @moonbitlang/core/debug.Debug::{to_repr}
@@ -925,10 +930,11 @@ fn acc_finish_string(reason~ : String) -> String {
 /// Pure classification for stream termination, mirroring the other protocol
 /// kits: EOF without a `message_stop` is a truncated stream — a typed
 /// error, never inferred success from accumulated content.
+#derive(Eq, Debug)
 pub(all) enum StreamTermination {
   ExplicitTerminal
   CleanEof
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend StreamTermination with @moonbitlang/core/debug.Debug::{to_repr}

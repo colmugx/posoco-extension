@@ -4,10 +4,11 @@ package "colmugx/posoco-ext-mbtx/sdk/stdio"
 import {
   "colmugx/posoco-ext-mbtx/protocol",
   "colmugx/posoco-ext-mbtx/sdk",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub async fn serve(async (@sdk.Context, Json) -> @protocol.Outcome) -> Unit
+pub async fn serve(async (@sdk.Context, @json.Json) -> @protocol.Outcome) -> Unit
 
 // Errors
 

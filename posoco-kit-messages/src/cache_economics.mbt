@@ -2,12 +2,13 @@
 /// Native cache economics. All rates are *relative input token multipliers*
 /// supplied by the caller for its concrete model and billing contract.
 /// Never infer an upstream price from a model id or invent a hit count.
+#derive(Debug)
 pub(all) struct MessagesCacheRates {
   ordinary_input : Double
   cache_read : Double
   cache_write_5m : Double
   cache_write_1h : Double
-} derive(Debug)
+}
 
 ///|
 pub extend MessagesCacheRates with @moonbitlang/core/debug.Debug::{to_repr}
@@ -15,10 +16,11 @@ pub extend MessagesCacheRates with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Per-TTL cache creation counters from the protocol's usage.cache_creation.
 /// These are native observations, not estimates.
+#derive(Eq, Debug)
 pub(all) struct MessagesCacheCreation {
   ephemeral_5m_input_tokens : Int32?
   ephemeral_1h_input_tokens : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesCacheCreation with Eq::{equal, not_equal}
@@ -73,6 +75,7 @@ pub fn parse_messages_cache_creation(
 ///|
 /// Usage with unknown per-TTL write distribution cannot be priced precisely;
 /// cost fields are therefore optional and never silently assign 5m or 1h.
+#derive(Debug)
 pub(all) struct MessagesCacheEconomics {
   input_tokens : Int32
   cache_read_tokens : Int32?
@@ -81,7 +84,7 @@ pub(all) struct MessagesCacheEconomics {
   effective_input_cost : Double?
   uncached_input_cost : Double?
   net_savings : Double?
-} derive(Debug)
+}
 
 ///|
 pub extend MessagesCacheEconomics with @moonbitlang/core/debug.Debug::{to_repr}

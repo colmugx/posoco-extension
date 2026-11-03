@@ -1,6 +1,7 @@
 ///|
 /// Detached observations, never executable authority. Persisted graph records
 /// and in-process scope grants deliberately remain separate fields.
+#derive(Eq, @debug.Debug)
 pub struct BoardWorkflowView {
   snapshot : @domain.BoardStateSnapshot
   run : @dynamic.DynamicWorkflowStatus?
@@ -10,7 +11,7 @@ pub struct BoardWorkflowView {
   mutation_uncertain : Bool
   stopped : Bool
   paused : Bool
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend BoardWorkflowView with Eq::{equal, not_equal}

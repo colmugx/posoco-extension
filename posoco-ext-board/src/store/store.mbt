@@ -1,11 +1,12 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum BoardStoreError {
   InvalidData(String)
   Io(String)
   Injected(StoreFailureStage)
   /// Replacement has already succeeded; reload before retrying.
   DurabilityUncertain(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardStoreError with Eq::{equal, not_equal}
@@ -16,6 +17,7 @@ pub extend BoardStoreError with @debug.Debug::{to_repr}
 ///|
 /// A directory-fsync error is after the visibility boundary: the new board
 /// may already be authoritative. All other injected failures are before it.
+#derive(Eq, Debug)
 pub(all) enum StoreFailureStage {
   TempWrite
   TempFsync
@@ -23,7 +25,7 @@ pub(all) enum StoreFailureStage {
   JournalFsync
   Rename
   DirectoryFsync
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend StoreFailureStage with Eq::{equal, not_equal}
@@ -56,11 +58,12 @@ fn copy_snapshot(
 
 ///|
 /// Audit metadata, not a replay instruction or independently allocated revision.
+#derive(Eq, Debug)
 pub(all) struct JournalRecord {
   schema_version : Int32
   revision : Int64
   event : @domain.BoardEvent
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend JournalRecord with Eq::{equal, not_equal}
@@ -69,10 +72,11 @@ pub extend JournalRecord with Eq::{equal, not_equal}
 pub extend JournalRecord with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct BoardLoad {
   snapshot : @domain.BoardStateSnapshot
   journal : Array[JournalRecord]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardLoad with Eq::{equal, not_equal}

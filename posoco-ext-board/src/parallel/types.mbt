@@ -9,15 +9,17 @@ pub using @workflow {
 ///|
 /// Confirmed failures either stop after the wave, continue after its barrier,
 /// or cancel the remaining runs. Unresolved always overrides this policy.
+#derive(Eq, Debug)
 pub(all) enum ParallelFailurePolicy {
   StopOnFailure
   ContinueOnConfirmedFailure
   CancelRemainingOnFailure
-} derive(Eq, Debug)
+}
 
 ///|
 /// Trusted-host authorization only. Concurrency defaults to one; all other
 /// resource budgets and scope are explicit. Inputs still require the resolver.
+#derive(Eq, Debug)
 pub(all) struct ParallelWorkflowSpec {
   run_id : String
   scope : @workflow.WorkflowScope
@@ -26,7 +28,7 @@ pub(all) struct ParallelWorkflowSpec {
   max_elapsed_ms : Int32
   execution_timeout_ms : Int32
   failure_policy : ParallelFailurePolicy
-} derive(Eq, Debug)
+}
 
 ///|
 /// ```mbt check
@@ -81,6 +83,7 @@ pub fn ParallelWorkflowSpec::validate(self : ParallelWorkflowSpec) -> Bool {
 ///|
 /// Detached metadata only. Active rows are actual occupied owner slots, not
 /// planned work. Unresolved history blocks admission even after a driver exits.
+#derive(Eq, Debug)
 pub(all) struct ParallelWorkflowStatus {
   run_id : String?
   phase : @workflow.WorkflowPhase
@@ -102,7 +105,7 @@ pub(all) struct ParallelWorkflowStatus {
   blocked_count : Int32
   blocked_reason_counts : Array[ParallelBlockCount]
   reason : @workflow.WorkflowStopReason?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ParallelFailurePolicy with Eq::{equal, not_equal}
@@ -123,10 +126,11 @@ pub extend ParallelWorkflowStatus with Eq::{equal, not_equal}
 pub extend ParallelWorkflowStatus with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ParallelBlockCount {
   reason : @orchestration.ExecutionBlockReason
   count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ParallelBlockCount with Eq::{equal, not_equal}

@@ -6,12 +6,13 @@
 /// Automatic modes use the protocol's top-level cache_control. Explicit mode
 /// validates caller-inserted block marks but does not move them.
 /// Never silently downgrade a requested TTL or caching capability.
+#derive(Eq, Debug)
 pub(all) enum MessagesCacheMode {
   CacheUnchanged
   CacheAutomatic5m
   CacheAutomatic1h
   CacheExplicit
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesCacheMode with Eq::{equal, not_equal}
@@ -23,10 +24,11 @@ pub extend MessagesCacheMode with @moonbitlang/core/debug.Debug::{to_repr}
 /// Capability declaration of the actual endpoint. The kit does not infer it
 /// from model spelling. A gateway that cannot preserve native Messages cache
 /// semantics must declare automatic=false / one_hour=false explicitly.
+#derive(Eq, Debug)
 pub(all) struct MessagesCacheCapabilities {
   automatic : Bool
   one_hour : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesCacheCapabilities with Eq::{equal, not_equal}
@@ -350,12 +352,13 @@ pub fn apply_messages_cache_policy(
 /// a cache-hit prediction: cache entries and upstream account affinity are
 /// outside the kit's view. Use a stable explicit checkpoint when a caller
 /// KNOWS that more than 20 cacheable blocks will arrive between reuse points.
+#derive(Eq, Debug)
 pub(all) struct MessagesCacheLayout {
   explicit_breakpoints : Int32
   scanned_blocks : Int32
   blocks_since_last_explicit : Int32
   lookback_risk : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesCacheLayout with Eq::{equal, not_equal}
@@ -382,6 +385,7 @@ pub fn inspect_messages_cache_layout(
 /// all earlier messages must be structurally identical, with the same model,
 /// tool definitions, system prompt and cache-relevant generation settings.
 /// The diagnostic only establishes *prefix stability*, not cache existence.
+#derive(Eq, Debug)
 pub(all) struct MessagesCachePrefixComparison {
   model_stable : Bool
   tools_stable : Bool
@@ -390,7 +394,7 @@ pub(all) struct MessagesCachePrefixComparison {
   request_settings_stable : Bool
   prefix_reusable : Bool
   suffix_message_count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesCachePrefixComparison with Eq::{equal, not_equal}

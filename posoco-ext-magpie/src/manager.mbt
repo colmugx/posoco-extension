@@ -10,6 +10,7 @@
 ///|
 /// Report of one successful refresh: catalog size, how the swap changed it,
 /// and the duplicate ids the gateway sent.
+#derive(Eq, Debug)
 pub(all) struct MagpieRefreshOutcome {
   /// Number of models in the new catalog.
   total : Int32
@@ -19,7 +20,7 @@ pub(all) struct MagpieRefreshOutcome {
   removed : Int32
   /// Duplicate ids the gateway sent; the first occurrence won.
   duplicates : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRefreshOutcome with Eq::{not_equal, equal}

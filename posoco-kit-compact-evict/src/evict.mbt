@@ -23,11 +23,12 @@ pub fn estimate_tokens(text : String) -> Int32 {
 /// new array), how many tool calls (with their result messages) were
 /// evicted, and the estimated tokens freed. `evicted_tool_calls == 0` means
 /// nothing was removable and `messages` is a verbatim copy.
+#derive(Eq)
 pub(all) struct EvictResult {
   messages : Array[@posoco.Message]
   evicted_tool_calls : Int32
   evicted_tokens : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend EvictResult with Eq::{not_equal, equal}

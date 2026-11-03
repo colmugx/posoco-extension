@@ -26,11 +26,12 @@
 ///   injected before the model.
 /// - `ReadyForApproval`: the model called `exit_plan_mode`; still gated until
 ///   the product approves (→ `Off`) or rejects (→ `Planning`).
+#derive(Eq, Debug)
 pub(all) enum PlanStatus {
   Off
   Planning
   ReadyForApproval(name~ : String, plan~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PlanStatus with Eq::{not_equal, equal}
@@ -65,6 +66,7 @@ pub extend PlanStatus with Show::{to_string, output}
 /// workspace with a `writable_extensions` suffix (workspace containment
 /// needs an injected `WorkspaceAnchor`; without one only `writable_roots`
 /// count).
+#derive(Eq, Debug)
 pub(all) struct PlanModeConfig {
   /// Shell-like tool names gated per invocation: the call passes when its
   /// `cmd` cannot write outside the writable areas (shell_gate.mbt).
@@ -89,7 +91,7 @@ pub(all) struct PlanModeConfig {
   /// Name of the tool the model calls to enter plan mode. Only advertised
   /// when `allow_model_entry` is true.
   enter_tool_name : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PlanModeConfig with Eq::{not_equal, equal}

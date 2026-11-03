@@ -5,6 +5,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -33,7 +34,7 @@ pub(all) struct Handoff {
 pub fn Handoff::Handoff(cwd~ : String, store~ : &HandoffStore, probe~ : &HandoffWorkspaceProbe, work_sources~ : Array[&HandoffWorkSource]) -> Self
 pub fn Handoff::commands(Self) -> Array[@port.CommandDef]
 pub fn Handoff::extension_id(Self) -> String
-pub async fn Handoff::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn Handoff::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Handoff::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.CommandPort for Handoff
 pub impl @port.Extension for Handoff
@@ -74,6 +75,7 @@ pub fn HandoffWorkspaceState::set_head(Self, String?) -> Unit
 pub fn HandoffWorkspaceState::snapshot(Self, String) -> Result[WorkspaceSnapshot, String]
 pub impl HandoffWorkspaceProbe for HandoffWorkspaceState
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WorkSnapshot {
   objective : String?
   done_when : Array[String]
@@ -88,26 +90,28 @@ pub(all) struct WorkSnapshot {
   validation_passed : Array[String]
   validation_failed : Array[String]
   validation_not_run : Array[String]
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkSnapshot::empty() -> Self
 pub fn WorkSnapshot::equal(Self, Self) -> Bool
 pub fn WorkSnapshot::not_equal(Self, Self) -> Bool
 pub fn WorkSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WorkspaceChange {
   path : String
   status : String
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkspaceChange::equal(Self, Self) -> Bool
 pub fn WorkspaceChange::not_equal(Self, Self) -> Bool
 pub fn WorkspaceChange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WorkspaceSnapshot {
   root : String
   branch : String?
   head : String?
   changes : Array[WorkspaceChange]
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkspaceSnapshot::equal(Self, Self) -> Bool
 pub fn WorkspaceSnapshot::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSnapshot::to_repr(Self) -> @debug.Repr

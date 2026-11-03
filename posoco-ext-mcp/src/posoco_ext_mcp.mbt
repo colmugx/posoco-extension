@@ -151,10 +151,11 @@ fn convert_content_to_string(items : Array[@types.ContentBlock]) -> String {
 /// Authentication posture declared by a server entry. `OAuth` marks entries
 /// whose tokens the host acquires at runtime (`set_server_token`) instead of
 /// a static `auth_token`.
+#derive(Eq)
 pub(all) enum ServerAuth {
   NoAuth
   OAuth
-} derive(Eq)
+}
 
 ///|
 pub extend ServerAuth with Eq::{not_equal, equal}

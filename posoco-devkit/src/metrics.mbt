@@ -9,6 +9,7 @@
 /// The shape models codex-reset-radar's intelligence-efficiency-metrics
 /// entries (model/effort/iq/average_price_usd/passed/total plus the optional
 /// average_total_tokens/average_minutes).
+#derive(Eq, @debug.Debug)
 pub(all) struct MetricsPoint {
   model : String
   effort : String
@@ -22,7 +23,7 @@ pub(all) struct MetricsPoint {
   /// The source's average run duration in minutes (feed field
   /// `average_minutes`); present only when the source stated it.
   minutes : Double?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend MetricsPoint with Eq::{not_equal, equal}

@@ -2,6 +2,7 @@
 /// Board task stage. The legal moves between stages are defined once in
 /// `stage_allowed`; execution-specific invariants attached to Running are
 /// deferred to the S4 execution stage.
+#derive(Eq, Debug)
 pub(all) enum BoardStage {
   Created
   Refining
@@ -12,7 +13,7 @@ pub(all) enum BoardStage {
   Done
   Suspended
   Cancelled
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardStage with Eq::{equal, not_equal}
@@ -23,12 +24,13 @@ pub extend BoardStage with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Ordered priority: Low < Normal < High < Critical. `rank` is the total
 /// order used for deterministic task listing.
+#derive(Eq, Debug)
 pub(all) enum BoardPriority {
   Low
   Normal
   High
   Critical
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardPriority with Eq::{equal, not_equal}
@@ -49,13 +51,14 @@ pub fn BoardPriority::rank(self : BoardPriority) -> Int32 {
 ///|
 /// Stable accountability roles. Display names are configurable; these ids
 /// never change.
+#derive(Eq, Debug)
 pub(all) enum TeamRole {
   PO
   SM
   RD
   SET
   TE
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TeamRole with Eq::{equal, not_equal}
@@ -64,10 +67,11 @@ pub extend TeamRole with Eq::{equal, not_equal}
 pub extend TeamRole with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub struct TeamAssignment {
   role : TeamRole
   member_id : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TeamAssignment with Eq::{equal, not_equal}
@@ -85,11 +89,12 @@ pub fn TeamAssignment::from_record(
 
 ///|
 /// What kind of work one attempt performs.
+#derive(Eq, Debug)
 pub(all) enum AttemptKind {
   Discuss
   Execute
   Review
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AttemptKind with Eq::{equal, not_equal}
@@ -100,6 +105,7 @@ pub extend AttemptKind with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Attempt status. Queued -> Running is admission; Running -> a terminal
 /// outcome closes the attempt. The other combinations are invalid.
+#derive(Eq, Debug)
 pub(all) enum AttemptStatus {
   Queued
   Running
@@ -107,7 +113,7 @@ pub(all) enum AttemptStatus {
   Failed
   Cancelled
   Interrupted
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AttemptStatus with Eq::{equal, not_equal}
@@ -117,12 +123,13 @@ pub extend AttemptStatus with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Terminal outcomes a caller may request for a running attempt.
+#derive(Eq, Debug)
 pub(all) enum AttemptOutcome {
   Succeeded
   Failed
   Cancelled
   Interrupted
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AttemptOutcome with Eq::{equal, not_equal}
@@ -134,11 +141,12 @@ pub extend AttemptOutcome with @moonbitlang/core/debug.Debug::{to_repr}
 /// Review decision of a Review attempt. Pending is the implicit initial
 /// value when the attempt starts running; only Approved or ChangesRequested
 /// can be recorded.
+#derive(Eq, Debug)
 pub(all) enum ReviewDecision {
   Pending
   Approved
   ChangesRequested
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewDecision with Eq::{equal, not_equal}
@@ -149,10 +157,11 @@ pub extend ReviewDecision with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// A pinned model for one work item. `slot` is the modelport's slot id, not
 /// the model name; the same model may be served by different providers.
+#derive(Eq, Debug)
 pub struct ModelSelection {
   slot : String
   effort : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelSelection with Eq::{equal, not_equal}
@@ -170,12 +179,13 @@ pub fn ModelSelection::ModelSelection(
 
 ///|
 /// What produced one piece of review evidence.
+#derive(Eq, Debug)
 pub(all) enum ReviewEvidenceKind {
   Command
   Test
   Manual
   Artifact
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewEvidenceKind with Eq::{equal, not_equal}
@@ -186,12 +196,13 @@ pub extend ReviewEvidenceKind with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Result of one verification step. `NotRun` is explicit: an unobserved
 /// check is never recorded as passed.
+#derive(Eq, Debug)
 pub(all) enum ReviewEvidenceResult {
   Passed
   Failed
   NotRun
   Unknown
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewEvidenceResult with Eq::{equal, not_equal}
@@ -201,13 +212,14 @@ pub extend ReviewEvidenceResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Kind of artifact a review report references.
+#derive(Eq, Debug)
 pub(all) enum ReviewArtifactKind {
   File
   Diff
   Log
   Screenshot
   Url
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewArtifactKind with Eq::{equal, not_equal}
@@ -217,12 +229,13 @@ pub extend ReviewArtifactKind with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One verification record: what was checked, how, and with which result.
+#derive(Eq, Debug)
 pub struct ReviewEvidence {
   kind : ReviewEvidenceKind
   label : String
   result : ReviewEvidenceResult
   detail : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewEvidence with Eq::{equal, not_equal}
@@ -233,11 +246,12 @@ pub extend ReviewEvidence with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// A referenced artifact identified by a URI or a content digest — never
 /// the artifact body itself.
+#derive(Eq, Debug)
 pub struct ReviewArtifact {
   kind : ReviewArtifactKind
   label : String
   uri_or_digest : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewArtifact with Eq::{equal, not_equal}
@@ -250,6 +264,7 @@ pub extend ReviewArtifact with @moonbitlang/core/debug.Debug::{to_repr}
 /// how it was verified, what could bite, and what still needs a decision.
 /// Every array is owned by the report, so a retry replaces the report
 /// instead of mutating it.
+#derive(Eq, Debug)
 pub struct ReviewReport {
   outcome : String
   summary : String
@@ -259,7 +274,7 @@ pub struct ReviewReport {
   notes : Array[String]
   open_questions : Array[String]
   artifacts : Array[ReviewArtifact]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ReviewReport with Eq::{equal, not_equal}
@@ -271,6 +286,7 @@ pub extend ReviewReport with @moonbitlang/core/debug.Debug::{to_repr}
 /// Product/business lifecycle record. Timestamps are explicit command
 /// inputs; the domain owns no clock. `ready_since_ms` is set when the task
 /// enters Ready and cleared when it leaves.
+#derive(Eq, Debug)
 pub struct BoardTask {
   id : BoardTaskId
   title : String
@@ -301,7 +317,7 @@ pub struct BoardTask {
   /// The reviewer feedback of the most recent request-changes decision;
   /// `None` before any decision ever requested changes.
   review_feedback : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardTask with Eq::{equal, not_equal}
@@ -314,6 +330,7 @@ pub extend BoardTask with @moonbitlang/core/debug.Debug::{to_repr}
 /// recorded review decision once started. `started_at_ms` is stamped when
 /// the attempt leaves Queued and `finished_at_ms` when it reaches a
 /// terminal outcome; each stays None until its event.
+#derive(Eq, Debug)
 pub struct Attempt {
   id : AttemptId
   task_id : BoardTaskId
@@ -324,7 +341,7 @@ pub struct Attempt {
   started_at_ms : Int64?
   finished_at_ms : Int64?
   updated_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Attempt with Eq::{equal, not_equal}
@@ -337,12 +354,13 @@ pub extend Attempt with @moonbitlang/core/debug.Debug::{to_repr}
 /// aliases committed state. `expansions` carries the durable S4E1 expansion
 /// history (identity, lineage, local_ref mapping, normalized content
 /// digest); boards without expansions carry an empty array.
+#derive(Eq, Debug)
 pub(all) struct BoardStateSnapshot {
   revision : Int64
   tasks : Array[BoardTask]
   attempts : Array[Attempt]
   expansions : Array[ExpansionRecord]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardStateSnapshot with Eq::{equal, not_equal}

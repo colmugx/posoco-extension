@@ -7,13 +7,14 @@
 /// An explicit selection and its context capacity. Missing capacity is
 /// unknown, not unlimited. The selected logical model can differ from the
 /// model which ultimately served a call.
+#derive(Eq, Debug)
 pub(all) struct ModelStatusFacts {
   selection : SelectionRef
   context_used_tokens : Int64?
   context_capacity_tokens : Int64?
   last_served_model_id : String?
   observed_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelStatusFacts with Eq::{not_equal, equal}
@@ -41,12 +42,13 @@ pub(open) trait ModelFactsSource {
 ///|
 /// An upstream quota window. A named 5h or weekly allowance belongs to its
 /// own source, and is never averaged/summed with another source's percent.
+#derive(Eq, Debug)
 pub(all) struct ModelQuotaWindow {
   name : String
   remaining_percent : Double?
   resets_at_ms : Int64?
   unlimited : Bool?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelQuotaWindow with Eq::{not_equal, equal}
@@ -57,13 +59,14 @@ pub extend ModelQuotaWindow with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Source identities must be opaque and non-secret. This struct intentionally
 /// has neither an email nor a raw API key field.
+#derive(Eq, Debug)
 pub(all) struct ModelQuotaSourceSnapshot {
   source_ref : String
   display_label : String
   windows : Array[ModelQuotaWindow]
   eligible : Bool?
   observed_at_ms : Int64?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelQuotaSourceSnapshot with Eq::{not_equal, equal}
@@ -76,11 +79,12 @@ pub extend ModelQuotaSourceSnapshot with @moonbitlang/core/debug.Debug::{
 ///|
 /// Model-local quota observations; no pooled remaining-percent property.
 /// A model can be served by several sources with incompatible quota windows.
+#derive(Eq, Debug)
 pub(all) struct ModelQuotaSnapshot {
   selection : SelectionRef
   sources : Array[ModelQuotaSourceSnapshot]
   observed_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelQuotaSnapshot with Eq::{not_equal, equal}
@@ -95,13 +99,14 @@ pub(open) trait ModelQuotaSource {
 
 ///|
 /// A caller's budget is distinct from every underlying subscription limit.
+#derive(Eq, Debug)
 pub(all) struct ModelBudgetSnapshot {
   budget_label : String
   remaining : Double?
   currency : String?
   resets_at_ms : Int64?
   observed_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelBudgetSnapshot with Eq::{not_equal, equal}
@@ -117,12 +122,13 @@ pub(open) trait ModelBudgetSource {
 ///|
 /// The call's actual execution provenance is observational. It must not be
 /// used as a prediction for a future routing decision.
+#derive(Eq, Debug)
 pub(all) struct ModelExecutionFacts {
   requested_model_id : String
   served_model_id : String?
   served_source_ref : String?
   observed_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelExecutionFacts with Eq::{not_equal, equal}
@@ -139,12 +145,13 @@ pub(open) trait ModelExecutionFactsSource {
 /// Recovery advice describes a router's final verdict after any internal
 /// failover. It does not trigger retries itself: the generic supervisor
 /// decides when a failed turn is safe to resume.
+#derive(Eq, Debug)
 pub(all) enum ModelRecoveryAdvice {
   WaitUntil(Int64)
   ProbeWithBackoff
   Stop(String)
   Unknown
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ModelRecoveryAdvice with Eq::{not_equal, equal}

@@ -8,12 +8,13 @@
 /// its percentages describe the account, never the selected model. It
 /// publishes no dollar balance and no plan tier — both stay undiscoverable
 /// by design, and nothing here invents them.
+#derive(Eq, Debug)
 pub(all) struct GoUsageWindow {
   percent : Double
   reset_at_ms : Int64?
   /// The endpoint's own `status`: "rate-limited" marks a window that is out.
   rate_limited : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoUsageWindow with Eq::{not_equal, equal}
@@ -22,13 +23,14 @@ pub extend GoUsageWindow with Eq::{not_equal, equal}
 pub extend GoUsageWindow with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GoUsage {
   /// The 5-hour rolling window (the payload's `rolling`).
   rolling : GoUsageWindow
   weekly : GoUsageWindow
   monthly : GoUsageWindow
   fetched_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoUsage with Eq::{not_equal, equal}

@@ -19,10 +19,11 @@ pub async fn FileBoardExecutionStore::load(Self) -> Result[Array[@execution.Boar
 pub async fn FileBoardExecutionStore::persist(Self, Array[@execution.BoardExecutionBinding]) -> Result[Unit, @execution.BoardExecutionError]
 pub impl @execution.BoardExecutionStore for FileBoardExecutionStore
 
+#derive(Eq)
 pub(all) enum JournalFailure {
   BeforeRename
   AfterRename
-} derive(Eq)
+}
 pub fn JournalFailure::equal(Self, Self) -> Bool
 pub fn JournalFailure::not_equal(Self, Self) -> Bool
 

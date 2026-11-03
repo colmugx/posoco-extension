@@ -8,10 +8,11 @@
 /// unknown to the table — never a guessed dollar figure. The authoritative
 /// live state is the `/usage` endpoint; this table only names the allowance
 /// the windows are shares of.
+#derive(Eq, Debug)
 pub(all) enum GoPlan {
   Go
   GoPlus
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoPlan with Eq::{not_equal, equal}

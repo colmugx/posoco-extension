@@ -22,6 +22,7 @@ pub fn kimi_model_policy_error(model : String) -> String? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct KimiConfig {
   /// API key (kimi environment variable by convention).
   api_key : String
@@ -37,7 +38,7 @@ pub(all) struct KimiConfig {
   context_window : Int32?
   /// Sends `prompt_cache_key` (derived from the session id).
   send_prompt_cache_key : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend KimiConfig with Eq::{not_equal, equal}

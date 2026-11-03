@@ -18,6 +18,7 @@ pub extend MagpieCatalogEntry with @moonbitlang/core/debug.Debug::{to_repr}
 /// neutral contract does not carry (e.g. `magpie_label`,
 /// `max_output_tokens`, `native_endpoints`). Catalog objects never contain
 /// gateway credentials.
+#derive(Debug)
 pub(all) struct MagpieCatalogEntry {
   /// Manager-neutral projection (`ManagerModelInfo`).
   info : @modelmgmt.ManagerModelInfo
@@ -27,7 +28,7 @@ pub(all) struct MagpieCatalogEntry {
   /// The original Magpie JSON entry, verbatim; unknown extension metadata
   /// stays available here.
   raw : Json
-} derive(Debug)
+}
 
 ///|
 pub extend MagpieCatalogReport with @moonbitlang/core/debug.Debug::{to_repr}
@@ -36,12 +37,13 @@ pub extend MagpieCatalogReport with @moonbitlang/core/debug.Debug::{to_repr}
 /// Result of decoding one `/v1/models` payload: the deduplicated catalog in
 /// server order, plus the ids that appeared more than once. Duplicates are
 /// surfaced explicitly; the first occurrence wins.
+#derive(Debug)
 pub(all) struct MagpieCatalogReport {
   /// Decoded entries in server order — stable and deterministic.
   entries : Array[MagpieCatalogEntry]
   /// Ids seen more than once, in first-duplicate order.
   duplicates : Array[String]
-} derive(Debug)
+}
 
 ///|
 /// Decodes a `/v1/models` body. Raises `MagpieGatewayError::InvalidResponse`

@@ -3,11 +3,12 @@
 /// `"user" | "assistant" | "system"`. `System` exists
 /// for wire completeness but is never produced by `map_messages`: system
 /// transcript entries are excluded by the message-mapping contract.
+#derive(Debug, Eq)
 pub(all) enum NmemRole {
   User
   Assistant
   System
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend NmemRole with Eq::{not_equal, equal}
@@ -22,6 +23,7 @@ pub extend NmemRole with @moonbitlang/core/debug.Debug::{to_repr}
 /// `None` means "absent at every source". `api_url` feeds the thread-sync
 /// HTTP transport; `mcp_url` is the streamable-HTTP MCP endpoint the lazy
 /// tool client connects to (`{api_url}/mcp` by default).
+#derive(Debug, Eq)
 pub(all) struct NmemConfig {
   api_url : String
   mcp_url : String
@@ -30,7 +32,7 @@ pub(all) struct NmemConfig {
   agent_id : String?
   host_agent_id : String?
   source_app : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend NmemConfig with Eq::{not_equal, equal}
@@ -43,11 +45,12 @@ pub extend NmemConfig with @moonbitlang/core/debug.Debug::{to_repr}
 /// carries `external_id` (stable for a given source position) and
 /// `source_app`. Upstream also carries a timestamp; Posoco transcripts have
 /// no timestamp source, so the field is intentionally absent.
+#derive(Debug)
 pub(all) struct NmemThreadMessage {
   role : NmemRole
   content : String
   metadata : Map[String, Json]
-} derive(Debug)
+}
 
 ///|
 pub extend NmemThreadMessage with @moonbitlang/core/debug.Debug::{to_repr}

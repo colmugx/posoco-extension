@@ -1,20 +1,23 @@
 ///|
 /// Selection authorizes only these IDs. AllEligibleAtStart freezes the task IDs
 /// present at start; neither variant implicitly executes external dependencies.
+#derive(Eq, Debug)
 pub(all) enum WorkflowScope {
   Selected(Array[String])
   AllEligibleAtStart
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum WorkflowFailurePolicy {
   StopOnFailure
   ContinueOnConfirmedFailure
-} derive(Eq, Debug)
+}
 
 ///|
 /// Explicit host authorization, not browser authorization. Execution input is
 /// still independently authorized by the S4B resolver for every admission.
+#derive(Eq, Debug)
 pub(all) struct WorkflowRunSpec {
   run_id : String
   scope : WorkflowScope
@@ -22,7 +25,7 @@ pub(all) struct WorkflowRunSpec {
   max_elapsed_ms : Int32
   execution_timeout_ms : Int32
   failure_policy : WorkflowFailurePolicy
-} derive(Eq, Debug)
+}
 
 ///|
 /// Budgets and scope are mandatory; only the conservative failure policy has a
@@ -64,6 +67,7 @@ pub fn WorkflowRunSpec::WorkflowRunSpec(
 
 ///|
 /// Control state only; Pausing lets an admitted run finish, Paused is quiescent.
+#derive(Eq, Debug)
 pub(all) enum WorkflowPhase {
   Idle
   Running
@@ -74,9 +78,10 @@ pub(all) enum WorkflowPhase {
   Completed
   Failed
   Unresolved
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum WorkflowStopReason {
   NoEligibleWork
   OrchestrationBlocked(@orchestration.ExecutionBlockReason)
@@ -91,9 +96,10 @@ pub(all) enum WorkflowStopReason {
   UnconfirmedSettlement
   StalePlanLimit
   UnexpectedFailure
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum WorkflowError {
   InvalidSpec
   InvalidScope
@@ -103,11 +109,12 @@ pub(all) enum WorkflowError {
   UnresolvedOwner
   BoardUnavailable
   StartCancelled
-} derive(Eq, Debug)
+}
 
 ///|
 /// Detached metadata only. Board revision is the last authoritative revision
 /// observed by this loop, not a promise that the Board has stopped changing.
+#derive(Eq, Debug)
 pub(all) struct WorkflowStatus {
   run_id : String?
   phase : WorkflowPhase
@@ -123,7 +130,7 @@ pub(all) struct WorkflowStatus {
   execution_id : String?
   board_revision : Int64?
   reason : WorkflowStopReason?
-} derive(Eq, Debug)
+}
 
 ///|
 /// No unbounded or implicit authorization: at most 1000 runs and 24 hours.

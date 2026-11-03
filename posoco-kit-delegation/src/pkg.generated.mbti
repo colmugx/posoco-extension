@@ -4,6 +4,7 @@ package "colmugx/posoco-kit-delegation"
 import {
   "colmugx/posoco/kernel",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -11,32 +12,35 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct DelegationCall {
   tool : String
-  arguments : Json
-} derive(Eq, @debug.Debug)
+  arguments : @json.Json
+}
 pub fn DelegationCall::equal(Self, Self) -> Bool
 pub fn DelegationCall::not_equal(Self, Self) -> Bool
 pub fn DelegationCall::to_repr(Self) -> @debug.Repr
 pub fn DelegationCall::to_tool_call(Self, call_id~ : String) -> Result[@kernel.ToolCall, String]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DelegationIntent {
   task : String
   cwd : String?
   model : String?
   prompt : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn DelegationIntent::equal(Self, Self) -> Bool
 pub fn DelegationIntent::not_equal(Self, Self) -> Bool
 pub fn DelegationIntent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DelegationPhase {
   Queued
   Running
   Succeeded
   Failed
   Lost
-} derive(Eq, @debug.Debug)
+}
 pub fn DelegationPhase::equal(Self, Self) -> Bool
 pub fn DelegationPhase::not_equal(Self, Self) -> Bool
 pub fn DelegationPhase::to_repr(Self) -> @debug.Repr

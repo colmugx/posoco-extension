@@ -5,10 +5,7 @@
 /// independently for each turn. Returning a previous Posoco transcript here
 /// would create a second conversation authority and make retry/edit/restart
 /// semantics diverge from the host.
-pub impl @posoco.SessionPort for Memoh with fn load(
-  _self : Memoh,
-  _id : String,
-) -> @posoco.Session raise @posoco.SessionError {
+pub impl @posoco.SessionPort for Memoh with fn load(_self : Memoh, _id : String) -> @posoco.Session raise @posoco.SessionError {
   @posoco.Session::{ messages: [], metadata: Map::from_array([]), }
 }
 

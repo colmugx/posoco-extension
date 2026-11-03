@@ -34,20 +34,23 @@ pub fn ExecutionPolicy::stages(
 
 ///|
 /// A metadata hint only. Resolve must independently authorize explicit intent.
+#derive(Eq, Debug)
 pub(all) enum ExecutionInputStatus {
   Available
   Missing
   Denied
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ExecutionInputAvailability {
   task_id : String
   attempt_id : String
   status : ExecutionInputStatus
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ExecutionBlockReason {
   AdmissionDisabled
   TaskStageIneligible
@@ -63,31 +66,34 @@ pub(all) enum ExecutionBlockReason {
   HostUnavailable
   OwnerNotAttached
   OwnerClosed
-} derive(Eq, Debug)
+}
 
 ///|
 /// IDs only. A candidate is not a durable reservation or reusable execution.
+#derive(Eq, Debug)
 pub(all) struct ExecutionCandidate {
   task_id : String
   attempt_id : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// One blocked row per task, with deterministic reasons and preferred Attempt.
+#derive(Eq, Debug)
 pub(all) struct BlockedExecution {
   task_id : String
   attempt_id : String?
   reasons : Array[ExecutionBlockReason]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Detached ephemeral output; contains neither prompts nor authoritative entities.
+#derive(Eq, Debug)
 pub(all) struct ExecutionPlan {
   revision : Int64
   policy_id : String
   eligible : Array[ExecutionCandidate]
   blocked : Array[BlockedExecution]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Ephemeral host authorization plus fresh, dedicated identities. This payload
@@ -117,6 +123,7 @@ pub(open) trait BoardExecutionInputResolver {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum OrchestrationError {
   BoardUnavailable
   Closed
@@ -128,7 +135,7 @@ pub(all) enum OrchestrationError {
   AuthorizationRejected
   OwnerRejected(@execution.BoardExecutionError)
   DispatchCancelled(cleanup_confirmed~ : Bool)
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) enum ExecutionDispatch {

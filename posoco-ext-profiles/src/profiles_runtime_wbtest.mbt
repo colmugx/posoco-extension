@@ -463,10 +463,11 @@ async test "profiles_command_sink_failure_does_not_publish_activation" {
       ui~,
     ),
   )
-  match profiles.invoke(
-    "profiles",
-    Json::object(Map::from_array([("session_id", Json::string("s1"))])),
-  ) {
+  match
+    profiles.invoke(
+      "profiles",
+      Json::object(Map::from_array([("session_id", Json::string("s1"))])),
+    ) {
     @posoco.CommandOutcome::Failure(reason~) =>
       assert_true(reason.contains("busy"))
     _ => fail("rejected host submission must fail")

@@ -35,19 +35,21 @@ pub fn update_task_command(String, Int64, id~ : String, title? : String, descrip
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum ApplyOutcome {
   Applied
   Duplicate
   CommandSettled(@protocol.BoardCommandResult)
   NeedsSnapshot(String)
   TerminalProtocolError(String)
-} derive(Eq)
+}
 pub fn ApplyOutcome::equal(Self, Self) -> Bool
 pub fn ApplyOutcome::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct BoardReplica {
   // private fields
-} derive(Eq)
+}
 pub fn BoardReplica::apply_event(Self, @protocol.BoardWireEvent) -> ApplyOutcome
 pub fn BoardReplica::apply_frame(Self, @protocol.BoardServerFrame) -> ApplyOutcome
 pub fn BoardReplica::apply_snapshot(Self, @protocol.BoardSnapshot) -> ApplyOutcome
@@ -63,6 +65,7 @@ pub fn BoardReplica::not_equal(Self, Self) -> Bool
 pub fn BoardReplica::revision(Self) -> Int64
 pub fn BoardReplica::tasks(Self) -> Array[ClientBoardTask]
 
+#derive(Eq)
 pub struct ClientAttempt {
   id : String
   task_id : String
@@ -73,29 +76,32 @@ pub struct ClientAttempt {
   started_at_ms : Int64?
   finished_at_ms : Int64?
   updated_at_ms : Int64
-} derive(Eq)
+}
 pub fn ClientAttempt::equal(Self, Self) -> Bool
 pub fn ClientAttempt::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientAttemptKind {
   Discuss
   Execute
   Review
-} derive(Eq)
+}
 pub fn ClientAttemptKind::equal(Self, Self) -> Bool
 pub fn ClientAttemptKind::not_equal(Self, Self) -> Bool
 pub fn ClientAttemptKind::to_wire(Self) -> String
 
+#derive(Eq)
 pub(all) enum ClientAttemptOutcome {
   Succeeded
   Failed
   Cancelled
   Interrupted
-} derive(Eq)
+}
 pub fn ClientAttemptOutcome::equal(Self, Self) -> Bool
 pub fn ClientAttemptOutcome::not_equal(Self, Self) -> Bool
 pub fn ClientAttemptOutcome::to_wire(Self) -> String
 
+#derive(Eq)
 pub(all) enum ClientAttemptStatus {
   Queued
   Running
@@ -103,20 +109,22 @@ pub(all) enum ClientAttemptStatus {
   Failed
   Cancelled
   Interrupted
-} derive(Eq)
+}
 pub fn ClientAttemptStatus::equal(Self, Self) -> Bool
 pub fn ClientAttemptStatus::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientBoardPriority {
   Low
   Normal
   High
   Critical
-} derive(Eq)
+}
 pub fn ClientBoardPriority::equal(Self, Self) -> Bool
 pub fn ClientBoardPriority::not_equal(Self, Self) -> Bool
 pub fn ClientBoardPriority::to_wire(Self) -> String
 
+#derive(Eq)
 pub(all) enum ClientBoardStage {
   Created
   Refining
@@ -127,11 +135,12 @@ pub(all) enum ClientBoardStage {
   Done
   Suspended
   Cancelled
-} derive(Eq)
+}
 pub fn ClientBoardStage::equal(Self, Self) -> Bool
 pub fn ClientBoardStage::not_equal(Self, Self) -> Bool
 pub fn ClientBoardStage::to_wire(Self) -> String
 
+#derive(Eq)
 pub struct ClientBoardTask {
   id : String
   title : String
@@ -150,91 +159,101 @@ pub struct ClientBoardTask {
   model : ClientModelSelection?
   review : ClientReviewReport?
   review_feedback : String?
-} derive(Eq)
+}
 pub fn ClientBoardTask::equal(Self, Self) -> Bool
 pub fn ClientBoardTask::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientError {
   InvalidData(String)
   UnsupportedProtocolVersion
-} derive(Eq)
+}
 pub fn ClientError::equal(Self, Self) -> Bool
 pub fn ClientError::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct ClientModelSelection {
   slot : String
   effort : String?
-} derive(Eq)
+}
 pub fn ClientModelSelection::ClientModelSelection(slot~ : String, effort? : String?) -> Self
 pub fn ClientModelSelection::equal(Self, Self) -> Bool
 pub fn ClientModelSelection::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientRecordableReviewDecision {
   Approved
   ChangesRequested
-} derive(Eq)
+}
 pub fn ClientRecordableReviewDecision::equal(Self, Self) -> Bool
 pub fn ClientRecordableReviewDecision::not_equal(Self, Self) -> Bool
 pub fn ClientRecordableReviewDecision::to_wire(Self) -> String
 
+#derive(Eq)
 pub struct ClientReviewArtifact {
   kind : ClientReviewArtifactKind
   label : String
   uri_or_digest : String
-} derive(Eq)
+}
 pub fn ClientReviewArtifact::ClientReviewArtifact(kind~ : ClientReviewArtifactKind, label~ : String, uri_or_digest~ : String) -> Self
 pub fn ClientReviewArtifact::equal(Self, Self) -> Bool
 pub fn ClientReviewArtifact::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientReviewArtifactKind {
   File
   Diff
   Log
   Screenshot
   Url
-} derive(Eq)
+}
 pub fn ClientReviewArtifactKind::equal(Self, Self) -> Bool
 pub fn ClientReviewArtifactKind::not_equal(Self, Self) -> Bool
 pub fn ClientReviewArtifactKind::to_wire(Self) -> String
 
+#derive(Eq)
 pub(all) enum ClientReviewDecision {
   Pending
   Approved
   ChangesRequested
-} derive(Eq)
+}
 pub fn ClientReviewDecision::equal(Self, Self) -> Bool
 pub fn ClientReviewDecision::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct ClientReviewEvidence {
   kind : ClientReviewEvidenceKind
   label : String
   result : ClientReviewEvidenceResult
   detail : String
-} derive(Eq)
+}
 pub fn ClientReviewEvidence::ClientReviewEvidence(kind~ : ClientReviewEvidenceKind, label~ : String, result~ : ClientReviewEvidenceResult, detail~ : String) -> Self
 pub fn ClientReviewEvidence::equal(Self, Self) -> Bool
 pub fn ClientReviewEvidence::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientReviewEvidenceKind {
   Command
   Test
   Manual
   Artifact
-} derive(Eq)
+}
 pub fn ClientReviewEvidenceKind::equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceKind::not_equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceKind::to_wire(Self) -> String
 
+#derive(Eq)
 pub(all) enum ClientReviewEvidenceResult {
   Passed
   Failed
   NotRun
   Unknown
-} derive(Eq)
+}
 pub fn ClientReviewEvidenceResult::equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceResult::not_equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceResult::to_wire(Self) -> String
 
+#derive(Eq)
 pub struct ClientReviewReport {
   outcome : String
   summary : String
@@ -244,34 +263,37 @@ pub struct ClientReviewReport {
   notes : Array[String]
   open_questions : Array[String]
   artifacts : Array[ClientReviewArtifact]
-} derive(Eq)
+}
 pub fn ClientReviewReport::ClientReviewReport(outcome~ : String, summary~ : String, changes~ : Array[String], verification~ : Array[ClientReviewEvidence], risks~ : Array[String], notes~ : Array[String], open_questions~ : Array[String], artifacts~ : Array[ClientReviewArtifact]) -> Self
 pub fn ClientReviewReport::equal(Self, Self) -> Bool
 pub fn ClientReviewReport::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct ClientTeamAssignment {
   role : ClientTeamRole
   member_id : String
-} derive(Eq)
+}
 pub fn ClientTeamAssignment::equal(Self, Self) -> Bool
 pub fn ClientTeamAssignment::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ClientTeamRole {
   PO
   SM
   RD
   SET
   TE
-} derive(Eq)
+}
 pub fn ClientTeamRole::equal(Self, Self) -> Bool
 pub fn ClientTeamRole::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct DecodedBoardSnapshot {
   revision : Int64
   last_seq : Int64
   tasks : Array[ClientBoardTask]
   attempts : Array[ClientAttempt]
-} derive(Eq)
+}
 pub fn DecodedBoardSnapshot::equal(Self, Self) -> Bool
 pub fn DecodedBoardSnapshot::not_equal(Self, Self) -> Bool
 

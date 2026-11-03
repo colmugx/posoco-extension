@@ -1,6 +1,7 @@
 ///|
 /// Why a dynamic workflow operation was refused or failed. Typed payloads
 /// only: proposal text, model output and provider diagnostics never appear.
+#derive(Eq, @debug.Debug)
 pub(all) enum DynamicWorkflowError {
   InvalidSpec
   InvalidScope
@@ -32,20 +33,22 @@ pub(all) enum DynamicWorkflowError {
   ScopeApprovalDenied
   PreparationFailed(@coordinator.BoardCoordinatorError)
   PreparationUncertain(PreparationRecord)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The durable stage/queue step a preparation reached. `step` is the step
 /// that failed or whose durability is unknown; earlier steps are committed.
+#derive(Eq, @debug.Debug)
 pub(all) enum PreparationStep {
   MoveRefining
   MoveReady
   QueueExecute
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Captured identity and step of a partial or uncertain preparation. Records
 /// accumulate for the controller lifetime; nothing resets or retries them.
+#derive(Eq, @debug.Debug)
 pub(all) struct PreparationRecord {
   task_id : String
   attempt_id : String
@@ -53,17 +56,18 @@ pub(all) struct PreparationRecord {
   uncertain : Bool
   base_revision : Int64
   completed_steps : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Explicit expansion bounds and the scope-approval policy. Expansion is
 /// disabled unless the host passes `Some` in `DynamicWorkflowSpec`.
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicExpansionSpec {
   max_expansions : Int32
   max_generated_tasks : Int32
   max_depth : Int32
   scope_approval : DynamicScopeApprovalPolicy
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub fn DynamicExpansionSpec::DynamicExpansionSpec(
@@ -79,14 +83,16 @@ pub fn DynamicExpansionSpec::DynamicExpansionSpec(
 /// Trusted-host approval policy for execution-scope extensions. The default
 /// is `Denied`: no approver callback can override a denied policy, and a
 /// `HostApprover` policy still requires an explicit per-call `Grant`.
+#derive(Eq, @debug.Debug)
 pub(all) enum DynamicScopeApprovalPolicy {
   Denied
   HostApprover
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Explicit S4E2 workflow authorization. The initial task scope is concrete
 /// (`Selected`); expansion is disabled unless `expansion` is `Some`.
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicWorkflowSpec {
   workflow_id : String
   initial_scope : Array[String]
@@ -96,7 +102,7 @@ pub(all) struct DynamicWorkflowSpec {
   failure_policy : @parallel.ParallelFailurePolicy
   max_concurrency : Int32
   expansion : DynamicExpansionSpec?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub fn DynamicWorkflowSpec::DynamicWorkflowSpec(
@@ -183,12 +189,14 @@ fn[T] find_first(items : Array[T], pred : (T) -> Bool) -> T? {
 /// Detached, immutable preview of one execution-scope extension. The trusted
 /// host approver sees exactly this binding: the durable full mapping, the
 /// requested canonical IDs and the fresh revision it is bound to.
+#derive(Eq, @debug.Debug)
 pub(all) struct ScopeTaskMapping {
   key : String
   task_id : String
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub(all) struct ScopeExtensionPreview {
   workflow_id : String
   expansion_id : String
@@ -199,7 +207,7 @@ pub(all) struct ScopeExtensionPreview {
   scope_before : Array[String]
   expansions_committed : Int32
   scope_authorizations : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Trusted host approver for execution-scope extension. Distinct from the
@@ -212,6 +220,7 @@ pub(open) trait ScopeExtensionApprover {
 ///|
 /// Read-only detached status. No proposal text, model output, prompt or
 /// error text is ever included.
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicWorkflowStatus {
   workflow_id : String
   phase : @workflow.WorkflowPhase
@@ -235,7 +244,7 @@ pub(all) struct DynamicWorkflowStatus {
   unresolved : Bool
   remaining_expansions : Int32
   remaining_generated_tasks : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend DynamicWorkflowError with Eq::{equal, not_equal}

@@ -32,6 +32,7 @@ let go_oauth_refresh_margin_secs : Int32 = 300
 
 ///|
 /// The Console's device-authorization answer (RFC 8628 §3.2).
+#derive(Eq, Debug)
 pub(all) struct GoDeviceAuth {
   device_code : String
   user_code : String
@@ -39,7 +40,7 @@ pub(all) struct GoDeviceAuth {
   verification_url : String
   expires_in : Int32
   interval : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoDeviceAuth with Eq::{not_equal, equal}
@@ -49,13 +50,14 @@ pub extend GoDeviceAuth with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One grant.
+#derive(Eq, Debug)
 pub(all) struct GoOAuthToken {
   access_token : String
   refresh_token : String
   expires_in : Int32
   /// Present when the Console scoped the grant to a workspace.
   org_id : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoOAuthToken with Eq::{not_equal, equal}
@@ -65,12 +67,13 @@ pub extend GoOAuthToken with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One poll verdict; `Failed` carries the Console's error code.
+#derive(Eq, Debug)
 pub(all) enum GoTokenPoll {
   Pending
   SlowDown
   Granted(GoOAuthToken)
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoTokenPoll with Eq::{not_equal, equal}
@@ -80,10 +83,11 @@ pub extend GoTokenPoll with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// A Console workspace.
+#derive(Eq, Debug)
 pub(all) struct GoOrg {
   id : String
   name : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoOrg with Eq::{not_equal, equal}
@@ -93,10 +97,11 @@ pub extend GoOrg with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Chosen workspace and its inference base.
+#derive(Eq, Debug)
 pub(all) struct GoOrgChoice {
   org : GoOrg
   api_base : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoOrgChoice with Eq::{not_equal, equal}
@@ -106,6 +111,7 @@ pub extend GoOrgChoice with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// A stored grant, projected from the generic credential.
+#derive(Eq, Debug)
 pub(all) struct GoOAuthSession {
   access_token : String
   refresh_token : String
@@ -114,7 +120,7 @@ pub(all) struct GoOAuthSession {
   server : String
   org_id : String?
   api_base : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoOAuthSession with Eq::{not_equal, equal}

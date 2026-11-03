@@ -5,13 +5,14 @@
 /// transport failures, sudden 5xx, mid-stream resets, truncated SSE) without
 /// per-provider wrappers. Rate-limit (429) verdicts never retry here — they
 /// belong to the rate-limit resume domain.
+#derive(Debug)
 pub(all) struct TransientRetryPolicy {
   /// Retries granted after the first failure (total attempts = 1 + this).
   max_retries : Int32
   /// Delay before the first retry; later retries follow the fibonacci
   /// progression 1x, 2x, 3x, 5x, 8x, ... of this delay.
   initial_delay_ms : Int32
-} derive(Debug)
+}
 
 ///|
 /// 1 initial attempt + up to 10 retries with fibonacci backoff of

@@ -6,6 +6,7 @@
 
 ///|
 /// Why trim_fallback refused to produce a compact result.
+#derive(Eq, Debug)
 pub(all) enum TrimError {
   /// Input already fits the budget; nothing to trim.
   AlreadyWithinBudget
@@ -14,7 +15,7 @@ pub(all) enum TrimError {
   NoProgress
   /// Input message array is empty.
   EmptyInput
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TrimError with Eq::{not_equal, equal}

@@ -4,10 +4,11 @@ package "colmugx/posoco-ext-kind"
 import {
   "colmugx/posoco-ext-permission",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn kind_spec_from_json(Json) -> KindSpec raise KindError
+pub fn kind_spec_from_json(@json.Json) -> KindSpec raise KindError
 
 pub fn parse_kind_file(String) -> KindSpec raise KindError
 
@@ -31,6 +32,7 @@ pub async fn KindCatalog::load(home~ : String, cwd~ : String, extra? : Array[Kin
 pub fn KindCatalog::names(Self) -> Array[String]
 pub fn KindCatalog::with_entries(Array[KindSpec]) -> Self raise KindError
 
+#derive(Eq, @debug.Debug)
 pub(all) struct KindSpec {
   name : String
   description : String
@@ -40,7 +42,7 @@ pub(all) struct KindSpec {
   skills : Array[String]?
   mode : @posoco-ext-permission.PermissionMode
   body : String
-} derive(Eq, @debug.Debug)
+}
 pub fn KindSpec::equal(Self, Self) -> Bool
 pub fn KindSpec::not_equal(Self, Self) -> Bool
 pub fn KindSpec::to_repr(Self) -> @debug.Repr

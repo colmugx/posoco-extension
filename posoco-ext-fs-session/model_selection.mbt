@@ -19,13 +19,14 @@
 pub const MODEL_SELECTION_V2_METADATA_KEY : String = "posoco.model_selection_v2"
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct SessionSelectionV2 {
   owner : String
   model_id : String
   effort : String?
   pending : Bool
   revision : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend SessionSelectionV2 with Eq::{not_equal, equal}

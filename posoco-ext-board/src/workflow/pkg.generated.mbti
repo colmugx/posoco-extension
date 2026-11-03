@@ -26,6 +26,7 @@ pub fn SequentialWorkflowRunner::status(Self) -> WorkflowStatus
 pub fn SequentialWorkflowRunner::stop_after_current(Self) -> Bool
 pub async fn SequentialWorkflowRunner::wait(Self) -> WorkflowStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowError {
   InvalidSpec
   InvalidScope
@@ -35,19 +36,21 @@ pub(all) enum WorkflowError {
   UnresolvedOwner
   BoardUnavailable
   StartCancelled
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowError::equal(Self, Self) -> Bool
 pub fn WorkflowError::not_equal(Self, Self) -> Bool
 pub fn WorkflowError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowFailurePolicy {
   StopOnFailure
   ContinueOnConfirmedFailure
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowFailurePolicy::equal(Self, Self) -> Bool
 pub fn WorkflowFailurePolicy::not_equal(Self, Self) -> Bool
 pub fn WorkflowFailurePolicy::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowPhase {
   Idle
   Running
@@ -58,11 +61,12 @@ pub(all) enum WorkflowPhase {
   Completed
   Failed
   Unresolved
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowPhase::equal(Self, Self) -> Bool
 pub fn WorkflowPhase::not_equal(Self, Self) -> Bool
 pub fn WorkflowPhase::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WorkflowRunSpec {
   run_id : String
   scope : WorkflowScope
@@ -70,21 +74,23 @@ pub(all) struct WorkflowRunSpec {
   max_elapsed_ms : Int32
   execution_timeout_ms : Int32
   failure_policy : WorkflowFailurePolicy
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowRunSpec::WorkflowRunSpec(run_id~ : String, scope~ : WorkflowScope, max_executions~ : Int32, max_elapsed_ms~ : Int32, execution_timeout_ms~ : Int32, failure_policy? : WorkflowFailurePolicy) -> Self
 pub fn WorkflowRunSpec::equal(Self, Self) -> Bool
 pub fn WorkflowRunSpec::not_equal(Self, Self) -> Bool
 pub fn WorkflowRunSpec::to_repr(Self) -> @debug.Repr
 pub fn WorkflowRunSpec::validate(Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowScope {
   Selected(Array[String])
   AllEligibleAtStart
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowScope::equal(Self, Self) -> Bool
 pub fn WorkflowScope::not_equal(Self, Self) -> Bool
 pub fn WorkflowScope::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WorkflowStatus {
   run_id : String?
   phase : WorkflowPhase
@@ -100,11 +106,12 @@ pub(all) struct WorkflowStatus {
   execution_id : String?
   board_revision : Int64?
   reason : WorkflowStopReason?
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowStatus::equal(Self, Self) -> Bool
 pub fn WorkflowStatus::not_equal(Self, Self) -> Bool
 pub fn WorkflowStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowStopReason {
   NoEligibleWork
   OrchestrationBlocked(@orchestration.ExecutionBlockReason)
@@ -119,7 +126,7 @@ pub(all) enum WorkflowStopReason {
   UnconfirmedSettlement
   StalePlanLimit
   UnexpectedFailure
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkflowStopReason::equal(Self, Self) -> Bool
 pub fn WorkflowStopReason::not_equal(Self, Self) -> Bool
 pub fn WorkflowStopReason::to_repr(Self) -> @debug.Repr

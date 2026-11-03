@@ -16,6 +16,7 @@
 /// need: who authorized generation, which workflow lineage and parent it is
 /// bound to, which existing tasks may be referenced, and the exact bounds.
 /// The permitted-dependency list is detached once here.
+#derive(Eq, Debug)
 pub(all) struct DynamicPlanContext {
   workflow_parent : String
   workflow : String?
@@ -25,7 +26,7 @@ pub(all) struct DynamicPlanContext {
   max_new_edges : Int32
   max_payload_bytes : Int32
   deadline_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DynamicPlanContext with Eq::{equal, not_equal}
@@ -36,9 +37,10 @@ pub extend DynamicPlanContext with @debug.Debug::{to_repr}
 ///|
 /// One generated proposal payload: an opaque versioned proposal, exactly the
 /// input `decode_expansion_proposal` accepts. Nothing else may accompany it.
+#derive(Eq, Debug)
 pub(all) struct DynamicPlanReply {
   payload : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DynamicPlanReply with Eq::{equal, not_equal}
@@ -47,12 +49,13 @@ pub extend DynamicPlanReply with Eq::{equal, not_equal}
 pub extend DynamicPlanReply with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum DynamicPlanSourceError {
   /// The source cannot generate now; no payload was produced.
   Unavailable
   /// The source refused generation for this context.
   Denied
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DynamicPlanSourceError with Eq::{equal, not_equal}

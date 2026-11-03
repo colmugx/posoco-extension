@@ -3,6 +3,7 @@ package "colmugx/posoco-kit-paseo"
 
 import {
   "colmugx/posoco-kit-delegation",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -30,7 +31,7 @@ pub fn detect_from_tool_names(Array[String]) -> Bool
 
 pub fn is_paseo_tool_name(String) -> Bool
 
-pub fn parse_agent_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
+pub fn parse_agent_phase(@json.Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
 
 pub fn paseo_create_call(@posoco-kit-delegation.DelegationIntent) -> @posoco-kit-delegation.DelegationCall
 

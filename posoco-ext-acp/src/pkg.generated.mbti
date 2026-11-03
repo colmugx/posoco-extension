@@ -12,6 +12,7 @@ import {
   "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -35,29 +36,31 @@ pub fn acp_outcome_text(@kernel.ToolOutcome) -> String
 
 pub fn acp_permission_request(String, @posoco-ext-permission.ApprovalRequest) -> @protocol.RequestPermissionRequest
 
-pub fn acp_primary_arg(Json) -> String?
+pub fn acp_primary_arg(@json.Json) -> String?
 
 pub fn acp_stop_reason(@kernel.FinishReason?) -> @session.StopReason
 
 pub fn acp_tool_kind(String) -> @protocol.ToolKind
 
-pub fn acp_tool_locations(Json) -> @protocol.ProtocolNullable[Array[@protocol.ToolCallLocation]]
+pub fn acp_tool_locations(@json.Json) -> @protocol.ProtocolNullable[Array[@protocol.ToolCallLocation]]
 
 pub fn acp_tool_title(@kernel.ToolCall) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror AcpHostFsError {
   HostFsCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
-} derive(Eq, @debug.Debug)
+}
 pub fn AcpHostFsError::equal(Self, Self) -> Bool
 pub fn AcpHostFsError::not_equal(Self, Self) -> Bool
 pub fn AcpHostFsError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror AcpTerminalError {
   HostCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
   TerminalTimedOut(timeout_ms~ : Int32, partial_output~ : String)
   TerminalCancelled(partial_output~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn AcpTerminalError::equal(Self, Self) -> Bool
 pub fn AcpTerminalError::not_equal(Self, Self) -> Bool
 pub fn AcpTerminalError::to_repr(Self) -> @debug.Repr
@@ -67,7 +70,7 @@ pub struct AcpBridge {
   mut queue_closed : Bool
   mut context : @agent.AgentContext?
   mut session_id : String?
-  meta_decorator : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?
+  meta_decorator : ((@types.TurnEvent, @protocol.SessionUpdate) -> @json.Json?)?
   mut message_seq : Int32
   mut current_text_id : String?
   mut current_thought_id : String?
@@ -78,7 +81,7 @@ pub struct AcpBridge {
   mut last_failure : String?
   // private fields
 }
-pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?, context_window? : Int32?) -> Self
+pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> @json.Json?)?, context_window? : Int32?) -> Self
 pub async fn AcpBridge::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
 pub fn AcpBridge::close(Self) -> Unit
@@ -121,10 +124,11 @@ pub struct AcpTerminal {
 pub fn AcpTerminal::AcpTerminal(context~ : @agent.AgentContext, session_id~ : String) -> Self
 pub async fn AcpTerminal::run(Self, String, cwd~ : String, on_output? : (String) -> Unit, timeout_ms? : Int32) -> AcpTerminalResult raise AcpTerminalError
 
+#derive(Eq, @debug.Debug)
 pub(all) struct AcpTerminalResult {
   exit_code : Int32?
   output : String
-} derive(Eq, @debug.Debug)
+}
 pub fn AcpTerminalResult::equal(Self, Self) -> Bool
 pub fn AcpTerminalResult::not_equal(Self, Self) -> Bool
 pub fn AcpTerminalResult::to_repr(Self) -> @debug.Repr

@@ -7,6 +7,7 @@
 /// trusted host, so the reported outlook is exactly what S4B would plan.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GeneratedTaskOutlookClass {
   /// The task leads the current S4B plan as eligible.
   Eligible
@@ -15,7 +16,7 @@ pub(all) enum GeneratedTaskOutlookClass {
   /// The task is not part of the plan's rows (e.g. the snapshot predates the
   /// commit or the planner scoped it out); never assumed admissible.
   OutOfScope
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GeneratedTaskOutlookClass with Eq::{equal, not_equal}
@@ -24,6 +25,7 @@ pub extend GeneratedTaskOutlookClass with Eq::{equal, not_equal}
 pub extend GeneratedTaskOutlookClass with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GeneratedTaskOutlook {
   key : String
   task_id : String
@@ -35,7 +37,7 @@ pub(all) struct GeneratedTaskOutlook {
   /// (missing, not Created, or carrying queued Execute attempts). Report
   /// only: nothing is corrected or executed automatically.
   unexpected_state : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GeneratedTaskOutlook with Eq::{equal, not_equal}

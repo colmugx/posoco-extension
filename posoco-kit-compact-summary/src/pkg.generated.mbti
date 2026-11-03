@@ -26,29 +26,32 @@ pub fn serialize_for_summary(Array[@kernel.Message], tool_output_char_limit? : I
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct CutPoint {
   head_end : Int32
   kept_from : Int32
   is_split_turn : Bool
   turn_start_index : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn CutPoint::equal(Self, Self) -> Bool
 pub fn CutPoint::not_equal(Self, Self) -> Bool
 pub fn CutPoint::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FileOps {
   read_files : Array[String]
   modified_files : Array[String]
-} derive(Eq, @debug.Debug)
+}
 pub fn FileOps::equal(Self, Self) -> Bool
 pub fn FileOps::not_equal(Self, Self) -> Bool
 pub fn FileOps::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum SummaryTemplate {
   StructuredMd
   KimiXml
   CodexHandoff
-} derive(@debug.Debug)
+}
 pub fn SummaryTemplate::to_repr(Self) -> @debug.Repr
 
 // Type aliases

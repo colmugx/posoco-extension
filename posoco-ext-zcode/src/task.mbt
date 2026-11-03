@@ -1,5 +1,6 @@
 ///|
 /// Result of one delegation.
+#derive(Eq, Debug)
 pub(all) struct ZcodeTaskResult {
   session_id : String
   title : String
@@ -7,7 +8,7 @@ pub(all) struct ZcodeTaskResult {
   /// success | failed | permission_denied
   stop_reason : String
   usage : ZcodeUsage?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZcodeTaskResult with Eq::{not_equal, equal}

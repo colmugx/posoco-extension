@@ -2,10 +2,11 @@
 pub let version : Int32 = 1
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Outcome {
   Success(content~ : String, structured~ : Json?)
   Failure(code~ : String, content~ : String, structured~ : Json?)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Outcome with Eq::{equal, not_equal}
@@ -14,6 +15,7 @@ pub extend Outcome with Eq::{equal, not_equal}
 pub extend Outcome with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Message {
   Hello(protocol~ : Int32)
   Invoke(
@@ -27,7 +29,7 @@ pub(all) enum Message {
   Log(level~ : String, content~ : String)
   Result(outcome~ : Outcome)
   Cancel(reason~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Message with Eq::{equal, not_equal}

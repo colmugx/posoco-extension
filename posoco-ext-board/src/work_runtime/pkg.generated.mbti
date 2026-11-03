@@ -9,40 +9,41 @@ import {
   "colmugx/posoco/types",
   "moonbitlang/async/cond_var",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
 pub fn append_tail(String, String, Int32) -> String
 
-pub fn extract_json_object(String) -> Json?
+pub fn extract_json_object(String) -> @json.Json?
 
-pub fn minimal_review_report(String) -> Json
+pub fn minimal_review_report(String) -> @json.Json
 
-pub fn model_pin_json(ModelPin?) -> Json
+pub fn model_pin_json(ModelPin?) -> @json.Json
 
 pub fn one_line_preview(String, Int32) -> String
 
-pub fn parse_shape_children(Json?, String) -> Result[Array[ShapeChild], String]
+pub fn parse_shape_children(@json.Json?, String) -> Result[Array[ShapeChild], String]
 
-pub fn parse_shape_story(Map[String, Json], String, title_fallback? : String) -> Result[ShapeChild, String]
+pub fn parse_shape_story(Map[String, @json.Json], String, title_fallback? : String) -> Result[ShapeChild, String]
 
 pub fn question_prompt(@port.UiRequest) -> String
 
 pub fn shape_priority(String) -> String?
 
-pub fn task_definition_of_done(Json) -> Array[String]
+pub fn task_definition_of_done(@json.Json) -> Array[String]
 
-pub fn task_field(Json, String) -> String
+pub fn task_field(@json.Json, String) -> String
 
-pub fn task_model(Json) -> ModelPin?
+pub fn task_model(@json.Json) -> ModelPin?
 
-pub fn task_required_roles(Json) -> Array[String]
+pub fn task_required_roles(@json.Json) -> Array[String]
 
-pub fn task_review_feedback(Json) -> String?
+pub fn task_review_feedback(@json.Json) -> String?
 
 pub fn ticket_language_contract() -> String
 
-pub fn validate_work_report(Json) -> Result[Unit, String]
+pub fn validate_work_report(@json.Json) -> Result[Unit, String]
 
 pub fn work_presence(runs~ : WorkRunStore, questions~ : TicketQuestions, progress~ : WorkProgressLog) -> @presence.BoardPresence
 
@@ -50,7 +51,7 @@ pub let work_progress_max_per_ticket : Int32
 
 pub fn work_session_id(String, String) -> String
 
-pub fn worker_prompt(Json, String, Bool, Array[WorkRun]) -> String
+pub fn worker_prompt(@json.Json, String, Bool, Array[WorkRun]) -> String
 
 // Errors
 
@@ -69,15 +70,15 @@ pub async fn BoardQuestionEndpoint::request_with_audience(Self, origin_call~ : S
 pub impl @posoco-ext-askquestion.QuestionEndpoint for BoardQuestionEndpoint
 
 pub struct BoardState {
-  tasks : Array[Json]
-  attempts : Array[Json]
+  tasks : Array[@json.Json]
+  attempts : Array[@json.Json]
   revision : Int64
 }
 pub fn BoardState::from_snapshot(@protocol.BoardSnapshot) -> Result[Self, String]
 pub fn BoardState::has_dependents(Self, String) -> Bool
 pub fn BoardState::latest_running_review_attempt(Self, String) -> String?
 pub fn BoardState::stage(Self, String) -> String
-pub fn BoardState::task(Self, String) -> Json?
+pub fn BoardState::task(Self, String) -> @json.Json?
 pub fn BoardState::tasks_from_snapshot(@protocol.BoardSnapshot) -> Result[Self, String]
 
 pub(all) struct ModelPin {
@@ -85,6 +86,7 @@ pub(all) struct ModelPin {
   effort : String?
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ShapeChild {
   title : String
   user_story : String
@@ -93,7 +95,7 @@ pub(all) struct ShapeChild {
   definition_of_done : Array[String]
   priority : String
   required_roles : Array[String]
-} derive(Eq, @debug.Debug)
+}
 pub fn ShapeChild::equal(Self, Self) -> Bool
 pub fn ShapeChild::not_equal(Self, Self) -> Bool
 pub fn ShapeChild::to_repr(Self) -> @debug.Repr
@@ -131,7 +133,7 @@ pub async fn TicketQuestions::ask(Self, String, String, String, String, @port.Ui
 pub fn TicketQuestions::cancel(Self, String) -> Unit
 pub fn TicketQuestions::forward(Self, String, String) -> Result[Unit, String]
 pub fn TicketQuestions::get(Self, String) -> TicketQuestion?
-pub fn TicketQuestions::json(Self) -> Json
+pub fn TicketQuestions::json(Self) -> @json.Json
 pub fn TicketQuestions::open(Self, String, String, String, String, @port.UiRequest) -> String
 pub fn TicketQuestions::open_count(Self) -> Int32
 pub async fn TicketQuestions::wait(Self, String) -> @port.UiResponse raise @posoco-ext-askquestion.QuestionError
@@ -141,7 +143,7 @@ pub(all) struct WorkActivity {
   kind : String
   text : String
 }
-pub fn WorkActivity::to_json(Self) -> Json
+pub fn WorkActivity::to_json(Self) -> @json.Json
 
 pub(all) struct WorkProgress {
   task_id : String
@@ -149,7 +151,7 @@ pub(all) struct WorkProgress {
   message : String
   at_ms : Int64
 }
-pub fn WorkProgress::to_json(Self) -> Json
+pub fn WorkProgress::to_json(Self) -> @json.Json
 
 pub struct WorkProgressLog {
   map : Map[String, Array[WorkProgress]]
@@ -168,7 +170,7 @@ pub(all) struct WorkRun {
   mut status : String
   mut error : String?
   mut result : String?
-  mut report : Json?
+  mut report : @json.Json?
   mut steps : Int32
   mut current_tool : String?
   mut preview : String
@@ -176,8 +178,8 @@ pub(all) struct WorkRun {
   activities : Array[WorkActivity]
 }
 pub fn WorkRun::activity(Self, String, String) -> Unit
-pub fn WorkRun::from_json(Json) -> Self?
-pub fn WorkRun::to_json(Self) -> Json
+pub fn WorkRun::from_json(@json.Json) -> Self?
+pub fn WorkRun::to_json(Self) -> @json.Json
 
 pub struct WorkRunStore {
   map : Map[String, Array[WorkRun]]
@@ -187,7 +189,7 @@ pub fn WorkRunStore::add(Self, String, String, String, String) -> WorkRun
 pub fn WorkRunStore::all(Self) -> Array[WorkRun]
 pub fn WorkRunStore::count_running(Self) -> Int32
 pub fn WorkRunStore::dismiss(Self, String) -> Unit
-pub fn WorkRunStore::from_json(Json) -> Self
+pub fn WorkRunStore::from_json(@json.Json) -> Self
 pub fn WorkRunStore::interrupt_running(Self, String) -> Unit
 pub fn WorkRunStore::park(Self, String, String, String, String) -> Unit
 pub fn WorkRunStore::roles_completed(Self, String, Array[String]) -> Bool
@@ -195,7 +197,7 @@ pub fn WorkRunStore::run_for(Self, String) -> WorkRun?
 pub fn WorkRunStore::run_role(Self, String, String) -> WorkRun?
 pub fn WorkRunStore::runs_for(Self, String) -> Array[WorkRun]
 pub fn WorkRunStore::set_status(Self, String, String, String, String?) -> Unit
-pub fn WorkRunStore::to_json(Self) -> Json
+pub fn WorkRunStore::to_json(Self) -> @json.Json
 
 // Type aliases
 

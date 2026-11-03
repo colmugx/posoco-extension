@@ -37,6 +37,7 @@ pub fn is_status_color_role(role : String) -> Bool {
 
 ///|
 /// One decoded status-bar operation.
+#derive(Eq, Debug)
 pub(all) enum StatusOp {
   Register(
     segment~ : String,
@@ -47,7 +48,7 @@ pub(all) enum StatusOp {
   )
   Update(segment~ : String, value~ : String)
   Unregister(segment~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend StatusOp with Eq::{not_equal, equal}

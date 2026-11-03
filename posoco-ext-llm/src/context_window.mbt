@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct ContextWindowReading {
   tokens : Int32
   source : String
   stale : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ContextWindowReading with Eq::{equal, not_equal}

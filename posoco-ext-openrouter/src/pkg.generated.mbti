@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/core/ref",
   "posoco/devkit",
   "posoco/ext-oauth",
@@ -20,9 +21,9 @@ pub fn openrouter_is_decision_model(String) -> Bool
 
 pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@posoco-kit-provider.ApiKeyFactory, http_referer? : String?, title? : String?) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
-pub fn parse_cached_openrouter_models(Json?) -> Array[OpenRouterModelInfo]?
+pub fn parse_cached_openrouter_models(@json.Json?) -> Array[OpenRouterModelInfo]?
 
-pub fn parse_openrouter_models(Json) -> Array[OpenRouterModelInfo] raise @error.ModelError
+pub fn parse_openrouter_models(@json.Json) -> Array[OpenRouterModelInfo] raise @error.ModelError
 
 // Errors
 
@@ -36,6 +37,7 @@ pub async fn OpenRouterApiKeyFactory::login(Self, &@ext-oauth.AuthPromptInteract
 pub fn OpenRouterApiKeyFactory::provider_id(Self) -> String
 pub impl @posoco-kit-provider.ApiKeyFactory for OpenRouterApiKeyFactory
 
+#derive(Eq, @debug.Debug)
 pub(all) struct OpenRouterConfig {
   api_key : String
   model : String
@@ -49,7 +51,7 @@ pub(all) struct OpenRouterConfig {
   title : String?
   supports_images : Bool
   send_prompt_cache_key : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, http_referer? : String?, title? : String?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
 pub fn OpenRouterConfig::equal(Self, Self) -> Bool
 pub fn OpenRouterConfig::not_equal(Self, Self) -> Bool
@@ -63,6 +65,7 @@ pub fn OpenRouterDecisionPort::OpenRouterDecisionPort(OpenRouterConfig) -> Self
 pub async fn OpenRouterDecisionPort::evaluate(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
 pub impl @port.DecisionPort for OpenRouterDecisionPort
 
+#derive(Eq, @debug.Debug)
 pub(all) struct OpenRouterModelInfo {
   id : String
   context_length : Int32?
@@ -71,7 +74,7 @@ pub(all) struct OpenRouterModelInfo {
   default_effort : String?
   default_enabled : Bool
   supports_images : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn OpenRouterModelInfo::equal(Self, Self) -> Bool
 pub fn OpenRouterModelInfo::not_equal(Self, Self) -> Bool
 pub fn OpenRouterModelInfo::to_repr(Self) -> @debug.Repr

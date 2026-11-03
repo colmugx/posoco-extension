@@ -5,10 +5,11 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/types",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn cached_input_tokens_from_usage(Map[String, Json]) -> Int32?
+pub fn cached_input_tokens_from_usage(Map[String, @json.Json]) -> Int32?
 
 pub fn derive_prompt_cache_key(String) -> String
 
@@ -26,14 +27,14 @@ pub fn outcome_wire_text(@kernel.ToolOutcome) -> String
 
 pub fn process_chat_completions_sse(provider~ : String, usage_fields_required? : Bool, String, @types.StreamAccumulator, (@types.StreamChunk) -> Unit) -> Bool raise @error.ModelError
 
-pub fn uncached_input_tokens_from_usage(Map[String, Json]) -> Int32?
+pub fn uncached_input_tokens_from_usage(Map[String, @json.Json]) -> Int32?
 
 // Errors
 
 // Types and methods
 pub(all) enum EncodedChatContent {
   TextContent(String)
-  PartsContent(Array[Json])
+  PartsContent(Array[@json.Json])
 }
 
 // Type aliases

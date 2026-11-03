@@ -2,6 +2,7 @@
 pub using @protocol {type Outcome}
 
 ///|
+#derive(Debug)
 pub suberror RuntimeError {
   ToolchainUnavailable(String)
   BuildFailed(String)
@@ -11,16 +12,17 @@ pub suberror RuntimeError {
   Cancelled
   Closed
   Invalid(String)
-} derive(Debug)
+}
 
 ///|
 pub extend RuntimeError with Debug::{to_repr}
 
 ///|
+#derive(Debug)
 pub(all) struct Diagnostic {
   level : String
   content : String
-} derive(Debug)
+}
 
 ///|
 pub extend Diagnostic with Debug::{to_repr}
@@ -43,11 +45,12 @@ pub(all) struct InvocationResult {
 
 ///|
 /// Auto prefers moonx; Moon uses build-only followed by a directly owned moonrun.
+#derive(Debug, Eq)
 pub(all) enum Launcher {
   Auto
   Moon
   Moonx
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend Launcher with Debug::{to_repr}

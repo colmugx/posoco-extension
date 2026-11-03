@@ -17,6 +17,7 @@ pub fn normalize_lexical(String) -> String
 pub async fn read_file_result(&WorkspaceFs, String) -> FileReadResult noraise
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror PathPolicyError {
   LexicalEscape(rule~ : String, relative~ : String)
   CwdEscape(rule~ : String, relative~ : String)
@@ -26,14 +27,15 @@ pub(all) suberror PathPolicyError {
   ReadDenied(rule~ : String, relative~ : String)
   WriteDenied(rule~ : String, relative~ : String)
   ParentCreationDenied(rule~ : String, relative~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn PathPolicyError::equal(Self, Self) -> Bool
 pub fn PathPolicyError::not_equal(Self, Self) -> Bool
 pub fn PathPolicyError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror WorkspaceFsError {
   WorkspaceFsError(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkspaceFsError::equal(Self, Self) -> Bool
 pub fn WorkspaceFsError::not_equal(Self, Self) -> Bool
 pub fn WorkspaceFsError::output(Self, &Logger) -> Unit
@@ -42,19 +44,21 @@ pub fn WorkspaceFsError::to_string(Self) -> String
 pub impl Show for WorkspaceFsError
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct Capability {
   read : Bool
   write : Bool
-} derive(@debug.Debug)
+}
 pub fn Capability::read_only() -> Self
 pub fn Capability::read_write() -> Self
 pub fn Capability::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum FileReadResult {
   Missing
   Content(String)
   Failed(String)
-} derive(@debug.Debug)
+}
 pub fn FileReadResult::to_repr(Self) -> @debug.Repr
 
 pub struct NativeWorkspaceFs {
@@ -73,22 +77,25 @@ pub async fn NativeWorkspaceFs::write_file(Self, String, String) -> Unit raise W
 pub async fn NativeWorkspaceFs::write_file_atomic(Self, String, String) -> Unit raise WorkspaceFsError
 pub impl WorkspaceFs for NativeWorkspaceFs
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SymlinkPolicy {
   Reject
   FollowIfInsideRoot
-} derive(Eq, @debug.Debug)
+}
 pub fn SymlinkPolicy::equal(Self, Self) -> Bool
 pub fn SymlinkPolicy::not_equal(Self, Self) -> Bool
 pub fn SymlinkPolicy::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum WorkspaceFileKind {
   File
   Dir
   Symlink
   Other
-} derive(@debug.Debug)
+}
 pub fn WorkspaceFileKind::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct WorkspaceLimits {
   max_read_bytes : Int32
   max_walk_depth : Int32
@@ -96,10 +103,11 @@ pub(all) struct WorkspaceLimits {
   max_results : Int32
   max_matches_per_file : Int32
   max_line_width : Int32
-} derive(@debug.Debug)
+}
 pub fn WorkspaceLimits::defaults() -> Self
 pub fn WorkspaceLimits::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct WorkspacePolicy {
   root : String
   default_cwd : String
@@ -108,7 +116,7 @@ pub(all) struct WorkspacePolicy {
   ignore_patterns : Array[String]
   limits : WorkspaceLimits
   allow_create_parent : Bool
-} derive(@debug.Debug)
+}
 pub fn WorkspacePolicy::checked(root~ : String, default_cwd? : String, capability? : Capability, symlink? : SymlinkPolicy, ignore_patterns? : Array[String], limits? : WorkspaceLimits, allow_create_parent? : Bool) -> Result[Self, String]
 pub fn WorkspacePolicy::to_repr(Self) -> @debug.Repr
 

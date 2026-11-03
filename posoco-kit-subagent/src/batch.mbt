@@ -4,6 +4,7 @@
 /// resolved child request — every slicing decision (kind, slot/effort, tool
 /// face, permission) is made before a plan exists, so the batch layer never
 /// re-derives configuration and never starts work.
+#derive(Eq, @debug.Debug)
 pub(all) struct BatchItem {
   /// Domain key identifying this item inside the batch (usually the child
   /// session id); unique within one plan.
@@ -29,7 +30,7 @@ pub(all) struct BatchItem {
   timeout_ms : Int32
   /// True when continuing an existing child session.
   resuming : Bool
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend BatchItem with Eq::{not_equal, equal}
@@ -39,12 +40,13 @@ pub extend BatchItem with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Batch planning failures; messages are model-facing.
+#derive(Eq, @debug.Debug)
 pub(all) suberror BatchPlanError {
   ItemsEmpty
   TooManyItems(limit~ : Int32)
   DuplicateKey(key~ : String)
   InvalidTimeout(key~ : String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend BatchPlanError with Eq::{not_equal, equal}
@@ -55,11 +57,12 @@ pub extend BatchPlanError with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// A batch as pure plan: ordered items plus the wave cap derived from
 /// `SubagentLimits.concurrency`. Building a plan validates; it never submits.
+#derive(@debug.Debug)
 pub(all) struct BatchPlan {
   items : Array[BatchItem]
   /// Maximum concurrently admitted items (>= 1).
   wave_cap : Int32
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend BatchPlan with @moonbitlang/core/debug.Debug::{to_repr}
@@ -100,6 +103,7 @@ pub fn BatchPlan::build(
 /// Domain projection of one admitted item: the receipt the Agent minted is
 /// kept only as a key→receipt-id mapping; handles themselves stay with the
 /// coordinator that will `wait` on them.
+#derive(@debug.Debug)
 pub(all) struct BatchState {
   /// Item keys still without a terminal, in admission order.
   mut pending : Array[String]
@@ -107,7 +111,7 @@ pub(all) struct BatchState {
   mut receipts : Map[String, String]
   /// Item key → terminal classification once observed.
   mut terminals : Map[String, TerminalState]
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend BatchState with @moonbitlang/core/debug.Debug::{to_repr}
@@ -171,13 +175,14 @@ pub fn BatchState::is_settled(self : BatchState) -> Bool {
 /// Terminal batch projection: per-key terminals plus aggregated counts and
 /// a one-line-per-item summary text. Built from observed outcomes only —
 /// it re-interprets nothing about core cancellation.
+#derive(@debug.Debug)
 pub(all) struct BatchResult {
   terminals : Map[String, TerminalState]
   completed : Int32
   failed : Int32
   timed_out : Int32
   cancelled : Int32
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend BatchResult with @moonbitlang/core/debug.Debug::{to_repr}

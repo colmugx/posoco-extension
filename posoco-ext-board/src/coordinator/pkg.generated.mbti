@@ -32,6 +32,7 @@ pub async fn BoardCoordinator::task(Self, id~ : @domain.BoardTaskId) -> Result[@
 pub async fn BoardCoordinator::tasks(Self) -> Result[Array[@domain.BoardTask], BoardCoordinatorError]
 pub async fn BoardCoordinator::wait_ready(Self) -> Result[Unit, BoardCoordinatorError]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardCoordinatorError {
   NotAttached
   Closed
@@ -41,11 +42,12 @@ pub(all) enum BoardCoordinatorError {
   PersistFailed(@store.BoardStoreError)
   DurabilityUncertain(String)
   RestoreFailed(BoardRestoreError)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardCoordinatorError::equal(Self, Self) -> Bool
 pub fn BoardCoordinatorError::not_equal(Self, Self) -> Bool
 pub fn BoardCoordinatorError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardCoordinatorStatus {
   Detached
   Loading
@@ -54,23 +56,25 @@ pub(all) enum BoardCoordinatorStatus {
   Failed
   Stopping
   Stopped
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardCoordinatorStatus::equal(Self, Self) -> Bool
 pub fn BoardCoordinatorStatus::not_equal(Self, Self) -> Bool
 pub fn BoardCoordinatorStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardRestoreError {
   Store(@store.BoardStoreError)
   Domain(@domain.BoardError)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardRestoreError::equal(Self, Self) -> Bool
 pub fn BoardRestoreError::not_equal(Self, Self) -> Bool
 pub fn BoardRestoreError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardStreamSnapshot {
   board_snapshot : @domain.BoardStateSnapshot
   stream_seq : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardStreamSnapshot::equal(Self, Self) -> Bool
 pub fn BoardStreamSnapshot::not_equal(Self, Self) -> Bool
 pub fn BoardStreamSnapshot::to_repr(Self) -> @debug.Repr

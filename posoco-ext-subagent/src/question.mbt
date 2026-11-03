@@ -14,12 +14,13 @@
 /// Error surface mirrored from the ask-question extension's endpoint
 /// contract (same shape, independent definition; host glue maps between
 /// them).
+#derive(Eq, @debug.Debug)
 pub(all) suberror QuestionError {
   Unsupported(String)
   Cancelled
   TimedOut
   Io(String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend QuestionError with Eq::{not_equal, equal}
@@ -30,6 +31,7 @@ pub extend QuestionError with @debug.Debug::{to_repr}
 ///|
 /// One registered question: everything the parent model needs to answer,
 /// plus the identity the runtime filled in.
+#derive(@debug.Debug)
 pub(all) struct QuestionInfo {
   /// Opaque answer key, minted by the broker.
   id : String
@@ -39,7 +41,7 @@ pub(all) struct QuestionInfo {
   origin_call : String
   /// The question itself, in core request vocabulary.
   req : @posoco.UiRequest
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend QuestionInfo with @debug.Debug::{to_repr}

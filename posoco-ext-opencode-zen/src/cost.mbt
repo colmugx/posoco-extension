@@ -9,6 +9,7 @@
 /// token count. Cache-write tokens are not surfaced by the core `Usage`
 /// shape, so they are never billed in an estimate — the estimate is
 /// conservative by construction.
+#derive(Eq, Debug)
 pub(all) struct ZenCostRates {
   input : Double
   output : Double
@@ -18,7 +19,7 @@ pub(all) struct ZenCostRates {
   tier_input : Double
   tier_output : Double
   tier_cache_read : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZenCostRates with Eq::{not_equal, equal}

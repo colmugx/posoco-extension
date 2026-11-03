@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 pub suberror ProtocolError {
   Invalid(String)
-} derive(Debug)
+}
 
 ///|
 pub extend ProtocolError with Debug::{to_repr}

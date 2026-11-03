@@ -7,11 +7,12 @@
 /// `mtime_s`/`mtime_ns` are the (seconds, nanoseconds) pair surfaced by
 /// `@fs.mtime` on native and by `statSync` on js; `size` is the file length
 /// in bytes.
+#derive(Eq, Debug)
 pub(all) struct FileStamp {
   mtime_s : Int64
   mtime_ns : Int32
   size : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend FileStamp with Eq::{not_equal, equal}
@@ -21,11 +22,12 @@ pub extend FileStamp with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Outcome of checking a modification target against a `FreshnessGuard`.
+#derive(Eq, Debug)
 pub(all) enum FreshnessVerdict {
   Fresh
   NeverRead
   Modified
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend FreshnessVerdict with Eq::{not_equal, equal}

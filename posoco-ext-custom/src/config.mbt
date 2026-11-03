@@ -10,6 +10,7 @@
 /// How the API key is presented on the wire. `Auto` follows the protocol's
 /// convention (Bearer for the two OpenAI wires, `x-api-key` for Messages);
 /// the explicit values exist because private gateways regularly deviate.
+#derive(Eq, Debug)
 pub(all) enum CustomAuth {
   /// Bearer on `chat_completions`/`responses`, `x-api-key` on `messages`.
   Auto
@@ -17,7 +18,7 @@ pub(all) enum CustomAuth {
   Bearer
   /// `x-api-key: <key>` on every wire.
   ApiKeyHeader
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CustomAuth with Eq::{not_equal, equal}
@@ -56,6 +57,7 @@ pub fn custom_auth_choices() -> String {
 pub const CUSTOM_DEFAULT_MAX_OUTPUT_TOKENS : Int32 = 8192
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct CustomConfig {
   /// API key sent according to `auth`.
   api_key : String
@@ -87,7 +89,7 @@ pub(all) struct CustomConfig {
   /// Opts in to a provider-side `prompt_cache_key` on the chat-completions
   /// wire, derived from the session id.
   send_prompt_cache_key : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CustomConfig with Eq::{not_equal, equal}

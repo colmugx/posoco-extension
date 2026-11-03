@@ -24,12 +24,13 @@ pub fn terminal_outcome(state~ : TerminalState, kind~ : String, child_session~ :
 pub fn terminal_state_word(TerminalState) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror BatchPlanError {
   ItemsEmpty
   TooManyItems(limit~ : Int32)
   DuplicateKey(key~ : String)
   InvalidTimeout(key~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn BatchPlanError::equal(Self, Self) -> Bool
 pub fn BatchPlanError::not_equal(Self, Self) -> Bool
 pub fn BatchPlanError::to_repr(Self) -> @debug.Repr
@@ -50,6 +51,7 @@ pub fn AutoApprove::AutoApprove() -> Self
 pub async fn AutoApprove::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub impl @posoco-ext-permission.ApprovalSource for AutoApprove
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BatchItem {
   key : String
   child_session_id : String
@@ -62,33 +64,36 @@ pub(all) struct BatchItem {
   mode : @port.TaskMode
   timeout_ms : Int32
   resuming : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn BatchItem::equal(Self, Self) -> Bool
 pub fn BatchItem::not_equal(Self, Self) -> Bool
 pub fn BatchItem::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct BatchPlan {
   items : Array[BatchItem]
   wave_cap : Int32
-} derive(@debug.Debug)
+}
 pub fn BatchPlan::build(config~ : SubagentConfig, items~ : Array[BatchItem]) -> Self raise BatchPlanError
 pub fn BatchPlan::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct BatchResult {
   terminals : Map[String, TerminalState]
   completed : Int32
   failed : Int32
   timed_out : Int32
   cancelled : Int32
-} derive(@debug.Debug)
+}
 pub fn BatchResult::summary(Self) -> String
 pub fn BatchResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct BatchState {
   mut pending : Array[String]
   mut receipts : Map[String, String]
   mut terminals : Map[String, TerminalState]
-} derive(@debug.Debug)
+}
 pub fn BatchState::BatchState(plan~ : BatchPlan) -> Self
 pub fn BatchState::is_settled(Self) -> Bool
 pub fn BatchState::on_accepted(Self, key~ : String, receipt~ : @port.TaskReceipt) -> Unit
@@ -96,10 +101,11 @@ pub fn BatchState::on_outcome(Self, outcome~ : @port.TaskOutcome) -> Unit
 pub fn BatchState::result(Self) -> BatchResult
 pub fn BatchState::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct SpawnLedger {
   limit : Int32
   labels : Array[String]
-} derive(@debug.Debug)
+}
 pub fn SpawnLedger::SpawnLedger(limit? : Int32) -> Self
 pub fn SpawnLedger::acquired(Self) -> Array[String]
 pub fn SpawnLedger::remaining(Self) -> Int32
@@ -107,24 +113,27 @@ pub fn SpawnLedger::reset(Self) -> Unit
 pub fn SpawnLedger::to_repr(Self) -> @debug.Repr
 pub fn SpawnLedger::try_acquire(Self, String) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SubagentConfig {
   default_model : String?
   default_effort : String?
   limits : SubagentLimits
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentConfig::defaults() -> Self
 pub fn SubagentConfig::equal(Self, Self) -> Bool
 pub fn SubagentConfig::not_equal(Self, Self) -> Bool
 pub fn SubagentConfig::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct SubagentEvent {
   child_session : String
   kind : String
   parent_call : String
   event : @types.TurnEvent
-} derive(@debug.Debug)
+}
 pub fn SubagentEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SubagentLimits {
   swarm_items : Int32
   concurrency : Int32
@@ -132,17 +141,18 @@ pub(all) struct SubagentLimits {
   timeout_ms : Int32
   spawn_budget : Int32
   answer_timeout_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentLimits::equal(Self, Self) -> Bool
 pub fn SubagentLimits::not_equal(Self, Self) -> Bool
 pub fn SubagentLimits::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TerminalState {
   Completed
   Failed(reason~ : String)
   TimedOut
   Cancelled
-} derive(Eq, @debug.Debug)
+}
 pub fn TerminalState::equal(Self, Self) -> Bool
 pub fn TerminalState::not_equal(Self, Self) -> Bool
 pub fn TerminalState::to_repr(Self) -> @debug.Repr

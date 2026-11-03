@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
 }
 
@@ -30,11 +31,11 @@ pub fn is_project_dir_name(String) -> Bool
 
 pub fn jsonl_session_path(String, String) -> String
 
-pub fn metadata_with_cwd(Map[String, Json], String?) -> Map[String, Json]
+pub fn metadata_with_cwd(Map[String, @json.Json], String?) -> Map[String, @json.Json]
 
-pub fn metadata_with_selection_v2(Map[String, Json], SessionSelectionV2) -> Map[String, Json]
+pub fn metadata_with_selection_v2(Map[String, @json.Json], SessionSelectionV2) -> Map[String, @json.Json]
 
-pub fn model_selection_from_metadata(Map[String, Json]) -> (String, String?)?
+pub fn model_selection_from_metadata(Map[String, @json.Json]) -> (String, String?)?
 
 pub fn normalize_cwd(String) -> String
 
@@ -50,19 +51,19 @@ pub fn rewrite_metadata_line(String, (String, String?)?) -> String?
 
 pub fn rewrite_metadata_line_v2(String, SessionSelectionV2?) -> String?
 
-pub fn session_cwd_from_metadata(Map[String, Json]) -> String?
+pub fn session_cwd_from_metadata(Map[String, @json.Json]) -> String?
 
 pub fn session_from_jsonl(String) -> Result[@types.Session, @error.SessionError]
 
-pub fn session_selection_v2_for_owner(Map[String, Json], String) -> SessionSelectionV2?
+pub fn session_selection_v2_for_owner(Map[String, @json.Json], String) -> SessionSelectionV2?
 
-pub fn session_selection_v2_from_json(Json) -> SessionSelectionV2?
+pub fn session_selection_v2_from_json(@json.Json) -> SessionSelectionV2?
 
-pub fn session_selection_v2_from_metadata(Map[String, Json]) -> SessionSelectionV2?
+pub fn session_selection_v2_from_metadata(Map[String, @json.Json]) -> SessionSelectionV2?
 
 pub fn session_selection_v2_of(@posoco-kit-model-management.SelectionRef) -> SessionSelectionV2?
 
-pub fn session_selection_v2_to_json(SessionSelectionV2) -> Json
+pub fn session_selection_v2_to_json(SessionSelectionV2) -> @json.Json
 
 pub fn session_to_jsonl(@types.Session) -> String
 
@@ -89,7 +90,7 @@ pub async fn JsonlSessionStore::append_messages(Self, String, Int32, ArrayView[@
 pub async fn JsonlSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
 pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]
 pub fn JsonlSessionStore::extension_id(Self) -> String
-pub async fn JsonlSessionStore::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn JsonlSessionStore::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub async fn JsonlSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
 pub async fn JsonlSessionStore::load(Self, String) -> @types.Session raise @error.SessionError
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
@@ -104,17 +105,19 @@ pub impl @port.CommandPort for JsonlSessionStore
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionPort for JsonlSessionStore
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionSelectionV2 {
   owner : String
   model_id : String
   effort : String?
   pending : Bool
   revision : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn SessionSelectionV2::equal(Self, Self) -> Bool
 pub fn SessionSelectionV2::not_equal(Self, Self) -> Bool
 pub fn SessionSelectionV2::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionSummary {
   id : String
   name : String?
@@ -122,7 +125,7 @@ pub(all) struct SessionSummary {
   model : String?
   effort : String?
   cwd : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn SessionSummary::equal(Self, Self) -> Bool
 pub fn SessionSummary::not_equal(Self, Self) -> Bool
 pub fn SessionSummary::to_repr(Self) -> @debug.Repr

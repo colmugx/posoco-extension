@@ -7,6 +7,7 @@
 /// `title` is the stable automatic title admitted by Posoco from the first
 /// real caller input. For sessions written before `posoco.title` existed,
 /// `summary` derives a legacy title from the first user-role message.
+#derive(Eq, Debug)
 pub(all) struct SessionSummary {
   id : String
   name : String?
@@ -20,7 +21,7 @@ pub(all) struct SessionSummary {
   /// (`SESSION_CWD_METADATA_KEY`); `None` for journals written before the
   /// contract existed or by stores not bound to a project.
   cwd : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend SessionSummary with Eq::{not_equal, equal}

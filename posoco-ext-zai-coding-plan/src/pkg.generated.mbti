@@ -11,6 +11,7 @@ import {
   "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
   "posoco/ext-oauth",
 }
@@ -18,7 +19,7 @@ import {
 // Values
 pub async fn fetch_zai_coding_plan_quota(String, String, now_ms? : () -> Int64) -> Result[Array[@devkit.QuotaReading], String]
 
-pub fn parse_zai_coding_plan_quota(Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
+pub fn parse_zai_coding_plan_quota(@json.Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
 
 pub fn zai_coding_plan_build_config(@posoco-kit-provider.ProviderConfigSource) -> @posoco-ext-zai.ZaiConfig? raise @error.CompositionError
 
@@ -62,7 +63,7 @@ pub(all) struct HttpZaiMcp {
   mut closed : Bool
 }
 pub fn HttpZaiMcp::HttpZaiMcp(api_key~ : String, client_name? : String, client_version? : String) -> Self
-pub async fn HttpZaiMcp::call(Self, String, Json) -> Result[String, String] noraise
+pub async fn HttpZaiMcp::call(Self, String, @json.Json) -> Result[String, String] noraise
 pub async fn HttpZaiMcp::close(Self) -> Unit noraise
 pub fn HttpZaiMcp::connected_groups(Self) -> Int32
 pub fn HttpZaiMcp::failures(Self) -> Array[String]
@@ -133,17 +134,19 @@ pub(all) struct ZaiLivePlane {
   provider : ZaiMcpToolProvider
 }
 
+#derive(@debug.Debug)
 pub(all) struct ZaiMcpOpen {
   tools : Array[@kernel.ToolDef]
   connected : Int32
   failures : Array[String]
-} derive(@debug.Debug)
+}
 pub fn ZaiMcpOpen::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ZaiMcpRoute {
   group : String
   tool : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ZaiMcpRoute::equal(Self, Self) -> Bool
 pub fn ZaiMcpRoute::not_equal(Self, Self) -> Bool
 pub fn ZaiMcpRoute::to_repr(Self) -> @debug.Repr
@@ -156,22 +159,24 @@ pub async fn ZaiMcpToolProvider::execute(Self, @port.ToolCallContext) -> @kernel
 pub fn ZaiMcpToolProvider::list_tools(Self) -> Array[@kernel.ToolDef]
 pub impl @port.ToolProvider for ZaiMcpToolProvider
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ZaiToolGroup {
   group : String
   title : String
   endpoint : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ZaiToolGroup::equal(Self, Self) -> Bool
 pub fn ZaiToolGroup::not_equal(Self, Self) -> Bool
 pub fn ZaiToolGroup::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ZaiToolsState {
   Inactive
   Connecting(connected~ : Int32, total~ : Int32)
   Ready(total~ : Int32)
   Degraded(connected~ : Int32, total~ : Int32)
   Withdrawing(total~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ZaiToolsState::connected(Self) -> Int32
 pub fn ZaiToolsState::equal(Self, Self) -> Bool
 pub fn ZaiToolsState::not_equal(Self, Self) -> Bool
@@ -188,6 +193,6 @@ pub(open) trait ZaiMcpConnection {
   fn tools(Self) -> Array[@kernel.ToolDef]
   fn connected_groups(Self) -> Int32
   fn failures(Self) -> Array[String]
-  async fn call(Self, String, Json) -> Result[String, String] noraise
+  async fn call(Self, String, @json.Json) -> Result[String, String] noraise
   async fn close(Self) -> Unit noraise
 }

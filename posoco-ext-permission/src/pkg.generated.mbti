@@ -7,6 +7,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/core/set",
   "posoco/devkit",
 }
@@ -29,17 +30,18 @@ pub(all) struct ApprovalRequest {
   call_id : String
   category : String
   arguments_preview : String
-  arguments : Json
+  arguments : @json.Json
   scopes : Array[String]
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PermissionMode {
   ReadOnly
   WorkspaceWrite
   Interactive
   Auto
   Yolo
-} derive(Eq, @debug.Debug)
+}
 pub fn PermissionMode::equal(Self, Self) -> Bool
 pub fn PermissionMode::not_equal(Self, Self) -> Bool
 pub fn PermissionMode::to_repr(Self) -> @debug.Repr
@@ -60,7 +62,7 @@ pub async fn PermissionPolicy::before_model(Self, Array[@kernel.Message]) -> Arr
 pub async fn PermissionPolicy::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn PermissionPolicy::commands(Self) -> Array[@port.CommandDef]
 pub fn PermissionPolicy::extension_id(Self) -> String
-pub async fn PermissionPolicy::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn PermissionPolicy::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode
 pub fn PermissionPolicy::on_bus_event(Self, @devkit.BusEvent) -> Unit

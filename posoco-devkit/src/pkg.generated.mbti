@@ -3,6 +3,7 @@ package "posoco/devkit"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -70,11 +71,12 @@ pub fn truncate_chars(String, Int32) -> String
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct BusEvent {
   source : String
   topic : String
-  data : Json
-} derive(@debug.Debug)
+  data : @json.Json
+}
 pub fn BusEvent::to_repr(Self) -> @debug.Repr
 
 pub struct EventBus {
@@ -91,18 +93,19 @@ pub(all) struct ExtContext {
   logger : &Logger
 }
 pub fn ExtContext::ExtContext(logger? : &Logger) -> Self
-pub fn ExtContext::debug(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::debug(Self, source~ : String, code~ : String, message~ : String, data? : @json.Json?) -> Unit
 pub fn ExtContext::default() -> Self
-pub fn ExtContext::error(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
-pub fn ExtContext::info(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::error(Self, source~ : String, code~ : String, message~ : String, data? : @json.Json?) -> Unit
+pub fn ExtContext::info(Self, source~ : String, code~ : String, message~ : String, data? : @json.Json?) -> Unit
 pub fn ExtContext::log(Self, LogEvent) -> Unit
-pub fn ExtContext::warn(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::warn(Self, source~ : String, code~ : String, message~ : String, data? : @json.Json?) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FileStamp {
   mtime_s : Int64
   mtime_ns : Int32
   size : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn FileStamp::equal(Self, Self) -> Bool
 pub fn FileStamp::not_equal(Self, Self) -> Bool
 pub fn FileStamp::to_repr(Self) -> @debug.Repr
@@ -115,32 +118,35 @@ pub fn FreshnessGuard::check(Self, String, FileStamp?) -> FreshnessVerdict
 pub fn FreshnessGuard::forget(Self, String) -> Unit
 pub fn FreshnessGuard::note_read(Self, String, FileStamp) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FreshnessVerdict {
   Fresh
   NeverRead
   Modified
-} derive(Eq, @debug.Debug)
+}
 pub fn FreshnessVerdict::equal(Self, Self) -> Bool
 #as_free_fn(freshness_hint, deprecated)
 pub fn FreshnessVerdict::hint(Self) -> String
 pub fn FreshnessVerdict::not_equal(Self, Self) -> Bool
 pub fn FreshnessVerdict::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct LogEvent {
   level : LogLevel
   source : String
   code : String
   message : String
-  data : Json?
-} derive(@debug.Debug)
+  data : @json.Json?
+}
 pub fn LogEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum LogLevel {
   Debug
   Info
   Warn
   Error
-} derive(Eq, @debug.Debug)
+}
 pub fn LogLevel::equal(Self, Self) -> Bool
 pub fn LogLevel::not_equal(Self, Self) -> Bool
 pub fn LogLevel::to_repr(Self) -> @debug.Repr
@@ -152,6 +158,7 @@ pub fn MemoryLogger::MemoryLogger() -> Self
 pub fn MemoryLogger::log(Self, LogEvent) -> Unit
 pub impl Logger for MemoryLogger
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MetricsPoint {
   model : String
   effort : String
@@ -161,7 +168,7 @@ pub(all) struct MetricsPoint {
   total : Int32
   tokens : Double?
   minutes : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn MetricsPoint::equal(Self, Self) -> Bool
 pub fn MetricsPoint::not_equal(Self, Self) -> Bool
 pub fn MetricsPoint::to_repr(Self) -> @debug.Repr
@@ -171,15 +178,17 @@ pub(all) struct NoopLogger {
 pub fn NoopLogger::log(Self, LogEvent) -> Unit
 pub impl Logger for NoopLogger
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PricingPhase {
   tier : String
   multiplier : String
   window : String
-} derive(Eq, @debug.Debug)
+}
 pub fn PricingPhase::equal(Self, Self) -> Bool
 pub fn PricingPhase::not_equal(Self, Self) -> Bool
 pub fn PricingPhase::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct QuotaReading {
   window : String
   used_percent : Double?
@@ -187,23 +196,25 @@ pub(all) struct QuotaReading {
   available : Bool?
   reset_at_ms : Int64?
   fetched_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn QuotaReading::equal(Self, Self) -> Bool
 pub fn QuotaReading::not_equal(Self, Self) -> Bool
 pub fn QuotaReading::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum StatusOp {
   Register(segment~ : String, label~ : String?, priority~ : Int32, value~ : String?, color~ : String?)
   Update(segment~ : String, value~ : String)
   Unregister(segment~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn StatusOp::equal(Self, Self) -> Bool
 pub fn StatusOp::not_equal(Self, Self) -> Bool
 pub fn StatusOp::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct WorkspaceAnchor {
   root : String
-} derive(@debug.Debug)
+}
 pub fn WorkspaceAnchor::WorkspaceAnchor(String) -> Self
 pub fn WorkspaceAnchor::resolve(Self, String) -> String
 pub fn WorkspaceAnchor::to_repr(Self) -> @debug.Repr

@@ -1,6 +1,7 @@
 ///|
 /// Numeric bundle of subagent-config.json. Defaults live
 /// in `SubagentConfig::defaults`.
+#derive(Eq, @debug.Debug)
 pub(all) struct SubagentLimits {
   swarm_items : Int32
   concurrency : Int32
@@ -11,7 +12,7 @@ pub(all) struct SubagentLimits {
   /// agent's answer. `0` disables the deadline (the wait still ends on
   /// cancel/shutdown). Int64: waits are configured in minutes, not turns.
   answer_timeout_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend SubagentLimits with Eq::{not_equal, equal}
@@ -24,11 +25,12 @@ pub extend SubagentLimits with @moonbitlang/core/debug.Debug::{to_repr}
 /// routes every kind that does not bind its own model; absent → subagents
 /// inherit the parent's live selection. Model bindings themselves live on
 /// kinds (frontmatter or settings entries), not here.
+#derive(Eq, @debug.Debug)
 pub(all) struct SubagentConfig {
   default_model : String?
   default_effort : String?
   limits : SubagentLimits
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend SubagentConfig with Eq::{not_equal, equal}

@@ -45,11 +45,12 @@ pub struct EventBus {
 /// One notification: `source` identifies the publisher (extension id),
 /// `topic` is the shared convention namespace, and `data` is the
 /// topic-defined payload.
+#derive(Debug)
 pub(all) struct BusEvent {
   source : String
   topic : String
   data : Json
-} derive(Debug)
+}
 
 ///|
 pub extend BusEvent with @moonbitlang/core/debug.Debug::{to_repr}

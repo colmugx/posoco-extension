@@ -10,6 +10,7 @@
 
 ///|
 /// The observability services this client can query.
+#derive(Eq, Debug)
 pub(all) enum MagpieService {
   Route
   Quotas
@@ -17,7 +18,7 @@ pub(all) enum MagpieService {
   Usage
   UsageRequests
   Concurrency
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieService with Eq::{not_equal, equal}
@@ -44,6 +45,7 @@ pub extend MagpieService with Show::{to_string, output}
 /// Gateway service availability, independent from the inference connection:
 /// one unavailable monitoring endpoint never invalidates working model
 /// execution.
+#derive(Eq, Debug)
 pub(all) enum MagpieServiceAvailability {
   /// Supported and accessible.
   Accessible
@@ -56,7 +58,7 @@ pub(all) enum MagpieServiceAvailability {
   NotSupported
   /// Never probed.
   Unknown
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieServiceAvailability with Eq::{not_equal, equal}
@@ -87,11 +89,12 @@ pub extend MagpieServiceAvailability with Show::{to_string, output}
 /// `None` before the session has one; the gateway's own fields are carried
 /// verbatim — asked, group, rule, the member being tried, the tries with
 /// their fallback reasons, and the post-reply done/status/served facts.
+#derive(Eq, Debug)
 pub(all) struct MagpieRouteSnapshot {
   session : String
   seq : Int32?
   route : MagpieRouteDecision?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRouteSnapshot with Eq::{not_equal, equal}
@@ -100,6 +103,7 @@ pub extend MagpieRouteSnapshot with Eq::{not_equal, equal}
 pub extend MagpieRouteSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct MagpieRouteDecision {
   /// The model the agent named, verbatim.
   asked : String?
@@ -119,7 +123,7 @@ pub(all) struct MagpieRouteDecision {
   status : Json?
   /// One entry per member tried; a failed try carries its fallback reason.
   tries : Array[MagpieRouteTry]?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRouteDecision with Eq::{not_equal, equal}
@@ -128,12 +132,13 @@ pub extend MagpieRouteDecision with Eq::{not_equal, equal}
 pub extend MagpieRouteDecision with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct MagpieRouteTry {
   model : String?
   effort : String?
   /// Why this member was fallen back from, when it failed.
   fail : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRouteTry with Eq::{not_equal, equal}
@@ -143,6 +148,7 @@ pub extend MagpieRouteTry with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One subscription/plan/key quota card.
+#derive(Eq, Debug)
 pub(all) struct MagpieQuotaCard {
   provider : String
   name : String?
@@ -168,7 +174,7 @@ pub(all) struct MagpieQuotaCard {
   resets_count : Int32?
   resets_until : String?
   resets_each_until : Array[String]?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieQuotaCard with Eq::{not_equal, equal}
@@ -180,6 +186,7 @@ pub extend MagpieQuotaCard with @moonbitlang/core/debug.Debug::{to_repr}
 /// One usage window: percentage-shaped (`used`/`remaining`) or
 /// amount-shaped (`amount`/`limit`), with the gateway's own display string
 /// when it has one.
+#derive(Eq, Debug)
 pub(all) struct MagpieQuotaWindow {
   name : String
   used : Double?
@@ -192,7 +199,7 @@ pub(all) struct MagpieQuotaWindow {
   display : String?
   amount : Double?
   limit : Double?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieQuotaWindow with Eq::{not_equal, equal}
@@ -203,11 +210,12 @@ pub extend MagpieQuotaWindow with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// The quota card list (`GET /v1/magpie/quotas`, `?kept=1` answers from what
 /// the gateway last read without asking any vendor).
+#derive(Eq, Debug)
 pub(all) struct MagpieQuotaSnapshot {
   cards : Array[MagpieQuotaCard]
   /// True when the answer came from the gateway's kept cache (`kept=1`).
   kept : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieQuotaSnapshot with Eq::{not_equal, equal}
@@ -218,10 +226,11 @@ pub extend MagpieQuotaSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// The calling gateway key's own limit status
 /// (`GET /v1/magpie/limit`); a key is told its own and no other's.
+#derive(Eq, Debug)
 pub(all) struct MagpieKeyLimit {
   key : String?
   limited : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieKeyLimit with Eq::{not_equal, equal}
@@ -231,12 +240,13 @@ pub extend MagpieKeyLimit with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Usage period selector (`GET /v1/magpie/usage?period=…`).
+#derive(Eq, Debug)
 pub(all) enum MagpieUsagePeriod {
   Today
   Week
   Month
   All
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieUsagePeriod with Eq::{not_equal, equal}
@@ -261,6 +271,7 @@ pub extend MagpieUsagePeriod with Show::{to_string, output}
 /// The usage summary: window totals, the gateway's own series, and the
 /// per-session rows it reports. Dimensions the gateway does not return stay
 /// `None`/empty — never fabricated.
+#derive(Eq, Debug)
 pub(all) struct MagpieUsageSummary {
   period : String?
   since : String?
@@ -280,7 +291,7 @@ pub(all) struct MagpieUsageSummary {
   session_count : Int32?
   /// Per-session rows exactly as the gateway reports them.
   sessions : Array[Json]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieUsageSummary with Eq::{not_equal, equal}
@@ -291,6 +302,7 @@ pub extend MagpieUsageSummary with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// One request-history row: the usage facts the gateway logged for a single
 /// call. Presentation-only fields are not carried.
+#derive(Eq, Debug)
 pub(all) struct MagpieUsageRequestRow {
   t : String?
   agent : String?
@@ -311,7 +323,7 @@ pub(all) struct MagpieUsageRequestRow {
   priced : Bool?
   status : Int32?
   duration_ms : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieUsageRequestRow with Eq::{not_equal, equal}
@@ -321,11 +333,12 @@ pub extend MagpieUsageRequestRow with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One page of request history (`GET /v1/magpie/usage/requests`).
+#derive(Eq, Debug)
 pub(all) struct MagpieUsageRequestsPage {
   rows : Array[MagpieUsageRequestRow]
   offset : Int32?
   total : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieUsageRequestsPage with Eq::{not_equal, equal}
@@ -338,6 +351,7 @@ pub extend MagpieUsageRequestsPage with @moonbitlang/core/debug.Debug::{to_repr}
 /// request rows are the gateway's own records, retained verbatim — their
 /// shape is not documented, so nothing is projected away and nothing is
 /// invented.
+#derive(Eq, Debug)
 pub(all) struct MagpieConcurrencySnapshot {
   requests : Array[Json]
   waiting : Int32?
@@ -345,7 +359,7 @@ pub(all) struct MagpieConcurrencySnapshot {
   tools : Int32?
   /// Per limited key/account in-flight counts.
   data : Array[(String, Int32)]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieConcurrencySnapshot with Eq::{not_equal, equal}

@@ -34,10 +34,11 @@ const NMEM_PENDING_PREFIX : String = "pending:"
 /// One queued write-back operation (D8 write-after queue). `Add` carries the
 /// pending ticket plus the staged content and its metadata; `Delete` targets
 /// a remote id.
+#derive(Debug)
 pub(all) enum MemoryOp {
   Add(pending_id~ : String, content~ : String, metadata~ : Map[String, Json])
   Delete(id~ : String)
-} derive(Debug)
+}
 
 ///|
 pub extend MemoryOp with @moonbitlang/core/debug.Debug::{to_repr}

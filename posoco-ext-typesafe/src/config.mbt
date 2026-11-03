@@ -6,6 +6,7 @@ pub fn typesafe_credential_id() -> String {
 
 ///|
 /// Configuration for the TypeSafe Jev Decision API.
+#derive(Eq, Debug)
 pub(all) struct TypesafeConfig {
   /// Optional direct API-key fallback for standalone hosts. When a canonical
   /// ProviderCredentialStore is injected into TypesafeDecisionPort, a stored
@@ -17,7 +18,7 @@ pub(all) struct TypesafeConfig {
   base_url : String
   /// Per-request timeout in milliseconds.
   timeout_ms : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TypesafeConfig with Eq::{not_equal, equal}

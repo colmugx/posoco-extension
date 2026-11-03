@@ -1,10 +1,11 @@
 ///|
 /// Server-side error object of a response: `{code, message, data?}`.
+#derive(Eq, Debug)
 pub(all) struct ZcodeRpcError {
   code : Int32
   message : String
   data : Json?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZcodeRpcError with Eq::{not_equal, equal}
@@ -18,11 +19,12 @@ pub extend ZcodeRpcError with @moonbitlang/core/debug.Debug::{to_repr}
 /// like "server-1" — both stay as raw `Json`.
 /// `method_name` (not `method`): "method" is a reserved word in the current
 /// toolchain and warns everywhere; the wire field itself stays "method".
+#derive(Eq, Debug)
 pub(all) enum ZcodeWire {
   Request(id~ : Json, method_name~ : String, params~ : Json?)
   Response(id~ : Json, result~ : Json?, error~ : ZcodeRpcError?)
   Notification(method_name~ : String, params~ : Json?)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZcodeWire with Eq::{not_equal, equal}

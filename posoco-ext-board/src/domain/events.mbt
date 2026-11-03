@@ -1,6 +1,7 @@
 ///|
 /// Typed facts produced by accepted mutations, in order. The domain stays
 /// transport-free; the runtime projects committed events onto the wire.
+#derive(Eq, Debug)
 pub(all) enum BoardEvent {
   TaskCreated(id~ : BoardTaskId, at_ms~ : Int64)
   TaskUpdated(id~ : BoardTaskId, at_ms~ : Int64)
@@ -61,7 +62,7 @@ pub(all) enum BoardEvent {
     digest~ : String,
     at_ms~ : Int64
   )
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardEvent with Eq::{equal, not_equal}

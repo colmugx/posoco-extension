@@ -1,10 +1,11 @@
 ///|
 /// Public endpoint metadata is intentionally token-free. The instance secret
 /// never crosses this value boundary.
+#derive(Eq, Debug)
 pub(all) struct BoardEndpoint {
   host : String
   port : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardEndpoint with Eq::{equal, not_equal}
@@ -23,13 +24,14 @@ pub fn BoardEndpoint::ws_url(self : BoardEndpoint) -> String {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum BoardServerStatus {
   Stopped
   Starting
   Running(BoardEndpoint)
   Stopping
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardServerStatus with Eq::{equal, not_equal}

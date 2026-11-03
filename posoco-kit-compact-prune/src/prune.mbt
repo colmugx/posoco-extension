@@ -8,10 +8,11 @@ pub fn estimate_tokens(text : String) -> Int32 {
 
 ///|
 /// Whether `prune_tool_outputs` changed the transcript.
+#derive(Eq)
 pub(all) enum PruneAction {
   Pruned
   Noop
-} derive(Eq)
+}
 
 ///|
 pub extend PruneAction with Eq::{not_equal, equal}
@@ -20,12 +21,13 @@ pub extend PruneAction with Eq::{not_equal, equal}
 /// Outcome of `prune_tool_outputs`: the rewritten transcript (always a new
 /// array), the estimated tokens freed, and how many tool outputs were
 /// cleared. On `Noop` both counts are zero.
+#derive(Eq)
 pub(all) struct PruneResult {
   messages : Array[@posoco.Message]
   pruned_tokens : Int32
   pruned_count : Int32
   action : PruneAction
-} derive(Eq)
+}
 
 ///|
 pub extend PruneResult with Eq::{not_equal, equal}

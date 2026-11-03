@@ -12,13 +12,14 @@
 
 ///|
 /// Query parameters for one route poll.
+#derive(Eq, Debug)
 pub(all) struct MagpieRouteQuery {
   session : String
   /// Hold the answer until the route changes past this sequence number.
   after : Int32?
   /// Long-poll wait in seconds; the gateway allows up to 60.
   wait : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieRouteQuery with Eq::{not_equal, equal}

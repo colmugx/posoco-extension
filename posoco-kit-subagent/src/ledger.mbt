@@ -5,13 +5,14 @@
 /// Acquisition is monotonic within a run: there is no release, and duplicate
 /// labels are recorded as separate acquisitions for audit. Concurrency is
 /// enforced separately from this budget ledger.
+#derive(@debug.Debug)
 pub(all) struct SpawnLedger {
   /// Maximum acquisitions; `remaining` reaches 0 here.
   limit : Int32
   /// Acquisition-ordered audit record; duplicate labels appear once per
   /// acquire.
   labels : Array[String]
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend SpawnLedger with @moonbitlang/core/debug.Debug::{to_repr}

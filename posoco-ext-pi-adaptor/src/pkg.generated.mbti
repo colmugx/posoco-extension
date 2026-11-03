@@ -9,6 +9,7 @@ import {
   "colmugx/posoco/runtime",
   "colmugx/posoco/types",
   "moonbitlang/async/js_async",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -130,7 +131,7 @@ pub struct PiCommandPort {
 }
 pub fn PiCommandPort::PiCommandPort(host~ : JsPiHost) -> Self
 pub fn PiCommandPort::commands(Self) -> Array[@port.CommandDef]
-pub async fn PiCommandPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn PiCommandPort::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub impl @port.CommandPort for PiCommandPort
 
 pub struct PiEventObserver {
@@ -142,9 +143,9 @@ pub struct PiEventObserver {
   mut thinking_started : Bool
   mut text_buf : StringBuilder
   mut thinking_buf : StringBuilder
-  mut last_assistant : Json?
-  mut turn_tool_results : Array[Json]
-  mut run_messages : Array[Json]
+  mut last_assistant : @json.Json?
+  mut turn_tool_results : Array[@json.Json]
+  mut run_messages : Array[@json.Json]
 }
 pub fn PiEventObserver::PiEventObserver(host~ : JsPiHost) -> Self
 pub fn PiEventObserver::emit_agent_boundary(Self) -> Unit
@@ -171,11 +172,11 @@ pub(all) struct PiRuntime {
 pub fn PiRuntime::PiRuntime(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime) -> Self
 pub fn PiRuntime::attach_control(Self, @posoco.AgentControl) -> Unit
 #deprecated
-pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
+pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @json.Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 #deprecated
 pub async fn PiRuntime::cancel_effects(Self, run_id~ : @kernel.RunId, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
 #deprecated
-pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
+pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @json.Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
 #deprecated
 pub async fn PiRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
 pub impl @runtime.Runtime for PiRuntime

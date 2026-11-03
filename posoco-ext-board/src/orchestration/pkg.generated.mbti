@@ -20,11 +20,12 @@ pub(all) struct AuthorizedExecutionInput {
   timeout_ms : Int32?
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BlockedExecution {
   task_id : String
   attempt_id : String?
   reasons : Array[ExecutionBlockReason]
-} derive(Eq, @debug.Debug)
+}
 pub fn BlockedExecution::equal(Self, Self) -> Bool
 pub fn BlockedExecution::not_equal(Self, Self) -> Bool
 pub fn BlockedExecution::to_repr(Self) -> @debug.Repr
@@ -42,6 +43,7 @@ pub fn BoardOrchestrator::set_control_scope(Self, Array[ExecutionCandidate]?, ta
 pub async fn BoardOrchestrator::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn BoardOrchestrator::status(Self, task_scope? : Array[String]) -> Result[OrchestrationStatus, OrchestrationError]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExecutionBlockReason {
   AdmissionDisabled
   TaskStageIneligible
@@ -57,15 +59,16 @@ pub(all) enum ExecutionBlockReason {
   HostUnavailable
   OwnerNotAttached
   OwnerClosed
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionBlockReason::equal(Self, Self) -> Bool
 pub fn ExecutionBlockReason::not_equal(Self, Self) -> Bool
 pub fn ExecutionBlockReason::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ExecutionCandidate {
   task_id : String
   attempt_id : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionCandidate::equal(Self, Self) -> Bool
 pub fn ExecutionCandidate::not_equal(Self, Self) -> Bool
 pub fn ExecutionCandidate::to_repr(Self) -> @debug.Repr
@@ -76,11 +79,12 @@ pub(all) enum ExecutionDispatch {
   StalePlan(ExecutionPlan)
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ExecutionInputAvailability {
   task_id : String
   attempt_id : String
   status : ExecutionInputStatus
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionInputAvailability::equal(Self, Self) -> Bool
 pub fn ExecutionInputAvailability::not_equal(Self, Self) -> Bool
 pub fn ExecutionInputAvailability::to_repr(Self) -> @debug.Repr
@@ -91,21 +95,23 @@ pub(all) enum ExecutionInputResolution {
   NotAuthorized
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExecutionInputStatus {
   Available
   Missing
   Denied
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionInputStatus::equal(Self, Self) -> Bool
 pub fn ExecutionInputStatus::not_equal(Self, Self) -> Bool
 pub fn ExecutionInputStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ExecutionPlan {
   revision : Int64
   policy_id : String
   eligible : Array[ExecutionCandidate]
   blocked : Array[BlockedExecution]
-} derive(Eq, @debug.Debug)
+}
 pub fn ExecutionPlan::equal(Self, Self) -> Bool
 pub fn ExecutionPlan::not_equal(Self, Self) -> Bool
 pub fn ExecutionPlan::to_repr(Self) -> @debug.Repr
@@ -118,6 +124,7 @@ pub struct ExecutionPolicy {
 pub fn ExecutionPolicy::ExecutionPolicy(enabled? : Bool, stages? : Array[@domain.BoardStage], id? : String) -> Self
 pub fn ExecutionPolicy::stages(Self) -> Array[@domain.BoardStage]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OrchestrationError {
   BoardUnavailable
   Closed
@@ -129,7 +136,7 @@ pub(all) enum OrchestrationError {
   AuthorizationRejected
   OwnerRejected(@execution.BoardExecutionError)
   DispatchCancelled(cleanup_confirmed~ : Bool)
-} derive(Eq, @debug.Debug)
+}
 pub fn OrchestrationError::equal(Self, Self) -> Bool
 pub fn OrchestrationError::not_equal(Self, Self) -> Bool
 pub fn OrchestrationError::to_repr(Self) -> @debug.Repr

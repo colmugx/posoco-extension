@@ -4,6 +4,7 @@
 /// decision to the composed `DecisionPort` — the approval source is never
 /// consulted either, but a missing DecisionPort is a hard error, not a
 /// fallback.
+#derive(Eq, Debug)
 pub(all) enum PermissionMode {
   ReadOnly
   WorkspaceWrite
@@ -15,7 +16,7 @@ pub(all) enum PermissionMode {
   /// `/permission auto` without one refuses the switch.
   Auto
   Yolo
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PermissionMode with Eq::{not_equal, equal}

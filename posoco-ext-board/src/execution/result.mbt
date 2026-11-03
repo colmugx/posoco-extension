@@ -10,10 +10,11 @@ priv struct CapturedExecutionResult {
 ///|
 /// What a one-shot capture channel accepts. Planning defaults to tool-free;
 /// trusted hosts may explicitly opt in after successful tool use.
+#derive(Eq, @debug.Debug)
 pub(all) enum ExecutionCaptureStrategy {
   ToolFreeFinal
   FinalAfterSuccessfulTools
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend ExecutionCaptureStrategy with Eq::{equal, not_equal}

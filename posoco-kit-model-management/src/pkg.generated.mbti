@@ -9,17 +9,19 @@ import {
 pub fn selection_ref(&ModelManagerControl, revision? : Int64) -> SelectionRef
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror ModelManagerError {
   UnknownModel(String)
   UnsupportedEffort(String)
   EffortNotApplicable(String)
-} derive(@debug.Debug)
+}
 pub fn ModelManagerError::output(Self, &Logger) -> Unit
 pub fn ModelManagerError::to_repr(Self) -> @debug.Repr
 pub fn ModelManagerError::to_string(Self) -> String
 pub impl Show for ModelManagerError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ManagerModelInfo {
   model_id : String
   label : String
@@ -29,16 +31,17 @@ pub(all) struct ManagerModelInfo {
   efforts : Array[String]
   default_effort : String?
   display_group : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn ManagerModelInfo::equal(Self, Self) -> Bool
 pub fn ManagerModelInfo::not_equal(Self, Self) -> Bool
 pub fn ManagerModelInfo::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ManagerSelection {
   model_id : String
   effort : String?
   pending : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn ManagerSelection::equal(Self, Self) -> Bool
 pub fn ManagerSelection::not_equal(Self, Self) -> Bool
 pub fn ManagerSelection::to_repr(Self) -> @debug.Repr
@@ -51,23 +54,25 @@ pub fn ManagerStatusAdapter::ManagerStatusAdapter(&ModelManagerControl, observed
 pub fn ManagerStatusAdapter::model_facts(Self) -> ModelObservation[ModelStatusFacts]
 pub impl ModelFactsSource for ManagerStatusAdapter
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelBudgetSnapshot {
   budget_label : String
   remaining : Double?
   currency : String?
   resets_at_ms : Int64?
   observed_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelBudgetSnapshot::equal(Self, Self) -> Bool
 pub fn ModelBudgetSnapshot::not_equal(Self, Self) -> Bool
 pub fn ModelBudgetSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelExecutionFacts {
   requested_model_id : String
   served_model_id : String?
   served_source_ref : String?
   observed_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelExecutionFacts::equal(Self, Self) -> Bool
 pub fn ModelExecutionFacts::not_equal(Self, Self) -> Bool
 pub fn ModelExecutionFacts::to_repr(Self) -> @debug.Repr
@@ -80,66 +85,72 @@ pub(all) enum ModelObservation[T] {
   Unsupported
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelQuotaSnapshot {
   selection : SelectionRef
   sources : Array[ModelQuotaSourceSnapshot]
   observed_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelQuotaSnapshot::equal(Self, Self) -> Bool
 pub fn ModelQuotaSnapshot::not_equal(Self, Self) -> Bool
 pub fn ModelQuotaSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelQuotaSourceSnapshot {
   source_ref : String
   display_label : String
   windows : Array[ModelQuotaWindow]
   eligible : Bool?
   observed_at_ms : Int64?
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelQuotaSourceSnapshot::equal(Self, Self) -> Bool
 pub fn ModelQuotaSourceSnapshot::not_equal(Self, Self) -> Bool
 pub fn ModelQuotaSourceSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelQuotaWindow {
   name : String
   remaining_percent : Double?
   resets_at_ms : Int64?
   unlimited : Bool?
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelQuotaWindow::equal(Self, Self) -> Bool
 pub fn ModelQuotaWindow::not_equal(Self, Self) -> Bool
 pub fn ModelQuotaWindow::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ModelRecoveryAdvice {
   WaitUntil(Int64)
   ProbeWithBackoff
   Stop(String)
   Unknown
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelRecoveryAdvice::deadline(Self) -> Int64?
 pub fn ModelRecoveryAdvice::equal(Self, Self) -> Bool
 pub fn ModelRecoveryAdvice::not_equal(Self, Self) -> Bool
 pub fn ModelRecoveryAdvice::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ModelStatusFacts {
   selection : SelectionRef
   context_used_tokens : Int64?
   context_capacity_tokens : Int64?
   last_served_model_id : String?
   observed_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelStatusFacts::context_percent(Self) -> Double?
 pub fn ModelStatusFacts::equal(Self, Self) -> Bool
 pub fn ModelStatusFacts::not_equal(Self, Self) -> Bool
 pub fn ModelStatusFacts::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SelectionRef {
   owner : String
   model_id : String
   effort : String?
   pending : Bool
   revision : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn SelectionRef::equal(Self, Self) -> Bool
 pub fn SelectionRef::not_equal(Self, Self) -> Bool
 pub fn SelectionRef::to_repr(Self) -> @debug.Repr

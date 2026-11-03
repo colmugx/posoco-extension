@@ -3,10 +3,11 @@
 /// resolve against. One anchor is built per host from the launch directory
 /// and threaded into every tool; the absolute root never appears in
 /// model-visible prompts.
+#derive(Debug)
 pub struct WorkspaceAnchor {
   /// Absolute or process-relative root directory, normalized.
   root : String
-} derive(Debug)
+}
 
 ///|
 pub extend WorkspaceAnchor with @moonbitlang/core/debug.Debug::{to_repr}

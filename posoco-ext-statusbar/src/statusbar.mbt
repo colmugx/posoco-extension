@@ -17,6 +17,7 @@
 ///|
 /// Public snapshot of one registry entry. `color` is a semantic role from
 /// the devkit vocabulary (`status_color_roles()`), never a raw color value.
+#derive(Debug, Eq)
 pub(all) struct SegmentInfo {
   segment : String
   owner : String
@@ -24,7 +25,7 @@ pub(all) struct SegmentInfo {
   priority : Int32
   value : String?
   color : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend SegmentInfo with Eq::{not_equal, equal}

@@ -1,21 +1,23 @@
 ///|
+#derive(Debug)
 pub(all) enum Action {
   Ready
   Call(id~ : Int32, name~ : String, arguments~ : Json)
   Diagnostic(level~ : String, content~ : String)
   Closing
-} derive(Debug)
+}
 
 ///|
 pub extend Action with Debug::{to_repr}
 
 ///|
+#derive(Eq)
 priv enum Phase {
   Handshaking
   Running
   Closing
   Terminated
-} derive(Eq)
+}
 
 ///|
 pub struct HostSession {

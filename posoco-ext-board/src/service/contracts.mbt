@@ -1,9 +1,10 @@
 ///|
 /// A composed client supplies capabilities, not a second execution owner.
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkflowAgentPurpose {
   Planning
   Execution
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend WorkflowAgentPurpose with Eq::{equal, not_equal}
@@ -107,6 +108,7 @@ fn BoardWorkflowPolicy::spec(
 
 ///|
 /// Sanitized product failures. Raw provider/store exceptions are never UI data.
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardWorkflowError {
   Disabled
   InvalidConfiguration
@@ -125,7 +127,7 @@ pub(all) enum BoardWorkflowError {
   NotQuiescent
   PreparationBlocked
   OperationRejected
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Exceptions are an internal short-circuit only. Public product failures remain

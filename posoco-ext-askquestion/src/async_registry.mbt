@@ -34,6 +34,7 @@ priv enum PendingState {
 
 ///|
 /// One parked ask plus the identity the runtime filled in.
+#derive(@debug.Debug)
 pub(all) struct AsyncQuestion {
   /// Opaque answer key (`question-N`), minted by the registry.
   id : String
@@ -45,17 +46,18 @@ pub(all) struct AsyncQuestion {
   asked_at : Int64
   /// Absolute deadline timestamp (milliseconds); `0` disables expiry.
   deadline_at : Int64
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend AsyncQuestion with @debug.Debug::{to_repr}
 
 ///|
 /// One outcome that has not reached the model yet.
+#derive(@debug.Debug)
 pub enum AsyncOutcome {
   Answered(question~ : AsyncQuestion, response~ : @posoco.UiResponse)
   Expired(question~ : AsyncQuestion)
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend AsyncOutcome with @debug.Debug::{to_repr}
@@ -68,6 +70,7 @@ priv struct Parked {
 }
 
 ///|
+#derive(Eq, @debug.Debug)
 pub enum AsyncAskError {
   Unknown(id~ : String)
   AlreadyAnswered(id~ : String)
@@ -76,7 +79,7 @@ pub enum AsyncAskError {
   WrongAnswerKind(id~ : String, expected~ : String)
   /// A select answer named an index outside the offered options.
   IndexOutOfRange(id~ : String, index~ : Int32, options~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend AsyncAskError with Eq::{not_equal, equal}

@@ -13,6 +13,7 @@
 ///|
 /// Configuration for OpenCodeZenModelPort. `endpoint_prefix` stays empty
 /// for Zen because its base URL already carries `/v1`.
+#derive(Eq, Debug)
 pub(all) struct OpenCodeZenConfig {
   /// API key sent as `Authorization: Bearer <api_key>` on the OpenAI planes;
   /// the Anthropic Messages plane sends it as `x-api-key`.
@@ -58,7 +59,7 @@ pub(all) struct OpenCodeZenConfig {
   extra_headers : Map[String, String]
   /// Messages plane uses `Authorization: Bearer` instead of `x-api-key`.
   bearer_auth : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OpenCodeZenConfig with Eq::{not_equal, equal}

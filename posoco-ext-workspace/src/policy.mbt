@@ -14,13 +14,14 @@
 
 ///|
 /// How symlinks are treated during path resolution.
+#derive(Eq, Debug)
 pub(all) enum SymlinkPolicy {
   /// Reject any symlink — safest; never follow links.
   Reject
   /// Follow symlinks but the resolved target MUST remain inside root.
   /// If the target escapes root, the operation is rejected.
   FollowIfInsideRoot
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend SymlinkPolicy with Eq::{not_equal, equal}
@@ -30,10 +31,11 @@ pub extend SymlinkPolicy with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Read/write capability for the workspace.
+#derive(Debug)
 pub(all) struct Capability {
   read : Bool
   write : Bool
-} derive(Debug)
+}
 
 ///|
 pub extend Capability with @moonbitlang/core/debug.Debug::{to_repr}
@@ -51,6 +53,7 @@ pub fn Capability::read_write() -> Capability {
 ///|
 /// Bounded-work limits. Frozen defaults from the adapter reliability
 /// contract; configurable per-policy.
+#derive(Debug)
 pub(all) struct WorkspaceLimits {
   max_read_bytes : Int32
   max_walk_depth : Int32
@@ -58,7 +61,7 @@ pub(all) struct WorkspaceLimits {
   max_results : Int32 // glob/grep/find/ls result count
   max_matches_per_file : Int32 // grep
   max_line_width : Int32 // grep line truncation
-} derive(Debug)
+}
 
 ///|
 pub extend WorkspaceLimits with @moonbitlang/core/debug.Debug::{to_repr}
@@ -80,6 +83,7 @@ pub fn WorkspaceLimits::defaults() -> WorkspaceLimits {
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
+#derive(Eq, Debug)
 pub(all) suberror PathPolicyError {
   LexicalEscape(rule~ : String, relative~ : String)
   CwdEscape(rule~ : String, relative~ : String)
@@ -89,7 +93,7 @@ pub(all) suberror PathPolicyError {
   ReadDenied(rule~ : String, relative~ : String)
   WriteDenied(rule~ : String, relative~ : String)
   ParentCreationDenied(rule~ : String, relative~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PathPolicyError with Eq::{not_equal, equal}
@@ -100,6 +104,7 @@ pub extend PathPolicyError with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// The unified workspace boundary. Constructed once per workspace;
 /// shared by all consumers.
+#derive(Debug)
 pub(all) struct WorkspacePolicy {
   /// Absolute filesystem root. All resolved paths must be inside this.
   root : String
@@ -117,7 +122,7 @@ pub(all) struct WorkspacePolicy {
   /// Whether to allow creating parent directories on write/edit.
   /// Default false — must be explicitly allowed.
   allow_create_parent : Bool
-} derive(Debug)
+}
 
 ///|
 pub extend WorkspacePolicy with @moonbitlang/core/debug.Debug::{to_repr}

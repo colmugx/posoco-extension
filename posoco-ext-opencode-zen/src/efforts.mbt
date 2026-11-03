@@ -25,11 +25,12 @@
 /// One model's reasoning surface as models.dev describes it: whether the
 /// model reasons at all, the selectable effort levels (empty for a bare
 /// toggle), and whether thinking can be switched off ("off" in the picker).
+#derive(Eq, Debug)
 pub(all) struct ZenReasoningSurface {
   reasoning : Bool
   levels : Array[String]
   can_disable : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZenReasoningSurface with Eq::{not_equal, equal}
@@ -127,13 +128,14 @@ pub fn zen_preset_default_level(levels : Array[String]) -> String {
 /// (`attachment`), and the per-model SDK signal (`provider.npm`) that names
 /// the wire. Each field degrades independently: a missing entry never
 /// fabricates a capability.
+#derive(Eq, Debug)
 pub(all) struct ZenModelMeta {
   surface : ZenReasoningSurface
   context_window : Int32?
   supports_images : Bool
   provider_npm : String?
   rates : ZenCostRates?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZenModelMeta with Eq::{not_equal, equal}

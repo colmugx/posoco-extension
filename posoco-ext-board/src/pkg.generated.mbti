@@ -10,6 +10,7 @@ import {
   "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -17,13 +18,14 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardConfig {
   auto_start : Bool
   auto_open : Bool
   bind_host : String
   event_buffer : Int32
   client_queue_depth : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardConfig::BoardConfig(auto_start? : Bool, auto_open? : Bool, bind_host? : String, event_buffer? : Int32, client_queue_depth? : Int32) -> Self
 pub fn BoardConfig::equal(Self, Self) -> Bool
 pub fn BoardConfig::not_equal(Self, Self) -> Bool
@@ -39,7 +41,7 @@ pub fn BoardExtension::backend(Self) -> @backend.BoardBackend
 pub fn BoardExtension::commands(Self) -> Array[@port.CommandDef]
 pub fn BoardExtension::config(Self) -> BoardConfig
 pub fn BoardExtension::extension_id(Self) -> String
-pub async fn BoardExtension::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn BoardExtension::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn BoardExtension::manifest(Self) -> @port.ExtensionManifest
 pub fn BoardExtension::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn BoardExtension::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit

@@ -52,10 +52,11 @@ pub fn ExpansionApprovalPreview::permitted_existing_dependencies(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ApprovalDecision {
   Grant
   Deny
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ApprovalDecision with Eq::{equal, not_equal}

@@ -3,10 +3,11 @@
 /// `text` joins the text content items — the Nowledge Mem server returns its
 /// `--json` payloads as text content, so the extension's existing payload
 /// parsers (acks/context/wm) keep working unchanged.
+#derive(Debug)
 pub(all) struct McpCallOutcome {
   is_error : Bool
   text : String
-} derive(Debug)
+}
 
 ///|
 pub extend McpCallOutcome with @moonbitlang/core/debug.Debug::{to_repr}
@@ -18,10 +19,11 @@ pub extend McpCallOutcome with @moonbitlang/core/debug.Debug::{to_repr}
 /// and the outcome is unknown (timeout, broken response, server-reported
 /// error) — the server may already have committed, so replaying a
 /// non-idempotent write such as `memory_add` would store a duplicate.
+#derive(Debug)
 pub(all) enum NmemCallError {
   NotSent(message~ : String)
   MaybePersisted(message~ : String)
-} derive(Debug)
+}
 
 ///|
 pub extend NmemCallError with @moonbitlang/core/debug.Debug::{to_repr}

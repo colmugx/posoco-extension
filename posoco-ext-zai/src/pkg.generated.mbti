@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
   "posoco/ext-oauth",
 }
@@ -15,9 +16,9 @@ import {
 // Values
 pub async fn fetch_zai_models(String, String) -> Array[String] raise @error.ModelError
 
-pub fn parse_cached_zai_models(Json?) -> Array[String]?
+pub fn parse_cached_zai_models(@json.Json?) -> Array[String]?
 
-pub fn parse_zai_models(Json) -> Array[String] raise @error.ModelError
+pub fn parse_zai_models(@json.Json) -> Array[String] raise @error.ModelError
 
 pub fn zai_endpoint_parts(String, String) -> (String, String)
 
@@ -44,6 +45,7 @@ pub(all) struct ZaiCatalogIdentity {
 }
 pub fn ZaiCatalogIdentity::ZaiCatalogIdentity(provider_id~ : String, label_prefix~ : String, manifest_id~ : String, endpoint_for_credential~ : ((@ext-oauth.ApiKeyCredential) -> (String, String)?)?) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ZaiConfig {
   api_key : String
   base_url : String
@@ -52,7 +54,7 @@ pub(all) struct ZaiConfig {
   reasoning_effort : String
   context_window : Int32?
   max_output_tokens : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, context_window? : Int32?, max_output_tokens? : Int32) -> Self
 pub fn ZaiConfig::equal(Self, Self) -> Bool
 pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String, context_window? : Int32?, max_output_tokens? : Int32) -> Self

@@ -2,6 +2,7 @@
 /// Configuration for DeepSeekModelPort. Defaults target the standard
 /// `https://api.deepseek.com` endpoint; FIM and prefix completion use the
 /// `/beta` base_url variant.
+#derive(Eq, Debug)
 pub(all) struct DeepSeekConfig {
   /// API key (DEEPSEEK environment variable by convention).
   api_key : String
@@ -37,7 +38,7 @@ pub(all) struct DeepSeekConfig {
   /// Explicit reference renderer version; unknown avoids inferring support
   /// from mutable hosted model aliases.
   prompt_profile : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DeepSeekConfig with Eq::{not_equal, equal}

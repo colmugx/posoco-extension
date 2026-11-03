@@ -7,13 +7,14 @@
 /// segment through the process default bus (same channel as the `cache`
 /// segment). With no bus registered the accounting still happens and the
 /// publish is a silent skip — a rendering gap, never an error.
+#derive(Eq, Debug)
 pub(all) struct ZenSpendTracker {
   /// The status source this tracker publishes under
   /// (e.g. "posoco_ext_opencode_zen").
   source : String
   /// Cumulative USD per session id.
   buckets : Map[String, Double]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZenSpendTracker with Eq::{not_equal, equal}

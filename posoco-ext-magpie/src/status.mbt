@@ -12,6 +12,7 @@
 /// a host needs to phrase feedback: unconfigured, disabled, unreachable,
 /// rejected credential, not actually Magpie, connected with an empty catalog,
 /// and connected successfully.
+#derive(Eq, Debug)
 pub(all) enum MagpieConnectionStatus {
   /// Fresh manager that has neither connected nor failed yet.
   NotConfigured
@@ -29,7 +30,7 @@ pub(all) enum MagpieConnectionStatus {
   /// Connected successfully with a non-empty catalog. Carries the gateway's
   /// self-reported version from `/api/hello` when it named one.
   Connected(String?)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieConnectionStatus with Eq::{not_equal, equal}

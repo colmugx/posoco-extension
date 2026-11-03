@@ -37,6 +37,7 @@ pub fn map_stop_reason(
 /// the raw stop reason, the message id / model echo, the native usage
 /// counters, and opaque top-level extension fields (documented pass-through
 /// for future protocol fields; the kit does not interpret them).
+#derive(Debug)
 pub(all) struct MessagesResult {
   completion : @posoco.Completion
   stop_reason : String
@@ -46,7 +47,7 @@ pub(all) struct MessagesResult {
   usage : MessagesUsage?
   cache_creation : MessagesCacheCreation?
   extensions : Array[(String, Json)]
-} derive(Debug)
+}
 
 ///|
 pub extend MessagesResult with Debug::{to_repr}

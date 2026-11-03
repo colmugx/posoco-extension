@@ -1,6 +1,7 @@
 ///|
 /// How a subagent run ended: the terminal
 /// classification is always explicit in the tool result, never silent.
+#derive(Eq, @debug.Debug)
 pub(all) enum TerminalState {
   Completed
   /// The child reported a business-level failure.
@@ -9,7 +10,7 @@ pub(all) enum TerminalState {
   TimedOut
   /// The run was cancelled (wave cancel / host abort).
   Cancelled
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend TerminalState with Eq::{not_equal, equal}

@@ -8,12 +8,13 @@
 
 ///|
 /// Self-reported identity of a Magpie gateway.
+#derive(Eq, Debug)
 pub(all) struct MagpieIdentity {
   /// Service name; Magpie reports `"magpie"`.
   name : String
   /// Gateway version, when the payload names one.
   version : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieIdentity with Eq::{not_equal, equal}

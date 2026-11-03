@@ -12,6 +12,7 @@
 /// `openrouter/<slug>`.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct OpenRouterModelInfo {
   id : String
   context_length : Int32?
@@ -20,7 +21,7 @@ pub(all) struct OpenRouterModelInfo {
   default_effort : String?
   default_enabled : Bool
   supports_images : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OpenRouterModelInfo with Eq::{not_equal, equal}

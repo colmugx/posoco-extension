@@ -27,16 +27,18 @@ pub fn custom_protocol_of_id(String) -> CustomProtocol?
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum CustomAuth {
   Auto
   Bearer
   ApiKeyHeader
-} derive(Eq, @debug.Debug)
+}
 pub fn CustomAuth::equal(Self, Self) -> Bool
 pub fn CustomAuth::not_equal(Self, Self) -> Bool
 pub fn CustomAuth::to_id(Self) -> String
 pub fn CustomAuth::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CustomConfig {
   api_key : String
   base_url : String
@@ -51,7 +53,7 @@ pub(all) struct CustomConfig {
   compact_threshold : Double?
   supports_images : Bool
   send_prompt_cache_key : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn CustomConfig::CustomConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, protocol? : CustomProtocol, auth? : CustomAuth, max_output_tokens? : Int32, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
 pub fn CustomConfig::equal(Self, Self) -> Bool
 pub fn CustomConfig::not_equal(Self, Self) -> Bool
@@ -74,11 +76,12 @@ pub fn CustomModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderMode
 pub fn CustomModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for CustomModelPort
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CustomProtocol {
   ChatCompletions
   Responses
   Messages
-} derive(Eq, @debug.Debug)
+}
 pub fn CustomProtocol::equal(Self, Self) -> Bool
 pub fn CustomProtocol::not_equal(Self, Self) -> Bool
 pub fn CustomProtocol::to_id(Self) -> String

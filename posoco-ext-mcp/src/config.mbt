@@ -21,6 +21,7 @@
 
 ///|
 /// When the bridge connects the servers declared by mcp.json.
+#derive(Eq)
 pub(all) enum LoadMode {
   /// Connect every server as soon as the host activates the bridge, before
   /// the Agent catalog is composed.
@@ -29,7 +30,7 @@ pub(all) enum LoadMode {
   /// catalog is admitted through the runtime seam (`McpCatalogSource`) at
   /// the same turn's prompt boundary.
   Lazy
-} derive(Eq)
+}
 
 ///|
 pub extend LoadMode with Eq::{not_equal, equal}

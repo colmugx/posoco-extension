@@ -17,10 +17,11 @@
 /// Why durable state could not be established. `Store` carries the typed
 /// store failure; `Domain` carries the typed rejection of a stored snapshot
 /// by `BoardState::from_snapshot`.
+#derive(Eq, Debug)
 pub(all) enum BoardRestoreError {
   Store(@store.BoardStoreError)
   Domain(@domain.BoardError)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardRestoreError with Eq::{equal, not_equal}
@@ -30,6 +31,7 @@ pub extend BoardRestoreError with @debug.Debug::{to_repr}
 
 ///|
 /// Why a coordinator request produced no domain answer.
+#derive(Eq, Debug)
 pub(all) enum BoardCoordinatorError {
   /// attach(group) was never called.
   NotAttached
@@ -55,7 +57,7 @@ pub(all) enum BoardCoordinatorError {
   /// Durable state could not be established or re-established. The
   /// coordinator stays read-only (answering with this error) until restart.
   RestoreFailed(BoardRestoreError)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardCoordinatorError with Eq::{equal, not_equal}
@@ -66,10 +68,11 @@ pub extend BoardCoordinatorError with @debug.Debug::{to_repr}
 ///|
 /// Detached committed board together with the actual event-stream position
 /// observed when the query was answered.
+#derive(Eq, Debug)
 pub(all) struct BoardStreamSnapshot {
   board_snapshot : @domain.BoardStateSnapshot
   stream_seq : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardStreamSnapshot with Eq::{equal, not_equal}
@@ -79,6 +82,7 @@ pub extend BoardStreamSnapshot with @debug.Debug::{to_repr}
 
 ///|
 /// Lifecycle phase of the durable coordinator, readable without blocking.
+#derive(Eq, Debug)
 pub(all) enum BoardCoordinatorStatus {
   /// attach(group) was never called.
   Detached
@@ -95,7 +99,7 @@ pub(all) enum BoardCoordinatorStatus {
   Stopping
   /// Shutdown finished.
   Stopped
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardCoordinatorStatus with Eq::{equal, not_equal}

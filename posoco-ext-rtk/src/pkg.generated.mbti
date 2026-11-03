@@ -6,12 +6,13 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
+  "moonbitlang/core/json",
 }
 
 // Values
 pub fn default_shell_tools() -> ShellTools
 
-pub fn extract_command(Json) -> String raise @error.RuntimeError
+pub fn extract_command(@json.Json) -> String raise @error.RuntimeError
 
 pub fn is_shell_tool(@kernel.ToolName, ShellTools) -> Bool
 

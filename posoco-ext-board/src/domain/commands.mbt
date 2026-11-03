@@ -3,6 +3,7 @@
 /// optimistic concurrency and explicit identifiers and timestamps; the
 /// domain never reads a clock. All commands are validated first and either
 /// produce a detached next state (revision + 1) or a typed rejection.
+#derive(Eq, Debug)
 pub(all) enum BoardCommand {
   CreateTask(
     id~ : BoardTaskId,
@@ -114,7 +115,7 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardCommand with Eq::{equal, not_equal}

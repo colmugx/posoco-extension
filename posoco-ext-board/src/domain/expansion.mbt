@@ -10,6 +10,7 @@
 /// `ready_since_ms`; callers never supply them. `local_ref` is the
 /// planner-side reference that the committed `ExpansionRecord` maps to the
 /// canonical task id.
+#derive(Eq, Debug)
 pub struct GraphTask {
   id : BoardTaskId
   title : String
@@ -18,7 +19,7 @@ pub struct GraphTask {
   definition_of_done : Array[String]
   dependencies : Array[BoardTaskId]
   local_ref : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GraphTask with Eq::{equal, not_equal}
@@ -62,10 +63,11 @@ pub fn GraphTask::copy_detached(self : GraphTask) -> GraphTask {
 
 ///|
 /// One ordered local reference to canonical ID binding.
+#derive(Eq, Debug)
 pub(all) struct ExpansionMapping {
   local_ref : String
   task_id : BoardTaskId
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ExpansionMapping with Eq::{equal, not_equal}
@@ -75,6 +77,7 @@ pub extend ExpansionMapping with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One durable whole-proposal identity. No raw proposal text is retained.
+#derive(Eq, Debug)
 pub struct ExpansionRecord {
   expansion_id : ExpansionId
   parent_task_id : BoardTaskId
@@ -82,7 +85,7 @@ pub struct ExpansionRecord {
   mapping : Array[ExpansionMapping]
   content_digest : String
   created_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ExpansionRecord with Eq::{equal, not_equal}
@@ -102,10 +105,11 @@ pub fn ExpansionRecord::copy_detached(
 /// Outcome of the pure expansion preview: the exact content binding the
 /// domain would commit and the record it would append. No state is mutated
 /// and nothing is persisted.
+#derive(Eq, Debug)
 pub(all) struct ExpansionPreview {
   digest : String
   record : ExpansionRecord
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ExpansionPreview with Eq::{equal, not_equal}

@@ -13,6 +13,7 @@
 
 ///|
 /// The wire structure this provider's models are served on.
+#derive(Eq, Debug)
 pub(all) enum CustomProtocol {
   /// `POST {base_url}{endpoint_prefix}/chat/completions` (default).
   ChatCompletions
@@ -20,7 +21,7 @@ pub(all) enum CustomProtocol {
   Responses
   /// `POST {base_url}{endpoint_prefix}/messages` (Anthropic Messages API).
   Messages
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CustomProtocol with Eq::{not_equal, equal}

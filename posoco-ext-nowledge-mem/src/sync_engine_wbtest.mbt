@@ -504,7 +504,8 @@ async test "SyncEngine: flusher_loop drains pending lanes until stop" {
 /// Host-style teardown error: raised by the group body to model a host
 /// abort (cetas-acp stdin EOF), which puts the group into failure and
 /// cancels every remaining child mid-flight.
-suberror HostEof derive(Debug)
+#derive(Debug)
+suberror HostEof
 
 ///|
 pub extend HostEof with @moonbitlang/core/debug.Debug::{to_repr}

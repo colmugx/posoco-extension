@@ -13,19 +13,21 @@ pub fn prune_tool_outputs(Array[@kernel.Message], protect_tokens? : Int32, min_g
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum PruneAction {
   Pruned
   Noop
-} derive(Eq)
+}
 pub fn PruneAction::equal(Self, Self) -> Bool
 pub fn PruneAction::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct PruneResult {
   messages : Array[@kernel.Message]
   pruned_tokens : Int32
   pruned_count : Int32
   action : PruneAction
-} derive(Eq)
+}
 pub fn PruneResult::equal(Self, Self) -> Bool
 pub fn PruneResult::not_equal(Self, Self) -> Bool
 

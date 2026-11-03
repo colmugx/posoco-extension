@@ -21,10 +21,11 @@
 /// Every terminal fact is per-question: answering or settling one question
 /// never withdraws another. Hosts decide what a plain human message means;
 /// the extension never infers that a message answers the outstanding set.
+#derive(@debug.Debug)
 pub(all) enum QuestionEvent {
   Asked(question~ : AsyncQuestion)
   Answered(question_id~ : String)
-} derive(@debug.Debug)
+}
 
 ///|
 pub extend QuestionEvent with @debug.Debug::{to_repr}

@@ -44,6 +44,7 @@ pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard
 pub impl @port.Observer for RateLimitGuard
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RateLimitPending {
   session_id : String
   encountered_at_ms : Int64
@@ -51,7 +52,7 @@ pub(all) struct RateLimitPending {
   resume_at_ms : Int64
   attempts : Int32
   provider_code : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn RateLimitPending::equal(Self, Self) -> Bool
 pub fn RateLimitPending::not_equal(Self, Self) -> Bool
 pub fn RateLimitPending::to_repr(Self) -> @debug.Repr

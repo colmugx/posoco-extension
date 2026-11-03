@@ -12,6 +12,7 @@
 /// The three execution protocols this control plane can plan for. Protocol
 /// identities are fixed; which endpoint serves them for a given model is
 /// catalog evidence, never assumed.
+#derive(Eq, Debug)
 pub(all) enum MagpieProtocol {
   /// Anthropic Messages (`/v1/messages`).
   Messages
@@ -19,7 +20,7 @@ pub(all) enum MagpieProtocol {
   Responses
   /// OpenAI Chat Completions (`/v1/chat/completions`).
   ChatCompletions
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieProtocol with Eq::{not_equal, equal}
@@ -43,10 +44,11 @@ pub extend MagpieProtocol with Show::{to_string, output}
 /// One declared native endpoint. `protocol` is `None` for paths this
 /// control plane does not recognize — they are retained verbatim, never
 /// dropped and never guessed into a protocol.
+#derive(Eq, Debug)
 pub(all) struct MagpieNativeEndpoint {
   protocol : MagpieProtocol?
   path : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieNativeEndpoint with Eq::{not_equal, equal}
@@ -60,6 +62,7 @@ pub extend MagpieNativeEndpoint with @moonbitlang/core/debug.Debug::{to_repr}
 /// `is_routing_group` reflects Magpie's `group/` id namespace: such ids
 /// resolve their upstream members at request time, so no native protocol
 /// claim can be extended to them, whatever the catalog declares.
+#derive(Eq, Debug)
 pub(all) struct MagpieModelMetadata {
   /// Opaque catalog id, verbatim; never split, parsed, or assumed to have
   /// exactly one slash.
@@ -85,7 +88,7 @@ pub(all) struct MagpieModelMetadata {
   /// Declared native endpoints, in server order; `None` = the field is
   /// absent (an empty array means declared-but-empty).
   native_endpoints : Array[MagpieNativeEndpoint]?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MagpieModelMetadata with Eq::{not_equal, equal}

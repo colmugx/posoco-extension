@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/core/ref",
   "posoco/devkit",
   "posoco/ext-oauth",
@@ -26,13 +27,14 @@ pub fn kimi_oauth_api_base() -> String
 
 pub fn kimi_user_agent() -> String
 
-pub fn parse_kimi_models(Json) -> Array[KimiModelInfo] raise @error.ModelError
+pub fn parse_kimi_models(@json.Json) -> Array[KimiModelInfo] raise @error.ModelError
 
-pub fn parse_kimi_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
+pub fn parse_kimi_usage(@json.Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct KimiConfig {
   api_key : String
   base_url : String
@@ -43,7 +45,7 @@ pub(all) struct KimiConfig {
   identity_headers : Map[String, String]
   context_window : Int32?
   send_prompt_cache_key : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int32?, send_prompt_cache_key? : Bool) -> Self
 pub fn KimiConfig::equal(Self, Self) -> Bool
 pub fn KimiConfig::from_oauth_credential(@ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self

@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-mbtx/sdk"
 
 import {
   "colmugx/posoco-ext-mbtx/protocol",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -14,7 +15,7 @@ pub struct Context {
   // private fields
 }
 pub fn Context::Context(tools~ : &ToolClient, allowed~ : Array[String], logs? : &LogSink) -> Self
-pub async fn Context::call(Self, String, Json) -> @protocol.Outcome
+pub async fn Context::call(Self, String, @json.Json) -> @protocol.Outcome
 pub fn Context::close(Self) -> Unit
 pub async fn Context::log(Self, String, String) -> Unit
 
@@ -27,5 +28,5 @@ pub(open) trait LogSink {
 }
 
 pub(open) trait ToolClient {
-  async fn call(Self, String, Json) -> @protocol.Outcome
+  async fn call(Self, String, @json.Json) -> @protocol.Outcome
 }

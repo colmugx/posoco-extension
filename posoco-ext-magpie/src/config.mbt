@@ -35,6 +35,7 @@ pub const MANAGER_ID : String = "magpie"
 /// seeded model missing from the current catalog stays `pending` — it is
 /// never rewritten and never replaced by a default. Seeding an effort
 /// without a model is a configuration error.
+#derive(Eq)
 pub struct MagpieConfig {
   /// Gateway base URL, normalized (no trailing slash); http/https only.
   base_url : String
@@ -53,7 +54,7 @@ pub struct MagpieConfig {
   /// Persisted explicit reasoning-effort seed. Only meaningful together
   /// with `selected_model`.
   selected_effort : String?
-} derive(Eq)
+}
 
 ///|
 /// Creates a normalized, validated configuration. Raises

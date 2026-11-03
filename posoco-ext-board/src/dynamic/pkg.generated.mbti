@@ -19,21 +19,23 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicExpansionSpec {
   max_expansions : Int32
   max_generated_tasks : Int32
   max_depth : Int32
   scope_approval : DynamicScopeApprovalPolicy
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicExpansionSpec::DynamicExpansionSpec(max_expansions~ : Int32, max_generated_tasks~ : Int32, max_depth~ : Int32, scope_approval? : DynamicScopeApprovalPolicy) -> Self
 pub fn DynamicExpansionSpec::equal(Self, Self) -> Bool
 pub fn DynamicExpansionSpec::not_equal(Self, Self) -> Bool
 pub fn DynamicExpansionSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DynamicScopeApprovalPolicy {
   Denied
   HostApprover
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicScopeApprovalPolicy::equal(Self, Self) -> Bool
 pub fn DynamicScopeApprovalPolicy::not_equal(Self, Self) -> Bool
 pub fn DynamicScopeApprovalPolicy::to_repr(Self) -> @debug.Repr
@@ -68,6 +70,7 @@ pub fn DynamicWorkflowController::status(Self) -> DynamicWorkflowStatus
 pub async fn DynamicWorkflowController::wait(Self) -> DynamicWorkflowStatus
 pub async fn DynamicWorkflowController::wait_boundary(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DynamicWorkflowError {
   InvalidSpec
   InvalidScope
@@ -99,11 +102,12 @@ pub(all) enum DynamicWorkflowError {
   ScopeApprovalDenied
   PreparationFailed(@coordinator.BoardCoordinatorError)
   PreparationUncertain(PreparationRecord)
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicWorkflowError::equal(Self, Self) -> Bool
 pub fn DynamicWorkflowError::not_equal(Self, Self) -> Bool
 pub fn DynamicWorkflowError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicWorkflowSpec {
   workflow_id : String
   initial_scope : Array[String]
@@ -113,13 +117,14 @@ pub(all) struct DynamicWorkflowSpec {
   failure_policy : @parallel.ParallelFailurePolicy
   max_concurrency : Int32
   expansion : DynamicExpansionSpec?
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicWorkflowSpec::DynamicWorkflowSpec(workflow_id~ : String, initial_scope~ : Array[String], max_executions~ : Int32, max_elapsed_ms~ : Int32, execution_timeout_ms~ : Int32, max_concurrency? : Int32, failure_policy? : @parallel.ParallelFailurePolicy, expansion? : DynamicExpansionSpec?) -> Self
 pub fn DynamicWorkflowSpec::equal(Self, Self) -> Bool
 pub fn DynamicWorkflowSpec::not_equal(Self, Self) -> Bool
 pub fn DynamicWorkflowSpec::to_repr(Self) -> @debug.Repr
 pub fn DynamicWorkflowSpec::validate(Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DynamicWorkflowStatus {
   workflow_id : String
   phase : @workflow.WorkflowPhase
@@ -143,11 +148,12 @@ pub(all) struct DynamicWorkflowStatus {
   unresolved : Bool
   remaining_expansions : Int32
   remaining_generated_tasks : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn DynamicWorkflowStatus::equal(Self, Self) -> Bool
 pub fn DynamicWorkflowStatus::not_equal(Self, Self) -> Bool
 pub fn DynamicWorkflowStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PreparationRecord {
   task_id : String
   attempt_id : String
@@ -155,20 +161,22 @@ pub(all) struct PreparationRecord {
   uncertain : Bool
   base_revision : Int64
   completed_steps : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn PreparationRecord::equal(Self, Self) -> Bool
 pub fn PreparationRecord::not_equal(Self, Self) -> Bool
 pub fn PreparationRecord::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PreparationStep {
   MoveRefining
   MoveReady
   QueueExecute
-} derive(Eq, @debug.Debug)
+}
 pub fn PreparationStep::equal(Self, Self) -> Bool
 pub fn PreparationStep::not_equal(Self, Self) -> Bool
 pub fn PreparationStep::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScopeExtensionPreview {
   workflow_id : String
   expansion_id : String
@@ -179,15 +187,16 @@ pub(all) struct ScopeExtensionPreview {
   scope_before : Array[String]
   expansions_committed : Int32
   scope_authorizations : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ScopeExtensionPreview::equal(Self, Self) -> Bool
 pub fn ScopeExtensionPreview::not_equal(Self, Self) -> Bool
 pub fn ScopeExtensionPreview::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScopeTaskMapping {
   key : String
   task_id : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ScopeTaskMapping::equal(Self, Self) -> Bool
 pub fn ScopeTaskMapping::not_equal(Self, Self) -> Bool
 pub fn ScopeTaskMapping::to_repr(Self) -> @debug.Repr

@@ -41,6 +41,7 @@ pub fn zai_thinking_efforts() -> Array[String] {
 /// keeps every context figure unknown (unknown windows are never guessed).
 /// `max_output_tokens` backs the Messages-required `max_tokens` field when
 /// the host chat option omits it.
+#derive(Eq, Debug)
 pub(all) struct ZaiConfig {
   api_key : String
   base_url : String
@@ -49,7 +50,7 @@ pub(all) struct ZaiConfig {
   reasoning_effort : String
   context_window : Int32?
   max_output_tokens : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZaiConfig with Eq::{not_equal, equal}

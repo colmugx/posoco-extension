@@ -10,6 +10,7 @@
 /// so the endpoint applies its own default. `thinking_efforts` lists the
 /// levels the settings declared as selectable; empty means the surface is the
 /// plain on/off toggle.
+#derive(Eq, Debug)
 pub(all) struct OpenRouterConfig {
   /// API key sent as `Authorization: Bearer <api_key>`.
   api_key : String
@@ -51,7 +52,7 @@ pub(all) struct OpenRouterConfig {
   /// the port stops sending it for the rest of the process regardless of this
   /// flag (`OpenRouterModelPort.prompt_cache_key_rejected`).
   send_prompt_cache_key : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OpenRouterConfig with Eq::{not_equal, equal}

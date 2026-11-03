@@ -1,11 +1,12 @@
 ///|
 /// One-root projection of a Board's activity. Hosts map this to OSC 7501,
 /// herdr, a statusbar or a header; the Board owns the aggregation rules.
+#derive(Eq, Debug)
 pub(all) enum BoardPresenceState {
   Idle
   Working
   Blocked
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardPresenceState with Eq::{equal, not_equal}
@@ -14,13 +15,14 @@ pub extend BoardPresenceState with Eq::{equal, not_equal}
 pub extend BoardPresenceState with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub struct BoardPresence {
   state : BoardPresenceState
   running : Int32
   waiting_input : Int32
   attention : Int32
   message : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BoardPresence with Eq::{equal, not_equal}

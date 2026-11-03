@@ -19,12 +19,13 @@
 ///|
 /// Native Messages usage, exactly as reported (validated). `None` marks a
 /// dimension the endpoint did not report; it is never coerced to zero.
+#derive(Eq, Debug)
 pub(all) struct MessagesUsage {
   input_tokens : Int32
   output_tokens : Int32
   cache_creation_input_tokens : Int32?
   cache_read_input_tokens : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MessagesUsage with Eq::{not_equal, equal}

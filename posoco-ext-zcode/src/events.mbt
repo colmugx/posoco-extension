@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct ZcodeUsage {
   input_tokens : Int32
   output_tokens : Int32
   total_tokens : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ZcodeUsage with Eq::{not_equal, equal}

@@ -30,10 +30,11 @@ pub fn recover_snapshot(@domain.BoardStateSnapshot, at_ms~ : Int64) -> Result[Bo
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct BoardLoad {
   snapshot : @domain.BoardStateSnapshot
   journal : Array[JournalRecord]
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardLoad::equal(Self, Self) -> Bool
 pub fn BoardLoad::not_equal(Self, Self) -> Bool
 pub fn BoardLoad::to_repr(Self) -> @debug.Repr
@@ -44,12 +45,13 @@ pub(all) struct BoardRecovery {
   events : Array[@domain.BoardEvent]
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BoardStoreError {
   InvalidData(String)
   Io(String)
   Injected(StoreFailureStage)
   DurabilityUncertain(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn BoardStoreError::equal(Self, Self) -> Bool
 pub fn BoardStoreError::not_equal(Self, Self) -> Bool
 pub fn BoardStoreError::to_repr(Self) -> @debug.Repr
@@ -63,11 +65,12 @@ pub async fn FileBoardStore::load(Self) -> Result[BoardLoad, BoardStoreError]
 pub async fn FileBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
 pub impl BoardStore for FileBoardStore
 
+#derive(Eq, @debug.Debug)
 pub(all) struct JournalRecord {
   schema_version : Int32
   revision : Int64
   event : @domain.BoardEvent
-} derive(Eq, @debug.Debug)
+}
 pub fn JournalRecord::equal(Self, Self) -> Bool
 pub fn JournalRecord::not_equal(Self, Self) -> Bool
 pub fn JournalRecord::to_repr(Self) -> @debug.Repr
@@ -80,6 +83,7 @@ pub async fn MemoryBoardStore::load(Self) -> Result[BoardLoad, BoardStoreError]
 pub async fn MemoryBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
 pub impl BoardStore for MemoryBoardStore
 
+#derive(Eq, @debug.Debug)
 pub(all) enum StoreFailureStage {
   TempWrite
   TempFsync
@@ -87,7 +91,7 @@ pub(all) enum StoreFailureStage {
   JournalFsync
   Rename
   DirectoryFsync
-} derive(Eq, @debug.Debug)
+}
 pub fn StoreFailureStage::equal(Self, Self) -> Bool
 pub fn StoreFailureStage::not_equal(Self, Self) -> Bool
 pub fn StoreFailureStage::to_repr(Self) -> @debug.Repr

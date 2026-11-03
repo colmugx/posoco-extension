@@ -1,25 +1,28 @@
 ///|
 /// Provenance scope for a discovered skill. Scope participates in deterministic
 /// name-collision precedence: repository > user > extra root.
+#derive(Eq)
 pub(all) enum SkillScope {
   Repository
   User
   Extra(String)
-} derive(Eq)
+}
 
 ///|
 pub extend SkillScope with Eq::{not_equal, equal}
 
 ///|
+#derive(Eq)
 pub(all) enum SkillDiagnosticSeverity {
   Warning
   Error
-} derive(Eq)
+}
 
 ///|
 pub extend SkillDiagnosticSeverity with Eq::{not_equal, equal}
 
 ///|
+#derive(Eq)
 pub(all) enum SkillDiagnosticCode {
   InvalidConfiguration
   RootStatFailed
@@ -40,7 +43,7 @@ pub(all) enum SkillDiagnosticCode {
   FieldTooLarge
   LenientYamlRepair
   Shadowed
-} derive(Eq)
+}
 
 // Runtime safety ceilings are intentionally much larger than the portable
 // Agent Skills recommendations. Portable violations stay lenient warnings,

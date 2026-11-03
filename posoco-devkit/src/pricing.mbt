@@ -5,11 +5,12 @@
 /// naming the surcharge window (e.g. "9:00 ~ 12:00, 14:00 ~ 18:00"). Nothing
 /// here is estimated locally: a PricingSource states phases, devkit never
 /// derives them.
+#derive(Eq, @debug.Debug)
 pub(all) struct PricingPhase {
   tier : String
   multiplier : String
   window : String
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend PricingPhase with Eq::{not_equal, equal}
