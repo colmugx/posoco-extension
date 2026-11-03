@@ -64,7 +64,7 @@ async test "hook events mutate only actor-owned recovery state" {
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
       @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionStore::RecordingSessionStore(),
+        @posoco.RecordingSessionPort::RecordingSessionPort(),
       ]),
       guard_ext,
     ],
@@ -98,7 +98,7 @@ async test "cancel_pending invalidates actor schedule" {
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
       @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionStore::RecordingSessionStore(),
+        @posoco.RecordingSessionPort::RecordingSessionPort(),
       ]),
       guard_ext,
     ],
@@ -128,7 +128,7 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     ),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("resumed")),
   ])
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 0L })
   let agent = @posoco.Agent(
     exts=[
@@ -224,7 +224,7 @@ async test "simultaneous due sessions serialize resume execution" {
   ) {
     @async.sleep(60000)
   })
-  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
   store.seed("s1", {
     messages: [@posoco.tk_user_msg("task one")],
     metadata: Map::from_array([]),
