@@ -32,5 +32,5 @@ fn proposal_digest(draft : DraftExpansion) -> String {
 ///|
 fn sha256_text(text : String) -> String {
   "sha256:" +
-  @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text.view())))
+  @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text.clamped_view())))
 }
