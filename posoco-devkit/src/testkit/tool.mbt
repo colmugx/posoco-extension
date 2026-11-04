@@ -1,0 +1,191 @@
+///|
+/// Configurable outcome for a tool call: success outcome, or raised runtime
+/// error. Constructors are prefixed with `Outcome` to avoid ambiguity with
+/// `Result::Ok`/`Result::Err` at unqualified call sites.
+#derive(Debug)
+pub(all) enum ScriptedToolOutcome {
+  OutcomeOk(@kernel.ToolOutcome)
+  OutcomeErr(@error.RuntimeError)
+}
+
+///|
+pub extend ScriptedToolOutcome with Debug::{to_repr}
+
+///|
+/// A recorded tool execution: call id, tool name, and outcome.
+#derive(Debug)
+pub(all) struct ToolExecRecord {
+  requested_name : String
+  call_id : String
+  tool_name : String
+  arguments : Json
+  outcome : ScriptedToolOutcome
+}
+
+///|
+pub extend ToolExecRecord with Debug::{to_repr}
+
+///|
+/// Unified provider operation trace, preserving list/execute interleaving.
+#derive(Debug)
+pub(all) enum ToolProviderOp {
+  ListTools
+  ExecuteTool(requested_name~ : String, call~ : @kernel.ToolCall)
+}
+
+///|
+pub extend ToolProviderOp with Debug::{to_repr}
+
+///|
+fn snapshot_scripted_outcome(
+  outcome : ScriptedToolOutcome,
+) -> ScriptedToolOutcome {
+  match outcome {
+    OutcomeOk(value) => OutcomeOk(snapshot_tool_outcome(value))
+    OutcomeErr(error) => OutcomeErr(error)
+  }
+}
+
+///|
+/// ToolProvider fake that declares a fixed tool list and routes execute() by
+/// tool name through a configurable outcome map. Unknown tools raise
+/// `RuntimeError::UnknownTool`. Every execute is recorded with its call id.
+pub(all) struct RecordingToolProvider {
+  tool_defs : Array[@kernel.ToolDef]
+  outcomes : Map[String, ScriptedToolOutcome]
+  mut list_calls : Int32
+  mut exec_records : Array[ToolExecRecord]
+  mut ops : Array[ToolProviderOp]
+}
+
+///|
+pub fn RecordingToolProvider::RecordingToolProvider(
+  tool_defs : Array[@kernel.ToolDef],
+  outcomes : Map[String, ScriptedToolOutcome],
+) -> RecordingToolProvider {
+  let copied_outcomes : Map[String, ScriptedToolOutcome] = Map::from_array([])
+  for key in outcomes.keys() {
+    copied_outcomes[key] = snapshot_scripted_outcome(outcomes[key])
+  }
+  {
+    tool_defs: tool_defs.map(snapshot_tool_def),
+    outcomes: copied_outcomes,
+    list_calls: 0,
+    exec_records: [],
+    ops: [],
+  }
+}
+
+///|
+/// Number of times list_tools was called.
+pub fn RecordingToolProvider::list_call_count(
+  self : RecordingToolProvider,
+) -> Int32 {
+  self.list_calls
+}
+
+///|
+/// Snapshot of recorded executions (call id, tool name, outcome).
+pub fn RecordingToolProvider::exec_records(
+  self : RecordingToolProvider,
+) -> Array[ToolExecRecord] {
+  self.exec_records.map(fn(record) {
+    {
+      requested_name: record.requested_name,
+      call_id: record.call_id,
+      tool_name: record.tool_name,
+      arguments: snapshot_json(record.arguments),
+      outcome: snapshot_scripted_outcome(record.outcome),
+    }
+  })
+}
+
+///|
+/// Snapshot of list/execute operations in their exact observed order.
+pub fn RecordingToolProvider::ops(
+  self : RecordingToolProvider,
+) -> Array[ToolProviderOp] {
+  self.ops.map(fn(op) {
+    match op {
+      ListTools => ListTools
+      ExecuteTool(requested_name~, call~) =>
+        ExecuteTool(requested_name~, call=snapshot_tool_call(call))
+    }
+  })
+}
+
+///|
+/// Test convenience: a `ToolCallContext` with synthetic identity (effect 1,
+/// call "call_1") and a no-op cancellation registrar.
+pub fn tk_tool_call_ctx(
+  name~ : String,
+  arguments~ : Json = Json::null(),
+) -> @port.ToolCallContext {
+  @port.ToolCallContext(
+    effect_id=@kernel.EffectId::first(),
+    call_id=@kernel.CallId::unchecked("call_1"),
+    name=@kernel.ToolName::unchecked(name),
+    arguments~,
+    register_cancel=fn(_ : &@port.ToolCancellable) { () },
+  )
+}
+
+///|
+/// Direct (non-trait) execute entry point for testkit self-tests. Builds a
+/// synthetic effect context (effect id 1, no-op cancellation registrar).
+pub async fn RecordingToolProvider::execute_direct(
+  self : RecordingToolProvider,
+  call : @kernel.ToolCall,
+) -> @kernel.ToolOutcome raise @error.RuntimeError {
+  let ctx = @port.ToolCallContext(
+    effect_id=@kernel.EffectId::first(),
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@port.ToolCancellable) { () },
+  )
+  (self as &@port.ToolProvider).execute(ctx)
+}
+
+///|
+pub extend RecordingToolProvider with @port.ToolProvider::{list_tools, execute}
+
+///|
+pub impl @port.ToolProvider for RecordingToolProvider with fn list_tools(self) {
+  self.list_calls = self.list_calls + 1
+  self.ops.push(ListTools)
+  self.tool_defs.map(snapshot_tool_def)
+}
+
+///|
+pub impl @port.ToolProvider for RecordingToolProvider with fn execute(
+  self,
+  ctx : @port.ToolCallContext,
+) -> @kernel.ToolOutcome raise @error.RuntimeError {
+  let name = ctx.name.to_string()
+  let call : @kernel.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
+  let key = call.name.to_string()
+  let outcome = match self.outcomes.get(key) {
+    Some(o) => o
+    None =>
+      OutcomeErr(
+        UnknownTool("recording_tool: no outcome configured for '\{key}'"),
+      )
+  }
+  self.ops.push(ExecuteTool(requested_name=name, call=snapshot_tool_call(call)))
+  self.exec_records.push({
+    requested_name: name,
+    call_id: call.call_id.to_string(),
+    tool_name: call.name.to_string(),
+    arguments: snapshot_json(call.arguments),
+    outcome: snapshot_scripted_outcome(outcome),
+  })
+  match outcome {
+    OutcomeOk(value) => snapshot_tool_outcome(value)
+    OutcomeErr(e) => raise e
+  }
+}
