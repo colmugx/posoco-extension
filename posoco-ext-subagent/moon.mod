@@ -14,12 +14,11 @@ description = "Posoco agent tool - run embedded subagents as a ToolProvider"
 
 import {
   "colmugx/posoco@0.23.3",
-  "colmugx/fuwaroid@0.3.2",
+  "colmugx/fuwaroid@0.4.0",
   "colmugx/posoco-kit-subagent@0.1.1",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.0",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.7",
 }
 
 source = "src"
