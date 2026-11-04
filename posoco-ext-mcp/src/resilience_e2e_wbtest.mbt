@@ -88,7 +88,7 @@ async fn e2e_fixture_cwd(
 /// Node availability is checked by the caller; an activation failure here is
 /// a real error, not a skip.
 async fn e2e_activate_bridge(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   node : String,
   extra_entry : String,
   fixture_env : Array[(String, String)],

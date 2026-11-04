@@ -238,7 +238,7 @@ async fn workflow_task(
 /// Online Board with one Ready task and one queued Execute Attempt per given
 /// Task ID, driven through real commands only.
 async fn workflow_board(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   tasks~ : Array[String],
 ) -> @backend.BoardBackend {
   let creation_clock = fake_clock(now=1234L)
@@ -272,7 +272,7 @@ struct WorkflowHarness {
 /// to the trusted-host opt-in; `policy_enabled=false` exercises the safe
 /// disabled default.
 async fn workflow_harness(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   adapter~ : ScriptedAdapter = scripted_adapter(),
   clock~ : FakeClock = fake_clock(),

@@ -203,7 +203,7 @@ priv struct ConnActor[ClientT] {
 /// generation 0, Fresh, empty in-flight. The mailbox is the default
 /// Unbounded: this round serializes state arbitration, not admission.
 fn[ClientT] ConnActor::start(
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   client~ : ClientT,
 ) -> ConnActor[ClientT] {
   let init : ConnState[ClientT] = {

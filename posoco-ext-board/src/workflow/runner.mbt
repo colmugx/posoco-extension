@@ -6,7 +6,7 @@ priv suberror WorkflowDeadline
 /// execution journal or background discovery loop is owned here.
 pub struct SequentialWorkflowRunner {
   priv orchestrator : @orchestration.BoardOrchestrator
-  priv group : @async.TaskGroup[Unit]
+  priv group : @async.TaskGroup
   priv now_ms : () -> Int64
   priv wake : @aqueue.Queue[Unit]
   priv history : Array[String]
@@ -38,7 +38,7 @@ pub struct SequentialWorkflowRunner {
 /// backend shutdown, and a false shutdown result must never be ignored.
 pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   now_ms~ : () -> Int64 = @async.now,
 ) -> SequentialWorkflowRunner {
   {

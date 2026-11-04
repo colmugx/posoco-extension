@@ -4,7 +4,7 @@
 /// internals. This instance is the sole durable writer for its namespace.
 pub struct BoardWorkflows {
   priv directory : String
-  priv group : @async.TaskGroup[Unit]
+  priv group : @async.TaskGroup
   priv agents : &WorkflowAgentFactory
   priv policy : BoardWorkflowPolicy
   priv clock : () -> Int64
@@ -37,7 +37,7 @@ pub struct BoardWorkflows {
 pub fn BoardWorkflows::BoardWorkflows(
   directory~ : String,
   agents~ : &WorkflowAgentFactory,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   policy~ : BoardWorkflowPolicy = BoardWorkflowPolicy(),
   now_ms~ : () -> Int64 = () => @async.now(),
   authorize~ : () -> Bool = () => true,

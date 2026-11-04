@@ -1,6 +1,6 @@
 ///|
 fn test_registry(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   init~ : Registry = Registry::{ pending: Map([]), next_id: 1, closed: false, },
 ) -> @fuwaroid.Fuwaroid[RegistryCmd, RegistryQuery, RegistryReply] {
   @fuwaroid.Fuwaroid::spawn(

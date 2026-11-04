@@ -145,7 +145,7 @@ impl @posoco.ModelPort for WorkflowRealModel with fn compact(
 /// scripted trusted host resolver and an enabled Ready-stage policy, wired
 /// into one runner inside the same structured host lifetime.
 async fn workflow_real_harness(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   model~ : WorkflowRealModel,
   resolver~ : ScriptedResolver,
