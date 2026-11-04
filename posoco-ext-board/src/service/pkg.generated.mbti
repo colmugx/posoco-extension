@@ -9,7 +9,7 @@ import {
   "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -91,7 +91,7 @@ pub fn BoardWorkflowView::to_repr(Self) -> @debug.Repr
 pub struct BoardWorkflows {
   // private fields
 }
-pub fn BoardWorkflows::BoardWorkflows(directory~ : String, agents~ : &WorkflowAgentFactory, group~ : @async.TaskGroup[Unit], policy? : BoardWorkflowPolicy, now_ms? : () -> Int64, authorize? : () -> Bool) -> Self
+pub fn BoardWorkflows::BoardWorkflows(directory~ : String, agents~ : &WorkflowAgentFactory, group~ : @async.TaskGroup, policy? : BoardWorkflowPolicy, now_ms? : () -> Int64, authorize? : () -> Bool) -> Self
 pub async fn BoardWorkflows::authorize_control(Self, workflow_id~ : String, task_ids~ : Array[String], expected_revision~ : Int64, max_runs~ : Int32, deadline_ms~ : Int64, authorize? : () -> Bool, capture_after_successful_tools? : Bool) -> Result[BoardWorkflowControl, BoardWorkflowError]
 pub fn BoardWorkflows::cancel(Self) -> Unit
 pub fn BoardWorkflows::commands(Self) -> Array[@port.CommandDef]

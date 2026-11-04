@@ -8,7 +8,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -36,7 +36,7 @@ pub struct BoardExtension {
   runtime_ : @runtime.BoardRuntime
 }
 pub fn BoardExtension::BoardExtension(config? : BoardConfig) -> Self
-pub fn BoardExtension::attach(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn BoardExtension::attach(Self, @async.TaskGroup) -> Unit
 pub fn BoardExtension::backend(Self) -> @backend.BoardBackend
 pub fn BoardExtension::commands(Self) -> Array[@port.CommandDef]
 pub fn BoardExtension::config(Self) -> BoardConfig
