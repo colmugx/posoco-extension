@@ -74,7 +74,7 @@ async fn Bridge::settle(
 async fn receive_invocation() -> @protocol.Message {
   let decoder = @protocol.Decoder()
   for ;; {
-    let chunk = match @system_stdio.stdin.read_some(max_len=8192) {
+    let chunk = match @system_stdio.stdin.read() {
       Some(chunk) => chunk
       None => raise Failure::Failure("EOF before invocation")
     }
@@ -93,7 +93,7 @@ async fn receive_invocation() -> @protocol.Message {
 async fn Bridge::receive_replies(self : Bridge) -> Unit {
   let decoder = @protocol.Decoder(max_frame_bytes=self.max_frame_bytes)
   for ;; {
-    let chunk = match @system_stdio.stdin.read_some(max_len=8192) {
+    let chunk = match @system_stdio.stdin.read() {
       Some(chunk) => chunk
       None => {
         decoder.finish()
