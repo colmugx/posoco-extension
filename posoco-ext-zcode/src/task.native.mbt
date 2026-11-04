@@ -277,7 +277,7 @@ fn zcode_permission_deny(params : Json?) -> (Json, String)? {
 /// realpath degrades to None, never aborts composition.
 async fn zcode_native_read_file_opt(path : String) -> String? {
   try {
-    let raw = @fs.read_file(path)
+    let raw = @fs.read_binary(path)
     Some(raw.text())
   } catch {
     _ => None
@@ -332,7 +332,7 @@ async fn zcode_resolve_command_io(
 /// Read the v2 credentials and build the provider registry payload.
 async fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
   let path = zcode_creds_path(config~, env=key => @env.get_env_var(key))
-  let raw = @fs.read_file(path) catch {
+  let raw = @fs.read_binary(path) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{e}")
   }
   let text = raw.text() catch {

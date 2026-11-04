@@ -28,7 +28,7 @@ async fn copy_sources(source : String, target : String) -> Unit {
     let to = target + "/" + name
     match @fs.kind(from, follow_symlink=false) {
       Directory => copy_sources(from, to)
-      Regular => @fs.write_file(to, @fs.read_file(from).binary())
+      Regular => @fs.write_binary(to, @fs.read_binary(from))
       SymLink => ()
       _ => fail("Unexpected special file in source fixture")
     }
@@ -68,7 +68,7 @@ async fn main {
     ] {
     copy_sources("../" + module_name, root + "/" + module_name)
   }
-  @fs.write_file(
+  @fs.write_text(
     root + "/moon.work",
     "members = [\"./posoco-ext-board-native\", \"./posoco-ext-board\", \"./posoco-ext-board-web\", \"./posoco-ext-askquestion\"]\n",
   )
@@ -79,29 +79,29 @@ async fn main {
   // a prebuilt artifact and refuses a dist older than its sources. Copying
   // rewrites every mtime, so restate `index.js` to keep the artifact newest.
   let js = dist + "/index.js"
-  @fs.write_file(js, @fs.read_file(js).binary())
+  @fs.write_binary(js, @fs.read_binary(js))
   assert_false(@fs.exists(generated))
   check_native(root)
   assert_true(@fs.exists(generated))
   assert_eq(
-    @fs.read_file(native + "/_build/browser-assets-dist/index.js").binary(),
-    @fs.read_file(js).binary(),
+    @fs.read_binary(native + "/_build/browser-assets-dist/index.js"),
+    @fs.read_binary(js),
   )
-  let first = @fs.read_file(generated).binary()
+  let first = @fs.read_binary(generated)
   // Incrementality: a changed dist byte must reach the embed on the next embed
   // run. The embed rule is deliberately not keyed on `dist` (a missing dist
   // would abort `moon check` before the rule could build it), so drive the
   // builder directly here.
   let css = dist + "/board.css"
-  let changed = @fs.read_file(css).binary() +
+  let changed = @fs.read_binary(css) +
     b"\n/* incremental-resource-regression */\n"
-  @fs.write_file(css, changed)
+  @fs.write_text(css, changed)
   embed(native)
   assert_eq(
-    @fs.read_file(native + "/_build/browser-assets-dist/board.css").binary(),
+    @fs.read_binary(native + "/_build/browser-assets-dist/board.css"),
     changed,
   )
-  assert_true(@fs.read_file(generated).binary() != first)
+  assert_true(@fs.read_binary(generated) != first)
   @shell.Cmd("moon", [
     "-C", native, "run", "tools/embed-assets/generate.mbtx", "--target", "native",
     "--output-json", "--", "--check",
@@ -109,7 +109,7 @@ async fn main {
   // Freshness guard: without a toolchain, a source newer than dist must stop
   // the build instead of silently embedding yesterday's bundle.
   let source = root + "/posoco-ext-board-web/styles/app.css"
-  @fs.write_file(source, @fs.read_file(source).binary())
+  @fs.write_binary(source, @fs.read_binary(source))
   let stale = @shell.Cmd("moon", [
     "-C", root, "check", "posoco-ext-board-native/src", "--target", "native",
     "--output-json",
@@ -119,7 +119,7 @@ async fn main {
     (stale.stdout() + stale.stderr()).contains("older than its source"),
     msg=stale.stdout() + stale.stderr(),
   )
-  @fs.write_file(js, @fs.read_file(js).binary())
+  @fs.write_binary(js, @fs.read_binary(js))
   let packaged = @shell.Cmd("moon", ["-C", native, "package", "--list"]).output()
   if packaged.exit_code() != 0 {
     println(packaged.stdout())

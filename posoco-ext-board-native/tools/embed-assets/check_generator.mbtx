@@ -276,18 +276,18 @@ async fn main {
   let out = fixture + "/assets.mbt"
   @fs.mkdir(dist)
   @fs.mkdir(dist + "/assets")
-  @fs.write_file(dist + "/index.html", b"html")
-  @fs.write_file(dist + "/index.js", b"js")
-  @fs.write_file(dist + "/board.css", b"css")
-  @fs.write_file(dist + "/.hidden", b"\x00\"\\\xff")
-  @fs.write_file(
+  @fs.write_binary(dist + "/index.html", b"html")
+  @fs.write_binary(dist + "/index.js", b"js")
+  @fs.write_binary(dist + "/board.css", b"css")
+  @fs.write_binary(dist + "/.hidden", b"\x00\"\\\xff")
+  @fs.write_binary(
     dist + "/assets/img.dat",
     Bytes::makei(6000, i => (i % 256).to_byte()),
   )
-  @fs.write_file(dist + "/aa.dat", Bytes::make(4096, b'a'))
-  @fs.write_file(dist + "/z.dat", Bytes::make(4097, b'z'))
+  @fs.write_binary(dist + "/aa.dat", Bytes::make(4096, b'a'))
+  @fs.write_binary(dist + "/z.dat", Bytes::make(4097, b'z'))
   generate(dist, out).check()
-  let first = @fs.read_file(out).binary()
+  let first = @fs.read_binary(out)
   let text = @utf8.decode(first)
   assert_true(
     text.find("\"/.hidden\"").unwrap() < text.find("\"/aa.dat\"").unwrap(),
@@ -307,13 +307,13 @@ async fn main {
   assert_eq(count_occurrences(text, "\n    b\""), 116)
   assert_chunked_literals(text)
   generate(dist, out).check()
-  assert_eq(@fs.read_file(out).binary(), first)
+  assert_eq(@fs.read_binary(out), first)
   let before = @fs.mtime(out)
   generate(dist, out, check=true).check()
   assert_eq(@fs.mtime(out), before)
-  assert_eq(@fs.read_file(out).binary(), first)
+  assert_eq(@fs.read_binary(out), first)
   let verify = fixture + "/verify.mbtx"
-  @fs.write_file(
+  @fs.write_text(
     verify,
     text +
     "\n" +
@@ -332,12 +332,12 @@ async fn main {
     ),
   )
   @shell.Cmd("moon", ["run", verify, "--target", "native", "--output-json"]).run()
-  @fs.write_file(out, b"stale marker")
+  @fs.write_binary(out, b"stale marker")
   let stale_mtime = @fs.mtime(out)
   let stale = generate(dist, out, check=true)
   assert_true(stale.exit_code() != 0)
   assert_true(stale.stdout().contains("stale:"))
-  assert_eq(@fs.read_file(out).binary(), b"stale marker")
+  assert_eq(@fs.read_binary(out), b"stale marker")
   assert_eq(@fs.mtime(out), stale_mtime)
   @fs.remove(out)
   let missing = generate(dist, out, check=true)
@@ -357,27 +357,27 @@ async fn main {
     rejected(dist, out, "special file")
     @fs.remove(dist + "/pipe")
   }
-  @fs.write_file(dist + "/board.css", b"")
+  @fs.write_binary(dist + "/board.css", b"")
   rejected(dist, out, "empty")
   @fs.remove(dist + "/board.css")
   rejected(dist, out, "missing required asset")
-  @fs.write_file(dist + "/board.css", b"css")
+  @fs.write_binary(dist + "/board.css", b"css")
   // Browser assets may never occupy the Board control-plane namespace.
   for path in ["/health", "/ws", "/api"] {
-    @fs.write_file(dist + path, b"shadow")
+    @fs.write_binary(dist + path, b"shadow")
     rejected(dist, out, "reserved control-plane asset path: " + path)
     @fs.remove(dist + path)
   }
   @fs.mkdir(dist + "/api")
   for path in ["/api/bootstrap", "/api/future"] {
-    @fs.write_file(dist + path, b"shadow")
+    @fs.write_binary(dist + path, b"shadow")
     rejected(dist, out, "reserved control-plane asset path: " + path)
     @fs.remove(dist + path)
   }
   @fs.rmdir(dist + "/api")
   @fs.symlink(target="dist/index.js", out + ".tmp")
   rejected(dist, out, "cannot create")
-  assert_eq(@fs.read_file(dist + "/index.js").binary(), b"js")
+  assert_eq(@fs.read_binary(dist + "/index.js"), b"js")
   @fs.remove(out + ".tmp")
   generate(dist, out).check()
   assert_false(@fs.exists(out + ".tmp"))

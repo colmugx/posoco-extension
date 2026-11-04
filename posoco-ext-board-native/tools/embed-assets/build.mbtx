@@ -30,7 +30,7 @@ async fn copy_tree(source : String, target : String) -> Unit {
     let to = target + "/" + name
     match @fs.kind(from, follow_symlink=false) {
       Directory => copy_tree(from, to)
-      Regular => @fs.write_file(to, @fs.read_file(from).binary())
+      Regular => @fs.write_binary(to, @fs.read_binary(from))
       _ => fail("Browser dist assets must be regular files or directories")
     }
   }

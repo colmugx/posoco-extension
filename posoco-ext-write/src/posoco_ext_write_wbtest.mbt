@@ -134,7 +134,7 @@ async test "write_freshness_gate_rejects_unread_existing_file" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/target.txt"
-    @fs.write_file(path, "old", create_mode=CreateNew)
+    @fs.write_text(path, "old", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let tools = WriteTools::WriteTools(freshness=ledger)
     match run_write(tools, write_call(path, "new")) {
@@ -156,7 +156,7 @@ async test "write_freshness_gate_rejects_modified_file" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/target.txt"
-    @fs.write_file(path, "old", create_mode=CreateNew)
+    @fs.write_text(path, "old", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     // A read happened, but the file changed afterwards.
     ledger.note_read(path, @devkit.FileStamp::{
@@ -182,7 +182,7 @@ async test "write_allows_fresh_file_and_updates_ledger" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/target.txt"
-    @fs.write_file(path, "old", create_mode=CreateNew)
+    @fs.write_text(path, "old", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
     let tools = WriteTools::WriteTools(freshness=ledger)
@@ -206,7 +206,7 @@ async test "write_without_ledger_allows_blind_overwrite" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/target.txt"
-    @fs.write_file(path, "old", create_mode=CreateNew)
+    @fs.write_text(path, "old", create_mode=CreateNew)
     match run_write(WriteTools::WriteTools(), write_call(path, "new")) {
       @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected ledger-less overwrite to succeed")
@@ -304,7 +304,7 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
       @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected overwrite via different spelling to pass the gate")
     }
-    let text = @fs.read_file(dir + "/notes/a.txt").text() catch {
+    let text = @fs.read_text(dir + "/notes/a.txt") catch {
       _ => fail("expected written file to exist")
     }
     assert_eq(text, "v2")
