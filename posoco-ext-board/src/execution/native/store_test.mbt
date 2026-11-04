@@ -22,7 +22,7 @@ async test "native journal persists identities separately from S3 Board state an
   competitor.close()
   assert_true(@fs.readdir(root).contains("execution.lock"))
   assert_true(first.persist([reserved()]) is Ok(_))
-  let encoded = @fs.read_file(root + "/executions.json").text()
+  let encoded = @fs.read_text(root + "/executions.json")
   assert_eq(@execution.decode_execution_journal(encoded), Ok([reserved()]))
   assert_false(encoded.contains("input"))
   first.close()
@@ -58,7 +58,7 @@ async test "native pre and post rename journal failures forbid subsequent writes
 async test "native journal rejects corrupt files and existing temp paths without overwriting" {
   let root = @fs.tmpdir(prefix="board-execution-unsafe-")
   defer @fs.rmdir(root, recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     root + "/executions.json",
     "{\"schema_version\":2,\"bindings\":[]}",
   )
@@ -69,10 +69,10 @@ async test "native journal rejects corrupt files and existing temp paths without
   @fs.remove(root + "/executions.json")
   let blocked = @native.FileBoardExecutionStore(directory=root)
   assert_eq(blocked.load(), Ok([]))
-  @fs.write_file(root + "/executions.json.tmp", "do not overwrite")
+  @fs.write_text(root + "/executions.json.tmp", "do not overwrite")
   assert_true(blocked.persist([reserved()]) is Err(@execution.StoreUnavailable))
   assert_eq(
-    @fs.read_file(root + "/executions.json.tmp").text(),
+    @fs.read_text(root + "/executions.json.tmp"),
     "do not overwrite",
   )
   blocked.close()
@@ -82,9 +82,9 @@ async test "native journal rejects corrupt files and existing temp paths without
 async test "stale lock after crash is never removed or automatically reacquired" {
   let root = @fs.tmpdir(prefix="board-execution-stale-")
   defer @fs.rmdir(root, recursive=true)
-  @fs.write_file(root + "/execution.lock", "old owner unknown")
+  @fs.write_text(root + "/execution.lock", "old owner unknown")
   let store = @native.FileBoardExecutionStore(directory=root)
   assert_true(store.load() is Err(@execution.StoreUnavailable))
   store.close()
-  assert_eq(@fs.read_file(root + "/execution.lock").text(), "old owner unknown")
+  assert_eq(@fs.read_text(root + "/execution.lock"), "old owner unknown")
 }
