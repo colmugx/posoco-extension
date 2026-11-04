@@ -6,9 +6,13 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
 warnings = "-unused_package"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
