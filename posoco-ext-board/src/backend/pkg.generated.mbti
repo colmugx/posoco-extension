@@ -6,7 +6,7 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -20,7 +20,7 @@ pub struct BoardBackend {
   // private fields
 }
 pub fn BoardBackend::BoardBackend(event_buffer? : Int32, client_queue_depth? : Int32, store? : &@store.BoardStore, now_ms? : () -> Int64) -> Self
-pub fn BoardBackend::attach(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn BoardBackend::attach(Self, @async.TaskGroup) -> Unit
 pub async fn BoardBackend::bootstrap_snapshot(Self) -> Result[@protocol.BoardSnapshot, String]
 pub fn BoardBackend::current_seq(Self) -> Int64
 pub fn BoardBackend::enqueue_local(Self, BoardSubscription, @protocol.BoardServerFrame) -> Unit
