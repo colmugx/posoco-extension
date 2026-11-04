@@ -28,7 +28,7 @@ impl KindFs for NativeKindFs with fn list_kind_files(_self, dir : String) -> Arr
 
 ///|
 impl KindFs for NativeKindFs with fn read_text(_self, path : String) -> String {
-  let data = @fs.read_file(path) catch {
+  let data = @fs.read_binary(path) catch {
     _ => raise kind_io_failure("read", path)
   }
   data.text() catch {

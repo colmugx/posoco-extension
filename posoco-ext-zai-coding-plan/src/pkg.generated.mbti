@@ -9,7 +9,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "posoco/devkit",
@@ -106,7 +106,7 @@ pub impl @devkit.QuotaSource for ZaiCodingPlanQuotaSource
 pub(all) struct ZaiCodingPlanTools {
   config : @posoco-ext-zai.ZaiConfig
   bus : @devkit.EventBus
-  group : @async.TaskGroup[Unit]
+  group : @async.TaskGroup
   initial_slot_id : String
   open_plane : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise
   mut contributions : @port.ToolContributions?
@@ -117,7 +117,7 @@ pub(all) struct ZaiCodingPlanTools {
   mut generation : Int32
   mut active_model : String
 }
-pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(config~ : @posoco-ext-zai.ZaiConfig, bus~ : @devkit.EventBus, group~ : @async.TaskGroup[Unit], initial_slot_id? : String, open_plane? : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise) -> Self
+pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(config~ : @posoco-ext-zai.ZaiConfig, bus~ : @devkit.EventBus, group~ : @async.TaskGroup, initial_slot_id? : String, open_plane? : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise) -> Self
 pub fn ZaiCodingPlanTools::extension_id(Self) -> String
 pub fn ZaiCodingPlanTools::manifest(Self) -> @port.ExtensionManifest
 pub fn ZaiCodingPlanTools::on_bus_event(Self, @devkit.BusEvent) -> Unit

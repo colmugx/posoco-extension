@@ -25,14 +25,14 @@ async test "native absent directory rev0 default path and real durable replaceme
   let restarted = FileBoardStore::FileBoardStore(root=path)
   assert_eq(restarted.load().map(loaded => loaded.snapshot), Ok(fixture()))
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok(all_events()),
   )
   let next = { ..fixture(), revision: 18L, }
   assert_eq(store.persist(next, []), Ok(()))
   assert_eq(restarted.load().map(loaded => loaded.snapshot), Ok(next))
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok(all_events()),
   )
   let result = restarted.load().map(loaded => loaded.snapshot).unwrap()
@@ -60,7 +60,7 @@ async test "six injected native stages preserve old board before rename and neve
     let old = fixture()
     let old_events = [all_events()[0]]
     assert_eq(good.persist(old, old_events), Ok(()))
-    let old_bytes = @fs.read_file(data + "/board.json").binary()
+    let old_bytes = @fs.read_binary(data + "/board.json")
     let next = {
       ..old,
       revision: 18L,
@@ -81,7 +81,7 @@ async test "six injected native stages preserve old board before rename and neve
       ],
     }
     let event = all_events()[1]
-    @fs.write_file(data + "/board.json.tmp", "stale temp")
+    @fs.write_text(data + "/board.json.tmp", "stale temp")
     let failing = FileBoardStore::FileBoardStore(root~, fail_at=Some(stage))
     if stage == DirectoryFsync {
       match failing.persist(next, [event]) {
@@ -98,7 +98,7 @@ async test "six injected native stages preserve old board before rename and neve
       assert_false(@fs.exists(data + "/board.json.tmp"))
     } else {
       assert_eq(restarted.load().map(loaded => loaded.snapshot), Ok(old))
-      assert_eq(@fs.read_file(data + "/board.json").binary(), old_bytes)
+      assert_eq(@fs.read_binary(data + "/board.json"), old_bytes)
     }
     let audit = restarted.load().unwrap().journal
     let expected = records(17L, old_events)
@@ -137,17 +137,17 @@ async test "native temp residue never rescues absent or corrupt authoritative bo
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   @fs.mkdir(data, recursive=true, allow_exist=true)
-  @fs.write_file(data + "/board.json.tmp", encode_snapshot(fixture()).unwrap())
+  @fs.write_text(data + "/board.json.tmp", encode_snapshot(fixture()).unwrap())
   assert_eq(store.load().map(loaded => loaded.snapshot), Ok(empty_snapshot()))
-  @fs.write_file(data + "/board.json", "corrupt")
+  @fs.write_text(data + "/board.json", "corrupt")
   invalid(store.load().map(loaded => loaded.snapshot))
-  @fs.write_file(data + "/board.json", "")
+  @fs.write_text(data + "/board.json", "")
   invalid(store.load().map(loaded => loaded.snapshot))
-  @fs.write_file(data + "/board.json", "null")
+  @fs.write_text(data + "/board.json", "null")
   invalid(store.load().map(loaded => loaded.snapshot))
-  @fs.write_file(data + "/board.json", b"\xff")
+  @fs.write_binary(data + "/board.json", b"\xff")
   invalid(store.load().map(loaded => loaded.snapshot))
-  @fs.write_file(data + "/board.json", b"\xef\xbb\xbf{}")
+  @fs.write_binary(data + "/board.json", b"\xef\xbb\xbf{}")
   invalid(store.load().map(loaded => loaded.snapshot))
   assert_eq(store.persist(fixture(), []), Ok(()))
   assert_eq(store.load().map(loaded => loaded.snapshot), Ok(fixture()))
@@ -160,7 +160,7 @@ async test "native malformed complete journal lines fail load and persist before
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
-  let board = @fs.read_file(data + "/board.json").binary()
+  let board = @fs.read_binary(data + "/board.json")
   let line = journal_line(all_events()[0]).unwrap() + "\n"
   for
     corrupt in [
@@ -171,16 +171,16 @@ async test "native malformed complete journal lines fail load and persist before
       "broken\n" + line,
       line + "\n",
     ] {
-    @fs.write_file(data + "/events.jsonl", corrupt)
+    @fs.write_text(data + "/events.jsonl", corrupt)
     invalid(store.load().map(loaded => loaded.snapshot))
     invalid(store.persist({ ..fixture(), revision: 18L, }, all_events()))
-    assert_eq(@fs.read_file(data + "/board.json").binary(), board)
-    assert_eq(@fs.read_file(data + "/events.jsonl").text(), corrupt)
+    assert_eq(@fs.read_binary(data + "/board.json"), board)
+    assert_eq(@fs.read_text(data + "/events.jsonl"), corrupt)
   }
-  @fs.write_file(data + "/events.jsonl", b"\xff\n")
+  @fs.write_binary(data + "/events.jsonl", b"\xff\n")
   invalid(store.load().map(loaded => loaded.snapshot))
   invalid(store.persist(fixture(), []))
-  assert_eq(@fs.read_file(data + "/board.json").binary(), board)
+  assert_eq(@fs.read_binary(data + "/board.json"), board)
 }
 
 ///|
@@ -201,7 +201,7 @@ async test "native safely truncates torn tails before append including UTF8 resi
     ] {
     // A malformed *earlier* physical line still fails, even if final tail is
     // unterminated. Everything else is removed before the next append.
-    @fs.write_file(data + "/events.jsonl", @utf8.encode(line) + residue)
+    @fs.write_binary(data + "/events.jsonl", @utf8.encode(line) + residue)
     if residue == @utf8.encode("bad\nlast") {
       invalid(store.load().map(loaded => loaded.snapshot))
       invalid(store.persist(fixture(), [next]))
@@ -212,13 +212,13 @@ async test "native safely truncates torn tails before append including UTF8 resi
       )
       assert_eq(store.persist(fixture(), [next]), Ok(()))
       assert_eq(
-        @fs.read_file(data + "/events.jsonl").text(),
+        @fs.read_text(data + "/events.jsonl"),
         line + journal_line(next).unwrap() + "\n",
       )
       assert_eq(store.load().map(loaded => loaded.snapshot), Ok(fixture()))
       assert_eq(store.persist({ ..fixture(), revision: 18L, }, [event]), Ok(()))
       assert_eq(
-        decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+        decode_journal_events(@fs.read_text(data + "/events.jsonl")),
         Ok([event, next, event]),
       )
       @fs.remove(data + "/board.json")
@@ -236,20 +236,20 @@ async test "native retains valid unterminated records and inserts newline before
   let first = all_events()[0]
   let second = all_events()[1]
   let raw = journal_line(first).unwrap()
-  @fs.write_file(data + "/events.jsonl", raw)
+  @fs.write_text(data + "/events.jsonl", raw)
   assert_eq(store.load().map(loaded => loaded.snapshot), Ok(empty_snapshot()))
   assert_eq(store.persist(fixture(), [second]), Ok(()))
   assert_eq(
-    @fs.read_file(data + "/events.jsonl").text(),
+    @fs.read_text(data + "/events.jsonl"),
     raw + "\n" + journal_line(second).unwrap() + "\n",
   )
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok([first, second]),
   )
-  @fs.write_file(data + "/events.jsonl", raw)
+  @fs.write_text(data + "/events.jsonl", raw)
   assert_eq(store.persist(fixture(), []), Ok(()))
-  assert_eq(@fs.read_file(data + "/events.jsonl").text(), raw + "\n")
+  assert_eq(@fs.read_text(data + "/events.jsonl"), raw + "\n")
 }
 
 ///|
@@ -260,15 +260,15 @@ async test "native failed persist retries retain a valid unterminated journal ta
     let data = root + "/.cetas/board/default"
     let store = FileBoardStore::FileBoardStore(root~)
     assert_eq(store.persist(fixture(), []), Ok(()))
-    let old_board = @fs.read_file(data + "/board.json").binary()
+    let old_board = @fs.read_binary(data + "/board.json")
     let first = all_events()[0]
     let second = all_events()[1]
     let raw = journal_line(first).unwrap()
-    @fs.write_file(data + "/events.jsonl", raw)
+    @fs.write_text(data + "/events.jsonl", raw)
     let next = { ..fixture(), revision: 18L, }
     let failing = FileBoardStore::FileBoardStore(root~, fail_at=Some(stage))
     assert_eq(failing.persist(next, [second]), Err(Injected(stage)))
-    assert_eq(@fs.read_file(data + "/board.json").binary(), old_board)
+    assert_eq(@fs.read_binary(data + "/board.json"), old_board)
     assert_false(@fs.exists(data + "/board.json.tmp"))
     let appended = raw +
       "\n" +
@@ -277,10 +277,10 @@ async test "native failed persist retries retain a valid unterminated journal ta
     let expected = records(17L, [first])
     if stage == JournalAppend {
       // Failure before journal repair preserves the valid unterminated tail.
-      assert_eq(@fs.read_file(data + "/events.jsonl").text(), raw)
+      assert_eq(@fs.read_text(data + "/events.jsonl"), raw)
     } else {
       // Failure after append retains the original record and an ahead fact.
-      assert_eq(@fs.read_file(data + "/events.jsonl").text(), appended)
+      assert_eq(@fs.read_text(data + "/events.jsonl"), appended)
       expected.append(records(18L, [second]))
     }
     assert_eq(store.load(), Ok({ snapshot: fixture(), journal: expected, }))
@@ -288,7 +288,7 @@ async test "native failed persist retries retain a valid unterminated journal ta
     expected.append(records(18L, [second]))
     assert_eq(store.load(), Ok({ snapshot: next, journal: expected, }))
     assert_eq(
-      @fs.read_file(data + "/events.jsonl").text(),
+      @fs.read_text(data + "/events.jsonl"),
       if stage == JournalAppend {
         appended
       } else {
@@ -310,8 +310,8 @@ async test "native explicit-time recovery persists before return second restart 
     FileBoardStore::FileBoardStore(root~),
     at_ms=123L,
   ).unwrap()
-  let bytes = @fs.read_file(data + "/board.json").binary()
-  let audit = @fs.read_file(data + "/events.jsonl").binary()
+  let bytes = @fs.read_binary(data + "/board.json")
+  let audit = @fs.read_binary(data + "/events.jsonl")
   let second = load_recover_persist(
     FileBoardStore::FileBoardStore(root~),
     at_ms=999L,
@@ -319,10 +319,10 @@ async test "native explicit-time recovery persists before return second restart 
   assert_eq(first.snapshot.revision, 18L)
   assert_eq(second.snapshot, first.snapshot)
   assert_eq(second.events, [])
-  assert_eq(@fs.read_file(data + "/board.json").binary(), bytes)
-  assert_eq(@fs.read_file(data + "/events.jsonl").binary(), audit)
+  assert_eq(@fs.read_binary(data + "/board.json"), bytes)
+  assert_eq(@fs.read_binary(data + "/events.jsonl"), audit)
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok(first.events),
   )
 }
@@ -345,7 +345,7 @@ async test "native helper failures never return an unpersisted normalized snapsh
   assert_eq(normalized.snapshot.attempts[0].finished_at_ms, Some(456L))
   let second = load_recover_persist(good, at_ms=789L).unwrap()
   assert_eq(second.events, [])
-  @fs.write_file(data + "/board.json", "broken")
+  @fs.write_text(data + "/board.json", "broken")
   invalid(load_recover_persist(good, at_ms=789L))
 }
 
@@ -358,7 +358,7 @@ async test "native invalid requests do not create files and real IO errors are t
   invalid(store.persist({ ..fixture(), revision: -1L, }, []))
   invalid(store.persist(fixture(), [@domain.TaskCreated(id=tid(""), at_ms=1L)]))
   assert_false(@fs.exists(path))
-  @fs.write_file(path, "not a directory")
+  @fs.write_text(path, "not a directory")
   match store.persist(fixture(), []) {
     Err(Io(_)) => ()
     _ => fail("expected typed IO error")
@@ -398,7 +398,7 @@ async test "native request arrays detached before first suspension" {
   })
   assert_eq(store.load().map(loaded => loaded.snapshot), Ok(fixture()))
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok(all_events()),
   )
 }
@@ -471,8 +471,8 @@ async test "native rejects schema-invalid unterminated tail without changing boa
   let store = FileBoardStore::FileBoardStore(root~)
   let data = root + "/.cetas/board/default"
   assert_eq(store.persist(fixture(), [all_events()[0]]), Ok(()))
-  let board = @fs.read_file(data + "/board.json").binary()
-  let prefix = @fs.read_file(data + "/events.jsonl").text()
+  let board = @fs.read_binary(data + "/board.json")
+  let prefix = @fs.read_text(data + "/events.jsonl")
   let line = journal_line(all_events()[1]).unwrap()
   for
     tail in [
@@ -481,11 +481,11 @@ async test "native rejects schema-invalid unterminated tail without changing boa
       line.replace(old="\"schema_version\":1", new="\"schema_version\":2"),
     ] {
     let journal = prefix + tail
-    @fs.write_file(data + "/events.jsonl", journal)
+    @fs.write_text(data + "/events.jsonl", journal)
     invalid(store.load())
     invalid(store.persist({ ..fixture(), revision: 18L, }, all_events()))
-    assert_eq(@fs.read_file(data + "/board.json").binary(), board)
-    assert_eq(@fs.read_file(data + "/events.jsonl").text(), journal)
+    assert_eq(@fs.read_binary(data + "/board.json"), board)
+    assert_eq(@fs.read_text(data + "/events.jsonl"), journal)
     assert_false(@fs.exists(data + "/board.json.tmp"))
   }
 }
@@ -497,7 +497,7 @@ async test "native best effort cleanup never masks primary IO failure" {
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
   let data = root + "/.cetas/board/default"
-  let before = @fs.read_file(data + "/board.json").binary()
+  let before = @fs.read_binary(data + "/board.json")
   // An externally installed directory prevents both opening and unlinking
   // the temp file. Cleanup is best effort and cannot replace the open error.
   @fs.mkdir(data + "/board.json.tmp")
@@ -505,6 +505,6 @@ async test "native best effort cleanup never masks primary IO failure" {
     Err(Io(message)) => assert_true(message.contains("@fs.open()"))
     _ => fail("expected primary open error")
   }
-  assert_eq(@fs.read_file(data + "/board.json").binary(), before)
+  assert_eq(@fs.read_binary(data + "/board.json"), before)
   assert_eq(store.load().unwrap().snapshot, fixture())
 }

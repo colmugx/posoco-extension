@@ -2,10 +2,10 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-kit-model-management" @modelmgmt,
   "posoco/devkit",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
+  "moonbitlang/core/async/js_async",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -17,7 +17,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/io", "moonbitlang/core/async/js_async" ],
+targets: {
     "jsonl_session.mbt": [ "native", "wasm" ],
     "jsonl_session.js.mbt": [ "js" ],
     "session_id_test.mbt": [ "native", "js" ],

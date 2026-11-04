@@ -140,7 +140,7 @@ struct ParallelRealHarness {
 /// driver over models[N]; every slot therefore constructs and owns a fresh
 /// Agent per run, exactly like a real host composition.
 async fn parallel_real_harness(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   models~ : Array[ParallelRealModel],
   resolver~ : ParallelResolver,

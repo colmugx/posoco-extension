@@ -2,9 +2,13 @@ import {
   "colmugx/posoco-ext-mbtx/protocol",
   "colmugx/posoco-ext-mbtx/sdk",
   "colmugx/fuwaroid",
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/stdio" @system_stdio,
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
+  "moonbitlang/core/async/stdio" @system_stdio,
 }
 
 supported_targets = "native + wasm"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/stdio" ],
+)

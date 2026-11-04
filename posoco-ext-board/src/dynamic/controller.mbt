@@ -6,7 +6,7 @@ pub struct DynamicWorkflowController {
   priv owner : @execution.BoardExecutionOwner
   priv orchestrator : @orchestration.BoardOrchestrator
   priv runner : @parallel.ParallelWorkflowRunner
-  priv group : @async.TaskGroup[Unit]
+  priv group : @async.TaskGroup
   priv spec : DynamicWorkflowSpec
   priv policy : @expansion.ExpansionPolicy
   priv now_ms : () -> Int64
@@ -41,7 +41,7 @@ pub fn DynamicWorkflowController::create(
   owner~ : @execution.BoardExecutionOwner,
   backend~ : @backend.BoardBackend,
   resolver~ : &@orchestration.BoardExecutionInputResolver,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   spec~ : DynamicWorkflowSpec,
   now_ms~ : () -> Int64 = @async.now,
 ) -> Result[DynamicWorkflowController, DynamicWorkflowError] {

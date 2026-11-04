@@ -8,7 +8,11 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_package"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

@@ -180,7 +180,7 @@ async test "grep_zero_matches_is_success" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/searchable.txt",
       "alpha\nbeta\n",
       create_mode=CreateNew,
@@ -213,7 +213,7 @@ async test "grep_multi_match_groups_by_file" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/hits.txt",
       "needle alpha\nplain\nneedle beta\nneedle gamma\n",
       create_mode=CreateNew,
@@ -249,7 +249,7 @@ async test "grep_max_matches_caps_output_with_footer" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/hits.txt", "n1\nn2\nn3\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/hits.txt", "n1\nn2\nn3\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([
@@ -284,9 +284,9 @@ async test "grep_files_with_matches_mode_lists_paths_only" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.txt", "x needle y\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/c.txt", "nothing\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.txt", "x needle y\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/c.txt", "nothing\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([
@@ -323,8 +323,8 @@ async test "grep_count_mode_reports_matches_per_file" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([
@@ -358,7 +358,7 @@ async test "grep_case_insensitive_flag_broadens_matching" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
     let plain = GrepTools::GrepTools().execute(
       test_ctx(grep_call("needle", dir)),
     )
@@ -407,15 +407,15 @@ async test "grep_skips_binary_and_unreadable_files_without_failing" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/invalid.bin", b"\xff", create_mode=CreateNew)
-    @fs.write_file("\{dir}/image.png", b"\x89PNG", create_mode=CreateNew)
-    @fs.write_file(
+    @fs.write_binary("\{dir}/invalid.bin", b"\xff", create_mode=CreateNew)
+    @fs.write_binary("\{dir}/image.png", b"\x89PNG", create_mode=CreateNew)
+    @fs.write_text(
       "\{dir}/unreadable.txt",
       "must not be surfaced",
       create_mode=CreateNew,
       permission=0o000,
     )
-    @fs.write_file("\{dir}/hit.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/hit.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(grep_call("needle", dir)),
     )
@@ -448,15 +448,15 @@ async test "grep_prunes_ignores_and_hidden_entries" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/top.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/top.txt", "needle\n", create_mode=CreateNew)
     @fs.mkdir("\{dir}/node_modules")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/node_modules/dep.txt",
       "needle\n",
       create_mode=CreateNew,
     )
     @fs.mkdir("\{dir}/.hidden")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/.hidden/secret.txt",
       "needle\n",
       create_mode=CreateNew,
@@ -488,8 +488,8 @@ async test "grep_glob_filter_narrows_searched_files" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.mbt", "needle\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.mbt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([
@@ -517,7 +517,7 @@ async test "grep_long_line_is_truncated_with_marker" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/long.txt",
       "needle " + "x".repeat(3000) + "\n",
       create_mode=CreateNew,
@@ -545,7 +545,7 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       dir + "/a.txt",
       "needle here\nplain line\n",
       create_mode=CreateNew,
@@ -631,7 +631,7 @@ async test "grep_regex_alternation_matches_and_literal_pipe_does_not" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/model.txt",
       "pub(all) struct ToolCall {\nstruct ToolCallBuilder {\nplain line\n",
       create_mode=CreateNew,
@@ -678,7 +678,7 @@ async test "grep_invalid_regex_fails_loudly" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
     let result = Ok(
       GrepTools::GrepTools().execute(
         test_ctx(
@@ -707,7 +707,7 @@ async test "grep_regex_case_insensitive_combo" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/a.txt",
       "needle here\nother line\n",
       create_mode=CreateNew,
@@ -739,8 +739,8 @@ async test "grep_regex_respects_glob_filter" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.txt", "alpha\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.md", "gamma\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.txt", "alpha\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.md", "gamma\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([

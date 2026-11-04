@@ -4,7 +4,7 @@ package "colmugx/posoco-ext-board/workflow"
 import {
   "colmugx/posoco-ext-board/execution",
   "colmugx/posoco-ext-board/orchestration",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -16,7 +16,7 @@ import {
 pub struct SequentialWorkflowRunner {
   // private fields
 }
-pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup[Unit], now_ms? : () -> Int64) -> Self
+pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup, now_ms? : () -> Int64) -> Self
 pub fn SequentialWorkflowRunner::cancel(Self) -> Unit
 pub fn SequentialWorkflowRunner::pause(Self) -> Bool
 pub fn SequentialWorkflowRunner::resume_workflow(Self) -> Bool

@@ -69,7 +69,7 @@ async fn fixture_directory() -> String {
 
 ///|
 async fn fixture_text(directory : String, name : String) -> String {
-  @fs.read_file(directory + "/" + name + ".json").text()
+  @fs.read_text(directory + "/" + name + ".json")
 }
 
 ///|

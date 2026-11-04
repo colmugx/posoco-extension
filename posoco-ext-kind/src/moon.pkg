@@ -1,21 +1,23 @@
 import {
+  "moonbitlang/core/encoding/utf8",
   "colmugx/posoco",
   "colmugx/posoco-ext-permission" @permission,
   "posoco/devkit",
   "moonbit-community/yaml",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "kind_fs.js.mbt": [ "js" ],
     "kind_fs.native.mbt": [ "native", "wasm" ],
   },

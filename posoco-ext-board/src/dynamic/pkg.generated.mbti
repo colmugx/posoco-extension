@@ -10,7 +10,7 @@ import {
   "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco-ext-board/parallel",
   "colmugx/posoco-ext-board/workflow",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -48,7 +48,7 @@ pub async fn DynamicWorkflowController::authorize_scope_extension(Self, workflow
 pub fn DynamicWorkflowController::cancel(Self) -> Unit
 pub fn DynamicWorkflowController::clear_control_scope(Self) -> Unit
 pub async fn DynamicWorkflowController::commit(Self, approval~ : @expansion.ExpansionApproval) -> Result[Unit, DynamicWorkflowError]
-pub fn DynamicWorkflowController::create(owner~ : @execution.BoardExecutionOwner, backend~ : @backend.BoardBackend, resolver~ : &@orchestration.BoardExecutionInputResolver, group~ : @async.TaskGroup[Unit], spec~ : DynamicWorkflowSpec, now_ms? : () -> Int64) -> Result[Self, DynamicWorkflowError]
+pub fn DynamicWorkflowController::create(owner~ : @execution.BoardExecutionOwner, backend~ : @backend.BoardBackend, resolver~ : &@orchestration.BoardExecutionInputResolver, group~ : @async.TaskGroup, spec~ : DynamicWorkflowSpec, now_ms? : () -> Int64) -> Result[Self, DynamicWorkflowError]
 pub fn DynamicWorkflowController::discard_proposal(Self) -> Unit
 pub async fn DynamicWorkflowController::execution_plan(Self, Array[String]) -> Result[@orchestration.ExecutionPlan, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::generate_plan(Self, request~ : @execution.BoardExecutionRequest, channel~ : @execution.BoardExecutionResultChannel, authorization_id~ : String, workflow_parent~ : String, permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int32, max_edges? : Int32) -> Result[Unit, DynamicWorkflowError]

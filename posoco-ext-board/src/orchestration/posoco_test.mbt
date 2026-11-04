@@ -205,7 +205,7 @@ impl @orchestration.BoardExecutionInputResolver for RealHostResolver with fn res
 /// Attempts. The command IDs below are correlation data and never become
 /// execution or session identity.
 async fn real_ready_board(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   attempts~ : Int32 = 1,
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store=@store.MemoryBoardStore(), now_ms=() => {
@@ -264,7 +264,7 @@ async fn real_ready_board(
 /// One owner (attached to the host group) with the actual Posoco driver and the
 /// trusted host resolver behind an enabled Ready-stage policy.
 async fn real_orchestrator(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   backend : @backend.BoardBackend,
   model : RealOrchestrationModel,
   resolver : RealHostResolver,

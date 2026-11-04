@@ -163,7 +163,7 @@ impl @expansion.ExpansionApprover for GrantApprover with fn approve(
 }
 
 ///|
-async fn plan_board(group : @async.TaskGroup[Unit]) -> @backend.BoardBackend {
+async fn plan_board(group : @async.TaskGroup) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(now_ms=() => 100L)
   backend.attach(group)
   assert_true(backend.bootstrap_snapshot() is Ok(_))

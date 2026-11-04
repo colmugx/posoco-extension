@@ -48,7 +48,7 @@ fn[T] assert_rejected(
 ///|
 /// Attach, then await the startup restore. Tests below work against a Ready
 /// coordinator over the default private memory store.
-async fn ready_coordinator(group : @async.TaskGroup[Unit]) -> BoardCoordinator {
+async fn ready_coordinator(group : @async.TaskGroup) -> BoardCoordinator {
   let coordinator = BoardCoordinator::BoardCoordinator()
   coordinator.attach(group~)
   assert_true(coordinator.wait_ready() is Ok(_))

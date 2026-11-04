@@ -146,7 +146,7 @@ struct DynamicHarness {
 
 ///|
 async fn dynamic_harness(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   enabled~ : Bool = true,
   max_executions~ : Int32 = 8,
   max_expansions~ : Int32 = 4,

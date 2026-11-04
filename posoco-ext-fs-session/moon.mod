@@ -21,6 +21,5 @@ import {
   "colmugx/posoco@0.23.3",
   "colmugx/posoco-kit-model-management@0.1.0",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.7",
   "moonbitlang/x@0.5.5",
 }

@@ -2,16 +2,17 @@ import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "colmugx/posoco/runtime",
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
-  supported_targets: "js",
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async" ],
+supported_targets: "js",
   link: {
     "js": {
       "format": "esm",

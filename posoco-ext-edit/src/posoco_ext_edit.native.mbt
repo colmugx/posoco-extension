@@ -33,10 +33,10 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
 
 ///|
 impl FsIo for NativeFsIo with fn read_text(_self, path : String) -> String {
-  let data = @fs.read_file(path) catch {
+  let data = @fs.read_binary(path) catch {
     error => raise edit_failure("read", path, error.to_string())
   }
-  data.text() catch {
+  @utf8.decode(data) catch {
     _ => raise edit_failure("decode", path, "invalid UTF-8")
   }
 }
@@ -51,7 +51,7 @@ impl FsIo for NativeFsIo with fn write_atomic(
 ) -> Unit {
   edit_tmp_counter.val += 1
   let tmp = "\{path}.tmp-\{edit_tmp_counter.val}"
-  @fs.write_file(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
+  @fs.write_text(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
     error => raise edit_failure("write", path, error.to_string())
   }
   @fs.rename(tmp, path, replace=true) catch {

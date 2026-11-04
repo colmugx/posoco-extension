@@ -1,6 +1,6 @@
 import {
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
   "colmugx/posoco",
   "posoco/devkit",
   "colmugx/posoco-ext-workspace" @workspace,
@@ -10,7 +10,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco-ext-workspace" @workspace,
   "colmugx/posoco/kernel",
 } for "wbtest"
@@ -18,7 +18,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/io" ],
+targets: {
     "posoco_ext_read.js.mbt": [ "js" ],
     "posoco_ext_read.native.mbt": [ "native", "wasm" ],
   },

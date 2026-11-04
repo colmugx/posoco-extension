@@ -1,11 +1,12 @@
 import {
+  "moonbitlang/core/encoding/utf8",
   "colmugx/posoco",
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
-  "moonbitlang/async/js_async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
+  "moonbitlang/core/async/js_async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
@@ -24,7 +25,8 @@ supported_targets = "+native +js"
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/fs", "moonbitlang/core/async/io", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+targets: {
     "task.native.mbt": [ "native" ],
     "task.js.mbt": [ "js" ],
     "live_wbtest.mbt": [ "native" ],

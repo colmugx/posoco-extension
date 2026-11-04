@@ -5,9 +5,10 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
-  targets: { "metrics_wbtest.mbt": [ "native" ] },
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+targets: { "metrics_wbtest.mbt": [ "native" ] },
 )

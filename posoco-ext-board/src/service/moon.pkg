@@ -15,8 +15,8 @@ import {
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
   "colmugx/posoco-ext-board/workflow",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/debug",
 }
 
@@ -32,7 +32,8 @@ import {
 supported_targets = "+native+js"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "directory.native.mbt": [ "native" ],
     "directory.js.mbt": [ "js" ],
   },

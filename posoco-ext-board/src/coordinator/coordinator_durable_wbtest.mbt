@@ -210,7 +210,7 @@ fn load_of(snapshot : @domain.BoardStateSnapshot) -> @store.BoardLoad {
 ///|
 /// Release one startup load immediately so the coordinator becomes Ready.
 async fn ready_scripted(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   store : ScriptedBoardStore,
 ) -> BoardCoordinator {
   let coordinator = scripted_coordinator(store)

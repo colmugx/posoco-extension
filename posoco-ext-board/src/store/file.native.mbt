@@ -72,7 +72,7 @@ extern "c" fn truncate_file(fd : Int32, length : Int64) -> Int32 = "board_store_
 async fn FileBoardStore::journal(self : FileBoardStore) -> Bytes {
   let path = self.directory + "/events.jsonl"
   if @fs.exists(path) {
-    @fs.read_file(path).binary()
+    @fs.read_binary(path)
   } else {
     b""
   }
@@ -106,7 +106,7 @@ pub impl BoardStore for FileBoardStore with fn load(self) {
     let scan = scan_journal_bytes(self.journal())
     let board = self.directory + "/board.json"
     let snapshot = if @fs.exists(board) {
-      checked(decode_snapshot(strict_utf8(@fs.read_file(board).binary())))
+      checked(decode_snapshot(strict_utf8(@fs.read_binary(board))))
     } else {
       empty_snapshot()
     }
@@ -150,7 +150,7 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
         permission=0o600,
       )
       defer temp.close()
-      temp.write(board)
+      temp.write(@utf8.encode(board)[:])
       self.stage(TempFsync)
       temp.sync()
       self.stage(JournalAppend)
@@ -170,10 +170,10 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
         }
       }
       if scan.add_newline {
-        journal.write("\n")
+        journal.write(b"\n")
       }
       for line in lines {
-        journal.write(line)
+        journal.write(@utf8.encode(line)[:])
       }
       self.stage(JournalFsync)
       journal.sync()

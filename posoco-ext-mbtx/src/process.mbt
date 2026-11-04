@@ -20,6 +20,7 @@ async fn collect_process(
     cwd,
     true,
     process => {
+      let collected : Ref[(Int32, String)?] = Ref(None)
       @async.with_task_group(group => {
         @async.pause()
         let output = []
@@ -46,12 +47,16 @@ async fn collect_process(
         let code = process.wait()
         out.wait()
         err.wait()
-        (
+        collected.val = Some((
           code,
           @utf8.decode(Bytes::from_array(output)) +
           @utf8.decode(Bytes::from_array(diagnostics)),
-        )
+        ))
       })
+      match collected.val {
+        Some(result) => result
+        None => abort("process collection completed without a result")
+      }
     },
     extra_env~,
   )

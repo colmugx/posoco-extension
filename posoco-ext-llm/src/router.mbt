@@ -53,7 +53,7 @@ pub(all) struct RouterModelPort {
   priv mut quota_shown : Array[String]
   /// Host task group for background lifecycle work, attached via
   /// `attach_background`. `None` keeps every lifecycle await inline.
-  priv mut background_group : @async.TaskGroup[Unit]?
+  priv mut background_group : @async.TaskGroup?
 }
 
 ///|
@@ -266,7 +266,7 @@ fn RouterModelPort::active_slot_opt(self : RouterModelPort) -> ModelSlot? {
 /// `with_task_group` scope; the group stays open for the agent's lifetime.
 pub fn RouterModelPort::attach_background(
   self : RouterModelPort,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   self.background_group = Some(group)
 }

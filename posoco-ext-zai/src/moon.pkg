@@ -6,19 +6,20 @@ import {
   "colmugx/posoco-kit-compact-summary" @compact_summary,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+targets: {
     "zai_wbtest.mbt": [ "native" ],
     "posoco_ext_zai_wbtest.mbt": [ "native" ],
     "list_models_wbtest.mbt": [ "native" ],

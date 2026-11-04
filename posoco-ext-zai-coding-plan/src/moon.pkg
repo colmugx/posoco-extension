@@ -7,8 +7,8 @@ import {
   "posoco/devkit",
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
 }
 
@@ -16,12 +16,13 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-ext-zai" @zai,
   "posoco/devkit",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
 } for "wbtest"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+targets: {
     "zai_coding_plan_wbtest.mbt": [ "native" ],
     "quota_wbtest.mbt": [ "native" ],
   },

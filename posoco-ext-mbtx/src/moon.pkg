@@ -1,10 +1,10 @@
 import {
   "colmugx/posoco-ext-mbtx/protocol",
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/js_async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/js_async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "posoco/devkit",
   "colmugx/posoco",
@@ -13,7 +13,8 @@ import {
 }
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+targets: {
     "process.native.mbt": [ "native" ],
     "toolchain_platform.native.mbt": [ "native" ],
     "toolchain_platform.js.mbt": [ "js" ],

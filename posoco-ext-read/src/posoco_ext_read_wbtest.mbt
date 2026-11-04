@@ -112,7 +112,7 @@ async test "read_invalid_utf8_names_binary_file" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/invalid.bin"
-    @fs.write_file(path, b"\xff", create_mode=CreateNew)
+    @fs.write_binary(path, b"\xff", create_mode=CreateNew)
     let outcome = Ok(ReadTools::ReadTools().execute(test_ctx(read_call(path)))) catch {
       error => Err(error)
     }
@@ -175,7 +175,7 @@ async fn run_read(
 async fn write_ten_lines(dir : String) -> String {
   let path = dir + "/ten.txt"
   let content = [ for i in 1..<=10 => "line-\{i}" ].join("\n") + "\n"
-  @fs.write_file(path, content, create_mode=CreateNew)
+  @fs.write_text(path, content, create_mode=CreateNew)
   path
 }
 
@@ -279,7 +279,7 @@ async test "read_empty_file_is_a_notice" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/empty.txt"
-    @fs.write_file(path, "", create_mode=CreateNew)
+    @fs.write_text(path, "", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       @posoco.ToolOutcome::Success(content~, ..) =>
@@ -298,7 +298,7 @@ async test "read_truncates_long_lines_with_marker" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/long.txt"
-    @fs.write_file(path, "a".repeat(3000) + "\n", create_mode=CreateNew)
+    @fs.write_text(path, "a".repeat(3000) + "\n", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       @posoco.ToolOutcome::Success(content~, ..) => {
@@ -321,7 +321,7 @@ async test "read_byte_cap_cuts_implicit_page_with_footer" {
     }
     let path = dir + "/wide.txt"
     let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
-    @fs.write_file(path, content, create_mode=CreateNew)
+    @fs.write_text(path, content, create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       @posoco.ToolOutcome::Success(content~, structured~) => {
@@ -349,7 +349,7 @@ async test "read_explicit_range_over_byte_cap_returns_partial_page" {
     }
     let path = dir + "/wide2.txt"
     let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
-    @fs.write_file(path, content, create_mode=CreateNew)
+    @fs.write_text(path, content, create_mode=CreateNew)
     let outcome = run_read(
       ReadTools::ReadTools(),
       read_call_args(path, limit=60),
@@ -409,7 +409,7 @@ async test "read_normalizes_crlf" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/crlf.txt"
-    @fs.write_file(path, "alpha\r\nbeta\r\n", create_mode=CreateNew)
+    @fs.write_text(path, "alpha\r\nbeta\r\n", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       @posoco.ToolOutcome::Success(content~, ..) =>
@@ -428,7 +428,7 @@ async test "read_records_freshness_stamp_and_detects_change" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/fresh.txt"
-    @fs.write_file(path, "one\ntwo\n", create_mode=CreateNew)
+    @fs.write_text(path, "one\ntwo\n", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let tools = ReadTools::ReadTools(freshness=ledger)
     match run_read(tools, read_call_args(path)) {
@@ -439,7 +439,7 @@ async test "read_records_freshness_stamp_and_detects_change" {
     let now = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(now)), content="Fresh")
     // External append changes the stamp: modified.
-    @fs.write_file(path, "three\n", append=true)
+    @fs.write_text(path, "three\n", append=true)
     let changed = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(changed)), content="Modified")
   }
@@ -627,7 +627,7 @@ async test "read_delegated_fs_serves_buffer_and_records_reads" {
     }
     // Disk bytes deliberately differ from the injected buffer.
     let path = dir + "/buffer.txt"
-    @fs.write_file(path, "disk-content\n", create_mode=CreateNew)
+    @fs.write_text(path, "disk-content\n", create_mode=CreateNew)
     let fake = FakeDelegatedFs::FakeDelegatedFs(
       buffer=[ for i in 1..<=8 => "buf-\{i}" ].join("\n") +
         "\nbuf-9\r\nbuf-10\n",
@@ -665,7 +665,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/fresh.txt"
-    @fs.write_file(path, "one\n", create_mode=CreateNew)
+    @fs.write_text(path, "one\n", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let fake = FakeDelegatedFs::FakeDelegatedFs(buffer="served\n")
     let tools = ReadTools::ReadTools(
@@ -715,7 +715,7 @@ async test "read_attaches_image_files_whole_for_vision" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/shot.png"
-    @fs.write_file(path, "png-bytes-here", create_mode=CreateNew)
+    @fs.write_text(path, "png-bytes-here", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       @posoco.ToolOutcome::SuccessWithAttachments(

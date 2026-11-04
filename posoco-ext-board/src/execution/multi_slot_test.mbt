@@ -53,7 +53,7 @@ fn held_journal(block_write~ : Int32, signal_write~ : Int32) -> HeldJournal {
 
 ///|
 async fn prepared_tasks(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   count : Int32,
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store=@store.MemoryBoardStore(), now_ms=() => {

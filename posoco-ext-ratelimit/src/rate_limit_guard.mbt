@@ -65,7 +65,7 @@ pub fn RateLimitGuard::bind(
 /// Start the serialized runtime and its Supervisor on the host task group.
 pub fn RateLimitGuard::start(
   self : RateLimitGuard,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   agent~ : @posoco.Agent,
 ) -> Unit {
   self.agent = Some(agent)
@@ -114,7 +114,7 @@ pub fn RateLimitGuard::start(
 /// it starts the event-driven runtime on the supplied host group.
 pub fn RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   match self.agent {
     Some(agent) => self.start(group~, agent~)

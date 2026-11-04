@@ -3,18 +3,19 @@ warnings = "-unused_package"
 import {
   "colmugx/posoco",
   "posoco/devkit",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
 } for "wbtest"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "posoco_ext_glob.js.mbt": [ "js" ],
     "posoco_ext_glob.native.mbt": [ "native", "wasm" ],
     "posoco_ext_glob_native_wbtest.mbt": [ "native" ],

@@ -66,7 +66,7 @@ fn ParallelWorkflowRunner::watch(
   self : ParallelWorkflowRunner,
   handle : @execution.BoardExecutionHandle,
   spec : ParallelWorkflowSpec,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   group.spawn_bg(() => {
     let binding = try handle.wait() catch {
@@ -173,7 +173,7 @@ async fn ParallelWorkflowRunner::drive(
 async fn ParallelWorkflowRunner::run_loop(
   self : ParallelWorkflowRunner,
   spec : ParallelWorkflowSpec,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   let mut stale = 0
   while true {

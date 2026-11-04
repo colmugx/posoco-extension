@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "colmugx/fuwaroid",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -10,7 +10,7 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "colmugx/fuwaroid",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
@@ -20,5 +20,6 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: { "rate_limit_guard_wbtest.mbt": [ "native" ] },
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+targets: { "rate_limit_guard_wbtest.mbt": [ "native" ] },
 )

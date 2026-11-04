@@ -9,8 +9,12 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "posoco/devkit/testkit" @tk,
 } for "test"
 
 supported_targets = "native + js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

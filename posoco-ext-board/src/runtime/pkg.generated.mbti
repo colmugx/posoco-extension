@@ -4,7 +4,7 @@ package "colmugx/posoco-ext-board/runtime"
 import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/protocol",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -31,7 +31,7 @@ pub struct BoardRuntime {
   opener : &BrowserOpener
   // private fields
 }
-pub fn BoardRuntime::attach(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn BoardRuntime::attach(Self, @async.TaskGroup) -> Unit
 pub fn BoardRuntime::backend(Self) -> @backend.BoardBackend
 pub async fn BoardRuntime::bootstrap_snapshot(Self) -> Result[@protocol.BoardSnapshot, String]
 pub async fn BoardRuntime::close_server(Self) -> Unit

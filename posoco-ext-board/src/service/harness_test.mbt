@@ -200,7 +200,7 @@ struct Harness {
 ///|
 fn harness(
   directory : String,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   enabled~ : Bool = true,
   max_executions~ : Int32 = 8,
   continue_on_confirmed_failure~ : Bool = false,

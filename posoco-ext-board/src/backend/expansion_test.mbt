@@ -39,7 +39,7 @@ fn for_loop_found(
 
 ///|
 async fn backend_with_parent(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> @backend.BoardBackend {
   let backend = expansion_backend()
   backend.attach(group)

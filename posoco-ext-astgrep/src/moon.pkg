@@ -1,21 +1,22 @@
 import {
   "posoco/devkit",
   "colmugx/posoco",
-  "moonbitlang/async/process",
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/js_async",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
 } for "wbtest"
 
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+targets: {
     "posoco_ext_astgrep.js.mbt": [ "js" ],
     "posoco_ext_astgrep.native.mbt": [ "native", "wasm" ],
     "posoco_ext_astgrep_wbtest.mbt": [ "native" ],

@@ -172,7 +172,7 @@ pub fn BoardCoordinator::BoardCoordinator(
 /// restores the board from the store again.
 pub fn BoardCoordinator::attach(
   self : BoardCoordinator,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
 ) -> Unit {
   if self.actor is Some(_) {
     return

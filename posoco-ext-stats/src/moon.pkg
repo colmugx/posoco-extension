@@ -1,15 +1,16 @@
 import {
   "colmugx/posoco",
   "posoco/devkit",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+targets: {
     "stats_wbtest.mbt": [ "native" ],
     "cache_reporting_wbtest.mbt": [ "native" ],
   },
