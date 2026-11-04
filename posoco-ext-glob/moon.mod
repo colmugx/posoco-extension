@@ -3,9 +3,9 @@ name = "colmugx/posoco-ext-glob"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.23.2",
+  "colmugx/posoco@0.23.3",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.mbt.md"

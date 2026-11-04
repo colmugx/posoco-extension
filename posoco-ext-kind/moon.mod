@@ -13,11 +13,11 @@ keywords = [ "posoco", "kind", "catalog", "subagent", "coding-agent" ]
 description = "Kind catalog and delimit-region template rendering for Posoco subagents"
 
 import {
-  "colmugx/posoco@0.23.2",
+  "colmugx/posoco@0.23.3",
   "colmugx/posoco-ext-permission@0.2.0",
   "posoco/devkit@0.4.1",
   "moonbit-community/yaml@0.0.5",
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
 }
 
 source = "src"

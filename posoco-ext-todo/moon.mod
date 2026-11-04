@@ -3,8 +3,9 @@ name = "colmugx/posoco-ext-todo"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.23.2",
-  "moonbitlang/async@0.22.5",
+  "colmugx/posoco@0.23.3",
+  "moonbitlang/async@0.22.7",
+  "colmugx/cetas-testkit@0.1.0",
 }
 
 readme = "README.mbt.md"

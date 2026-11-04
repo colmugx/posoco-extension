@@ -3,10 +3,10 @@ name = "colmugx/posoco-ext-typesafe"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.23.2",
+  "colmugx/posoco@0.23.3",
   "colmugx/posoco-kit-provider@0.1.0",
   "posoco/ext-oauth@0.1.0",
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.mbt.md"

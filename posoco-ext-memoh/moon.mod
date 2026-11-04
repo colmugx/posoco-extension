@@ -3,12 +3,13 @@ name = "colmugx/posoco-ext-memoh"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.23.2",
+  "colmugx/posoco@0.23.3",
   "colmugx/acp@0.3.0",
   "colmugx/posoco-ext-mcp@0.5.1",
   "colmugx/posoco-ext-permission@0.2.0",
   "colmugx/mcp@0.18.2",
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
+  "colmugx/cetas-testkit@0.1.0",
 }
 
 readme = "README.mbt.md"

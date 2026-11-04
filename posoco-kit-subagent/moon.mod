@@ -13,11 +13,11 @@ keywords = [ "posoco", "subagent", "kit", "orchestration", "coding-agent" ]
 description = "Subagent orchestration kit for Posoco - config validation, prompt assembly, and budget ledger"
 
 import {
-  "colmugx/posoco@0.23.2",
+  "colmugx/posoco@0.23.3",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.0",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
 }
 
 source = "src"
