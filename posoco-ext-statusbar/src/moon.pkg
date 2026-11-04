@@ -5,7 +5,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
@@ -15,7 +15,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+targets: {
     "statusbar_wbtest.mbt": [ "native" ],
     "command_statusbar_wbtest.mbt": [ "native" ],
   },

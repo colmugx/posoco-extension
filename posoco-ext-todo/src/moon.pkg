@@ -4,11 +4,11 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
@@ -19,5 +19,6 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: { "posoco_ext_todo_wbtest.mbt": [ "native" ] },
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+targets: { "posoco_ext_todo_wbtest.mbt": [ "native" ] },
 )
