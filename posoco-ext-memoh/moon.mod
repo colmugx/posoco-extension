@@ -8,7 +8,6 @@ import {
   "colmugx/posoco-ext-mcp@0.5.1",
   "colmugx/posoco-ext-permission@0.2.0",
   "colmugx/mcp@0.18.2",
-  "moonbitlang/async@0.22.7",
   "posoco/devkit@0.4.1",
 }
 
