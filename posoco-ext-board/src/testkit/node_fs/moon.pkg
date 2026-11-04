@@ -2,11 +2,12 @@
 warnings = "-unused_package"
 
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 supported_targets = "+native+js"
 
 options(
-  targets: { "fixtures.js.mbt": [ "js" ], "fixtures.native.mbt": [ "native" ] },
+    "allow-experimental-packages": [ "moonbitlang/core/async/fs" ],
+targets: { "fixtures.js.mbt": [ "js" ], "fixtures.native.mbt": [ "native" ] },
 )

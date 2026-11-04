@@ -1,8 +1,8 @@
 import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/internal/storage" @node_fs,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -17,7 +17,8 @@ supported_targets = "+native +js"
 warnings = "-unused_package"
 
 options(
-  "native-stub": [ "truncate_stub.c" ],
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+"native-stub": [ "truncate_stub.c" ],
   targets: {
     "file.native.mbt": [ "native" ],
     "file.js.mbt": [ "js" ],
