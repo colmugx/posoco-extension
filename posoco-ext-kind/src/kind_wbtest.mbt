@@ -253,31 +253,31 @@ async test "load_project_overrides_global_and_skips_bad_files" {
     @fs.mkdir(global_dir, recursive=true)
     @fs.mkdir(project_dir, recursive=true)
     // Global override of builtin coder.
-    @fs.write_file(
+    @fs.write_text(
       global_dir + "/coder.md",
       "---\nname: coder\ndescription: Global coder\ntools: read\n---\nGLOBAL {{instructions}}",
       create_mode=CreateNew,
     )
     // Project override wins over global for the same kind name...
-    @fs.write_file(
+    @fs.write_text(
       project_dir + "/coder.md",
       "---\nname: coder\ndescription: Project coder\nmode: readonly\ntools: read, glob\n---\nPROJECT {{instructions}}",
       create_mode=CreateNew,
     )
     // ...and adds a brand-new kind.
-    @fs.write_file(
+    @fs.write_text(
       project_dir + "/scout.md",
       "---\nname: scout\ndescription: Project scout\ntools:\n  - read\n---\nSCOUT {{instructions}}",
       create_mode=CreateNew,
     )
     // Broken frontmatter is skipped with a diagnostic, not fatal.
-    @fs.write_file(
+    @fs.write_text(
       project_dir + "/broken.md",
       "---\nname: broken\ndescription: x\nmode: hyper\n---\nB",
       create_mode=CreateNew,
     )
     // Non-md files are ignored silently.
-    @fs.write_file(
+    @fs.write_text(
       project_dir + "/README.txt",
       "ignore me",
       create_mode=CreateNew,
@@ -331,7 +331,7 @@ async test "load_rejects_name_stem_mismatch_with_diagnostic" {
     }
     let agents = root + "/.cetas/agents"
     @fs.mkdir(agents, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       agents + "/renamed.md",
       "---\nname: coder\ndescription: Mismatched\n---\nBODY",
       create_mode=CreateNew,
@@ -356,7 +356,7 @@ async test "load_global_directory_alone_overrides_builtin" {
     }
     let global_dir = root + "/.cetas/agents"
     @fs.mkdir(global_dir, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       global_dir + "/oracle.md",
       "---\nname: oracle\ndescription: House oracle\ntools:\n  - read\nmode: interactive\n---\nHOUSE {{instructions}}",
       create_mode=CreateNew,
