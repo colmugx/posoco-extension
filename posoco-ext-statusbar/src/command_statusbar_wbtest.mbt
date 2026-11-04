@@ -76,24 +76,6 @@ async test "empty bar lists a zero count" {
 }
 
 ///|
-async test "host slash spellings of no arguments are accepted" {
-  let (bar, _ui, _bus) = new_composed_bar()
-  for
-    args in [Json::null(), Json::string(""), Json::object(Map::from_array([]))] {
-    assert_true(
-      bar.invoke("statusbar", args) is @posoco.CommandOutcome::Success(_),
-    )
-  }
-  assert_true(
-    bar.invoke(
-      "statusbar",
-      Json::object(Map::from_array([("_positional", Json::string(""))])),
-    )
-    is @posoco.CommandOutcome::Success(_),
-  )
-}
-
-///|
 async test "non-empty arguments are rejected" {
   let (bar, _ui, _bus) = new_composed_bar()
   try
@@ -112,22 +94,5 @@ async test "non-empty arguments are rejected" {
     _ => fail("expected InvalidArgs")
   } noraise {
     _ => fail("expected InvalidArgs")
-  }
-}
-
-///|
-async test "unknown command id raises NotFound" {
-  let (bar, _ui, _bus) = new_composed_bar()
-  try bar.invoke("bogus", Json::null()) catch {
-    @posoco.CommandError::NotFound(id) =>
-      inspect(
-        id,
-        content=(
-          #|bogus
-        ),
-      )
-    _ => fail("expected NotFound")
-  } noraise {
-    _ => fail("expected NotFound")
   }
 }

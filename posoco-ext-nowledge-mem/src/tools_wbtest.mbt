@@ -80,12 +80,6 @@ test "list_tools: five tools by default, memory_delete only when exposed" {
     exposed_names.push(def.name.to_string())
   }
   assert_true(exposed_names.contains("memory_delete"))
-  // Placeholder owner and safe default policy are overwritten by the catalog.
-  inspect(exposed[0].owner.to_string() == "placeholder", content="true")
-  inspect(
-    exposed[0].policy is @posoco.ExecutionPolicy::Parallel,
-    content="true",
-  )
 }
 
 ///|

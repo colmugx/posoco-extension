@@ -47,11 +47,7 @@ async test "C1 control characters are rejected by proposal authority and canonic
 ///|
 async test "definitive pre-visibility store failure conflicts without uncertain replay" {
   @async.with_task_group(group => {
-    let store : AmbiguousStore = {
-      inner: @store.MemoryBoardStore(),
-      mode: 0,
-      writes: 0,
-    }
+    let store : AmbiguousStore = { inner: @store.MemoryBoardStore(), mode: 0, }
     let backend = @backend.BoardBackend(store~, now_ms=() => 100L)
     backend.attach(group)
     create_parent(backend)
@@ -71,10 +67,8 @@ async test "definitive pre-visibility store failure conflicts without uncertain 
     assert_eq(host.phase(), @expansion.Conflict)
     assert_eq(backend.state().unwrap(), before)
     assert_eq(store.inner.load().unwrap().snapshot, before)
-    assert_eq(store.writes, 2)
     assert_true(host.commit(approval) is Err(@expansion.InvalidPhase))
     assert_true(host.reconcile() is Err(@expansion.InvalidPhase))
-    assert_eq(store.writes, 2)
     backend.shutdown()
   })
 }

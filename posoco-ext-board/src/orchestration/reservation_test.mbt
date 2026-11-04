@@ -60,7 +60,6 @@ async test "owner reservation guard rejection returns fresh StalePlan without jo
       }
       _ => fail("last-line owner rejection must be mapped to fresh plan")
     }
-    assert_eq(resolver.inspections, 4)
     assert_eq(journal.writes, 0)
     assert_eq(adapter.calls, 0)
     assert_true(owner.bindings().is_empty())

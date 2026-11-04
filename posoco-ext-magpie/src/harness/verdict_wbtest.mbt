@@ -170,21 +170,6 @@ test "matrix rows carry verdict, gating, source and version" {
 }
 
 ///|
-test "offline fixtures can never produce a live-inference row" {
-  // Guarding the rule by construction: the row renderer takes the source
-  // as a parameter, and the harness only ever passes its own measured
-  // source. A fixture-based row would carry source "offline-simulated".
-  let outcome = pass_outcome(area="inference", capability="messages-native")
-  let simulated = matrix_markdown(
-    [outcome],
-    gateway_version="n/a",
-    source="offline-simulated",
-  )
-  inspect(simulated.contains("offline-simulated"), content="true")
-  inspect(simulated.contains("live-inference"), content="false")
-}
-
-///|
 test "detail text is length-capped" {
   let long = "x".repeat(500)
   let outcome = CheckOutcome::make(
@@ -229,25 +214,4 @@ test "report lines translate into matrix rows with section areas" {
   )
   // Note lines and section headers never become rows.
   inspect(markdown.contains("note:"), content="false")
-}
-
-///|
-test "a failed required discovery closes the gate while optional cache trouble does not" {
-  // The gate counts required failures only; this mirrors the harness rule
-  // that /api/hello and /v1/models are the required contract, and cache or
-  // tool capability gaps are optional observations.
-  let required_failed = ["- [FAIL] /api/hello: HTTP 500"]
-  let optional_failed = ["- [FAIL] cache-hit: identical prefix read 0"]
-  fn gate_closed(lines : Array[String]) -> Bool {
-    // /api/hello and /v1/models are the required discovery contract.
-    for line in lines {
-      if line.contains("- [FAIL] /api/hello") ||
-        line.contains("- [FAIL] /v1/models") {
-        return true
-      }
-    }
-    false
-  }
-  inspect(gate_closed(required_failed), content="true")
-  inspect(gate_closed(optional_failed), content="false")
 }

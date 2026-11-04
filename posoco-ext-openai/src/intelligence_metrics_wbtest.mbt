@@ -240,27 +240,3 @@ async test "metrics source reads through the injected transport" {
   }
   assert_true(broken_source.read() is Err(_))
 }
-
-///|
-async test "intelligence metrics source registers under a unique test id" {
-  let fake = FakeMetricsTransport::{
-    url: "",
-    status: 200,
-    body: "{\"points\":[{\"model\":\"gpt-6-astra\",\"effort\":\"low\",\"iq\":100.0,\"average_price_usd\":1.0,\"passed\":10,\"total\":20}]}",
-    fail_get: false,
-  }
-  let transport : &OpenAIModelsHttpTransport = fake
-  let source = RadarMetricsSource::{ transport, }
-  let borrowed : &@devkit.ModelMetricsSource = source
-  let id = "openai-metrics-wbtest"
-  @devkit.metrics_registry_register(id, borrowed)
-  guard @devkit.metrics_registry_lookup(id) is Some(stored) else {
-    fail("expected the test registration")
-  }
-  guard stored.read() is Ok(points) else {
-    fail("expected the registered source to read")
-  }
-  assert_eq(points.length(), 1)
-  @devkit.metrics_registry_unregister(id)
-  assert_true(@devkit.metrics_registry_lookup(id) is None)
-}

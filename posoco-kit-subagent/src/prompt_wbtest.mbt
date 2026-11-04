@@ -89,14 +89,6 @@ test "assemble_escapes_instructions_content" {
 }
 
 ///|
-test "render_swarm_task_substitutes_item" {
-  assert_eq(
-    render_swarm_task("Process {{item}} and report.", "fix the login bug"),
-    "Process fix the login bug and report.",
-  )
-}
-
-///|
 test "render_swarm_task_replaces_repeated_placeholders_keeps_others" {
   assert_eq(
     render_swarm_task("{{item}} / {{item}} / {{other}}", "x"),

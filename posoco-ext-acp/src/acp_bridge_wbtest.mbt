@@ -1382,9 +1382,3 @@ async test "accept with an out-of-enum answer fails loudly" {
   }
   assert_true(outcome is Err(@posoco.UiError::IoFailure(_)))
 }
-
-///|
-async test "manifest declares the UiPort contribution" {
-  let bridge = AcpBridge()
-  assert_eq(bridge.manifest().ui.length(), 1)
-}

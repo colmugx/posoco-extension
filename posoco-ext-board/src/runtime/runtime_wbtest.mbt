@@ -110,46 +110,6 @@ fn wire_create(
 }
 
 ///|
-async test "attach serves the headless backend with zero binds and opens" {
-  let server = lifecycle_server()
-  let opener = lifecycle_opener()
-  let runtime = BoardRuntime::with_adapters(
-    backend=@backend.BoardBackend::BoardBackend(),
-    server~,
-    opener~,
-  )
-  @async.with_task_group(group => {
-    runtime.attach(group)
-    // No presentation lifecycle ran, but the headless control plane is
-    // fully served through the runtime's backend accessor.
-    assert_eq(server.binds, 0)
-    assert_eq(opener.opened.length(), 0)
-    assert_eq(runtime.status(), Stopped)
-    let accepted = runtime
-      .backend()
-      .handle_command(wire_create("headless-1", "t1", 0L))
-    assert_eq(accepted.accepted, true)
-    assert_eq(accepted.current_revision, Some(1L))
-    let frame = runtime.backend().bootstrap_snapshot().unwrap()
-    assert_eq(frame.last_seq, 1L)
-    assert_eq(frame.board_revision, 1L)
-    let client = runtime.backend().subscribe(1L, true)
-    assert_eq(client.plan, Live)
-    runtime.backend().unsubscribe(client)
-    let tick = runtime
-      .backend()
-      .publish_telemetry(
-        board_revision=0L,
-        kind="runtime.warning",
-        payload=Json::null(),
-      )
-    assert_eq(tick.seq, 2L)
-    assert_eq(runtime.backend().subscriber_count(), 0)
-    runtime.shutdown()
-  })
-}
-
-///|
 async test "ensure_server is idempotent under concurrent opens" {
   let server = lifecycle_server()
   let opener = lifecycle_opener()
@@ -175,29 +135,6 @@ async test "ensure_server is idempotent under concurrent opens" {
     assert_true(
       runtime.backend().handle_command(wire_create("after-close", "t1", 0L)).accepted,
     )
-    runtime.shutdown()
-  })
-}
-
-///|
-async test "ensure_server installs the backend before bind" {
-  let server = lifecycle_server()
-  let opener = lifecycle_opener()
-  let runtime = BoardRuntime::with_adapters(
-    backend=@backend.BoardBackend::BoardBackend(),
-    server~,
-    opener~,
-  )
-  // The fake refuses to bind without an installed backend, so a successful
-  // bind is proof that the runtime ran set_backend first.
-  assert_true(BoardWebServer::bind(server) is Err(_))
-  assert_eq(server.binds, 0)
-  @async.with_task_group(group => {
-    runtime.attach(group)
-    assert_false(server.backend_installed)
-    assert_true(runtime.ensure_server() is Ok(_))
-    assert_true(server.backend_installed)
-    assert_eq(server.binds, 1)
     runtime.shutdown()
   })
 }

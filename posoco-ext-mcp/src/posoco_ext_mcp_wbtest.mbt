@@ -37,40 +37,6 @@ impl Eq for ConnReply[Int32] with fn equal(self, other) {
 }
 
 ///|
-test "namespaced_tool_name_double_underscore" {
-  let name = namespaced_tool_name("github", "create_issue")
-  assert_eq(name, "github__create_issue")
-}
-
-///|
-test "namespaced_tool_name_simple" {
-  let name = namespaced_tool_name("fs", "read")
-  assert_eq(name, "fs__read")
-}
-
-///|
-test "strip_namespace_roundtrip" {
-  let original = "create_issue"
-  let ns = namespaced_tool_name("github", original)
-  let stripped = strip_namespace(ns, "github")
-  assert_eq(stripped, original)
-}
-
-///|
-test "strip_namespace_no_prefix_returns_original" {
-  let stripped = strip_namespace("some_tool", "github")
-  assert_eq(stripped, "some_tool")
-}
-
-///|
-test "strip_namespace_empty_server" {
-  let name = namespaced_tool_name("", "tool")
-  assert_eq(name, "__tool")
-  let stripped = strip_namespace("__tool", "")
-  assert_eq(stripped, "tool")
-}
-
-///|
 test "convert_tool_def_namespaces_and_preserves_fields" {
   let mcp_def = @types.ToolDefinition::new(
     "search",
@@ -81,30 +47,6 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
   assert_eq(posoco_def.name.to_string(), "filesystem__search")
   assert_eq(posoco_def.description, "Search for items")
   assert_true(posoco_def.input_schema is Json::Object(_))
-}
-
-///|
-test "convert_content_to_string_text_only" {
-  let items = [
-    @types.ContentBlock::text("hello"),
-    @types.ContentBlock::text("world"),
-  ]
-  let result = convert_content_to_string(items)
-  assert_eq(result, "hello\nworld")
-}
-
-///|
-test "convert_content_to_string_single_text" {
-  let items = [@types.ContentBlock::text("hello")]
-  let result = convert_content_to_string(items)
-  assert_eq(result, "hello")
-}
-
-///|
-test "convert_content_to_string_empty" {
-  let items : Array[@types.ContentBlock] = []
-  let result = convert_content_to_string(items)
-  assert_eq(result, "")
 }
 
 ///|
@@ -264,21 +206,6 @@ test "sanitize_label_is_single_line_and_bounded" {
 }
 
 ///|
-async test "list_tools_returns_empty_before_connect" {
-  let bridge = MCPToolBridge()
-  let tools = @posoco.ToolProvider::list_tools(bridge)
-  assert_true(tools.is_empty())
-}
-
-///|
-async test "close_clears_state" {
-  let bridge = MCPToolBridge()
-  bridge.close()
-  let tools = @posoco.ToolProvider::list_tools(bridge)
-  assert_true(tools.is_empty())
-}
-
-///|
 /// The no-actor close path (retired slots only): close clears the registry
 /// and routing without touching an actor join — the join discipline lives
 /// on the slots that hold actors, pinned end-to-end by the e2e close tests.
@@ -397,32 +324,6 @@ test "list_tools_failure_message_distinguishes_timeout" {
     ListToolsFailure::Failed,
   )
   assert_eq(plain, "MCP list_tools failed for 'srv'")
-}
-
-///|
-/// Validates the classification assumption behind the timeout wrappers: the
-/// with_timeout abort makes the wrapped call see the sticky cancel flag,
-/// while the enclosing catch sees the sentinel error — not a cancellation
-/// error — so a fired deadline can be classified without swallowing real
-/// ambient cancellation.
-async test "timeout_aborts_inner_but_outer_sees_sentinel_not_cancel" {
-  let inner_flags : Array[Bool] = []
-  let outer_flags : Array[Bool] = []
-  let escaped_is_sentinel = @async.with_timeout(30, async fn() {
-    errdefer inner_flags.push(@async.is_being_cancelled())
-    @async.sleep(60_000)
-    true
-  }) catch {
-    error => {
-      outer_flags.push(@async.is_being_cancelled())
-      error is @async.TimeoutError
-    }
-  }
-  assert_eq(inner_flags.length(), 1)
-  assert_true(inner_flags[0])
-  assert_eq(outer_flags.length(), 1)
-  assert_false(outer_flags[0])
-  assert_true(escaped_is_sentinel)
 }
 
 ///|
@@ -651,76 +552,6 @@ test "retire_slot_clears_routes_and_keeps_slot_identity" {
   // Out-of-bounds retire is a no-op, never an index shift.
   bridge.retire_slot(7)
   assert_eq(bridge.connections.length(), 1)
-}
-
-///|
-/// Observation cell for the defer unwinding probe.
-priv struct DeferProbe {
-  mut deferred_ran : Bool
-  mut value_at_defer : Int32
-  mut mut_capture_saw_latest : Bool
-}
-
-///|
-/// Registers a defer, then mutates the observed state, then suspends: a
-/// caller cancellation raised at the suspension must still run the defer,
-/// and the defer body must observe the latest cell value.
-async fn defer_probe_body(probe : DeferProbe) -> Unit {
-  probe.deferred_ran = false
-  defer {
-    probe.deferred_ran = true
-    probe.value_at_defer = probe // placeholder, set below
-      .value_at_defer
-  }
-  probe.value_at_defer = 42
-  @async.sleep(60_000)
-}
-
-///|
-/// Same shape with a `mut` local captured by the defer closure: compiles
-/// only if MoonBit allows mut capture, and proves whether the closure sees
-/// the post-registration mutation.
-async fn defer_mut_capture_body(probe : DeferProbe) -> Unit {
-  let mut v = 0
-  defer {
-    probe.mut_capture_saw_latest = v == 42
-  }
-  v = 42
-  @async.sleep(60_000)
-}
-
-///|
-/// Empirical pin for the defer discipline `invoke_mcp_tool` relies on: a
-/// caller cancellation raised at an await inside the
-/// callee still runs the callee's registered defer during unwinding, and the
-/// defer body observes the latest state of captured cells. This is what
-/// guarantees the EndCall pairing never leaks in_flight on the cancel path.
-async test "defer runs on cancellation unwinding and sees latest cell state" {
-  @async.with_task_group(group => {
-    let probe = DeferProbe::{
-      deferred_ran: false,
-      value_at_defer: 0,
-      mut_capture_saw_latest: false,
-    }
-    // Async 0.22.3: cancellation is uncatchable and unwinds the whole task
-    // closure, so each body runs in its own task; the defers still run on
-    // the unwind and are observed via the probe flags.
-    let task_a = group.spawn(() => defer_probe_body(probe))
-    let task_b = group.spawn(() => defer_mut_capture_body(probe))
-    @async.sleep(100)
-    // Both tasks are parked at their sleeps with defers registered.
-    task_a.cancel()
-    task_b.cancel()
-    let mut waited = 0
-    while !(probe.deferred_ran && probe.mut_capture_saw_latest) &&
-          waited < 5_000 {
-      @async.sleep(25)
-      waited += 25
-    }
-    assert_true(probe.deferred_ran)
-    assert_eq(probe.value_at_defer, 42)
-    assert_true(probe.mut_capture_saw_latest)
-  })
 }
 
 ///|

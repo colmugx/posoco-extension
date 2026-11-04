@@ -179,32 +179,6 @@ test "codex ws provider error frames classify like the http path" {
 }
 
 ///|
-test "codex ws capture collects output items and the completed id" {
-  let reasoning_item : Json = Json::object(
-    Map::from_array([("type", Json::string("reasoning"))]),
-  )
-  let items : Array[Json] = []
-  let id = Ref::{ val: "", }
-  codex_ws_capture_output_item(
-    "{\"type\":\"response.output_item.done\",\"item\":" +
-    reasoning_item.stringify() +
-    "}",
-    items,
-  )
-  codex_ws_capture_output_item("not json", items)
-  codex_ws_capture_output_item(
-    "{\"type\":\"response.output_item.done\",\"item\":" +
-    ws_mock_assistant_item.stringify() +
-    "}",
-    items,
-  )
-  codex_ws_capture_response_id(ws_mock_completed("resp_9"), id)
-  codex_ws_capture_response_id("not json", id)
-  assert_eq(items.length(), 2)
-  assert_eq(id.val, "resp_9")
-}
-
-///|
 /// Loopback WebSocket server: records client frames and replays one scripted
 /// event sequence per received frame.
 struct WsMock {

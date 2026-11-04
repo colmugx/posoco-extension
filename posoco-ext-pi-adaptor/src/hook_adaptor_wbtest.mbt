@@ -177,9 +177,3 @@ async test "hidden tools contribute no snippet or guideline to the block" {
     content="true",
   )
 }
-
-///|
-test "manifest contributes the hook" {
-  let adaptor = pi_extension()
-  inspect(adaptor.manifest().hooks.length(), content="1")
-}

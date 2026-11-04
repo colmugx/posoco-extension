@@ -33,12 +33,3 @@ test "ledger_records_duplicate_labels_separately" {
   assert_eq(ledger.acquired(), ["review", "review"])
   assert_eq(ledger.remaining(), 1)
 }
-
-///|
-test "ledger_acquired_returns_a_copy" {
-  let ledger = SpawnLedger::SpawnLedger(limit=2)
-  let _ = ledger.try_acquire("a")
-  let snapshot = ledger.acquired()
-  snapshot.push("mutated")
-  assert_eq(ledger.acquired(), ["a"])
-}

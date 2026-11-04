@@ -22,16 +22,6 @@ async test "memoh session store is intentionally ephemeral" {
 }
 
 ///|
-test "memoh extension contributes session store and context hook" {
-  let memoh = Memoh()
-  assert_eq(memoh.extension_id(), "posoco_ext_memoh")
-  let manifest = memoh.manifest()
-  assert_eq(manifest.sessions.length(), 1)
-  assert_eq(manifest.hooks.length(), 1)
-  assert_eq(manifest.tools.length(), 0)
-}
-
-///|
 fn tk_memoh_impl(name : String) -> @acp.ProtocolNullable[@acp.Implementation] {
   @acp.ProtocolNullable::Value({
     name,

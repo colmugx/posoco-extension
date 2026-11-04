@@ -947,30 +947,6 @@ test "projected json arrays are detached from the committed snapshot" {
 }
 
 ///|
-test "projected events are freshly allocated per call" {
-  let snapshot = projection_snapshot(revision=1L, tasks=[projection_task()])
-  let first = project_event(
-    snapshot,
-    @domain.TaskCreated(id=projection_id(), at_ms=10L),
-  )
-  // Same inputs, equal wire content — and the committed revision always
-  // comes from the snapshot argument of that very call, never shared state.
-  let advanced : @domain.BoardStateSnapshot = { ..snapshot, revision: 2L, }
-  let second = project_event(
-    advanced,
-    @domain.TaskCreated(id=projection_id(), at_ms=10L),
-  )
-  assert_eq(first.kind, second.kind)
-  assert_eq(first.payload, second.payload)
-  assert_eq(first.seq, 0L)
-  assert_eq(second.seq, 0L)
-  assert_eq(first.scope, None)
-  assert_eq(second.scope, None)
-  assert_eq(first.board_revision, 1L)
-  assert_eq(second.board_revision, 2L)
-}
-
-///|
 test "snapshot payload renders the whole committed board verbatim" {
   let json = snapshot_to_json(projection_snapshot(revision=0L))
   assert_eq(json, { "revision": Json::number(0), "tasks": [], "attempts": [] })

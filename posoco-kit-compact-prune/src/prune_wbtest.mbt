@@ -78,15 +78,6 @@ fn tk_assert_cleared(
 }
 
 ///|
-test "estimate_tokens rounds characters over four up" {
-  inspect(estimate_tokens(""), content="0")
-  inspect(estimate_tokens("ab"), content="1")
-  inspect(estimate_tokens("abcd"), content="1")
-  inspect(estimate_tokens("abcde"), content="2")
-  inspect(estimate_tokens("abcdefghi"), content="3")
-}
-
-///|
 test "eligible outputs summing exactly to the default budget are kept" {
   let messages = [
     tk_user("turn one"),

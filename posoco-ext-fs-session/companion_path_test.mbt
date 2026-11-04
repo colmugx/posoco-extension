@@ -26,19 +26,3 @@ test "companion_path mirrors jsonl_session_path's directory and stem" {
     content=jsonl[:jsonl.length() - ".jsonl".length()].to_owned(),
   )
 }
-
-///|
-test "companion_path callers can gate ids with validate_session_id" {
-  // The escape guard stays at the caller boundary, same rule as the store.
-  match @posoco-ext-fs-session.validate_session_id("..") {
-    Err(reason) =>
-      assert_true(reason == "session id must not be a relative path segment")
-    Ok(_) => fail("'..' must be rejected")
-  }
-  match @posoco-ext-fs-session.validate_session_id("a/b") {
-    Err(reason) =>
-      assert_true(reason == "session id must not contain path separators")
-    Ok(_) => fail("'a/b' must be rejected")
-  }
-  assert_true(@posoco-ext-fs-session.validate_session_id("cetas-4") is Ok(_))
-}

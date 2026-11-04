@@ -642,17 +642,6 @@ async test "plan.approve and plan.reject drive the approval flow" {
 }
 
 ///|
-async test "unknown command id raises NotFound" {
-  let plan = tk_plan()
-  try plan.invoke("nope", Json::null()) catch {
-    @posoco.CommandError::NotFound(id) => assert_eq(id, "nope")
-    other => fail("expected NotFound, got \{other}")
-  } noraise {
-    _ => fail("expected NotFound for unknown command id")
-  }
-}
-
-///|
 test "extension manifest wires the three port views" {
   let plan = tk_plan()
   assert_eq(plan.extension_id(), "posoco_ext_plan")

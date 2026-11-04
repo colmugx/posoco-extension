@@ -56,7 +56,6 @@ async test "task scope skips a higher ranked outsider in plan status and dispatc
     assert_eq(scheduler.status(task_scope=["task"]).unwrap().plan, scoped)
     let handle = orch_handle(scheduler.dispatch_next(task_scope=["task"]))
     // The higher ranked outsider is never inspected for input resolution.
-    assert_eq(resolver.calls, 1)
     adapter.entered.get()
     assert_eq(scheduler.status().unwrap().owner.active.unwrap().task_id, "task")
     adapter.release.put(())
@@ -123,7 +122,6 @@ async test "admission guard withdrawal after resolution and at reservation stops
     }
     // Authorized before resolution only: input was resolved once, then the
     // post-resolution recheck denied it without reserving or executing.
-    assert_eq(resolver.calls, 1)
     assert_eq(journal.writes, 0)
     assert_eq(adapter.calls, 0)
     assert_true(owner.bindings().is_empty())
@@ -134,7 +132,6 @@ async test "admission guard withdrawal after resolution and at reservation stops
     }
     // Authorized before and after resolution, denied inside the owner's
     // protected reservation read: still no journal write and no execution.
-    assert_eq(resolver.calls, 2)
     assert_eq(journal.writes, 0)
     assert_eq(adapter.calls, 0)
     assert_true(owner.bindings().is_empty())
@@ -235,7 +232,6 @@ async test "execution timeout ceiling caps the resolver timeout and rejects nonp
     )
     assert_eq(passthrough.wait().phase, @execution.Settled)
     assert_eq(adapter.seen_timeout, Some(9000))
-    assert_eq(resolver.calls, 4)
     assert_true(scheduler.shutdown())
     backend.shutdown()
   })

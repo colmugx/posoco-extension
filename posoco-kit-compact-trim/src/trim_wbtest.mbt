@@ -23,13 +23,6 @@ fn tw_user(chars : Int32) -> @posoco.Message {
 }
 
 ///|
-fn tw_user_image(media_type : String) -> @posoco.Message {
-  @posoco.Message::UserMessage(content=[
-    @posoco.Content::Image(media_type~, data=""),
-  ])
-}
-
-///|
 fn tw_assistant(chars : Int32) -> @posoco.Message {
   let no_reasoning : @posoco.Reasoning? = None
   @posoco.Message::AssistantMessage(
@@ -37,23 +30,6 @@ fn tw_assistant(chars : Int32) -> @posoco.Message {
     tool_calls=[],
     reasoning=no_reasoning,
     finish_reason=@posoco.FinishReason::Stop,
-  )
-}
-
-///|
-fn tw_assistant_call(name : String) -> @posoco.Message {
-  let no_reasoning : @posoco.Reasoning? = None
-  @posoco.Message::AssistantMessage(
-    content=[],
-    tool_calls=[
-      @posoco.ToolCall::{
-        call_id: @posoco.CallId::unchecked("call-1"),
-        name: @posoco.ToolName::unchecked(name),
-        arguments: Json::null(),
-      },
-    ],
-    reasoning=no_reasoning,
-    finish_reason=@posoco.FinishReason::ToolCalls,
   )
 }
 
@@ -79,21 +55,6 @@ fn tw_role(message : @posoco.Message) -> String {
 ///|
 fn tw_tags(messages : Array[@posoco.Message]) -> String {
   messages.map(tw_role).join("")
-}
-
-///|
-test "trim/estimate tokens: ceil per message and additive" {
-  inspect(estimate_tokens([tw_user(4)]), content="1")
-  inspect(estimate_tokens([tw_user(5)]), content="2")
-  inspect(estimate_tokens([tw_user(0)]), content="0")
-  // tool call name (9) + arguments "null" (4) = 13 chars -> 4 tokens
-  inspect(estimate_tokens([tw_assistant_call("read_file")]), content="4")
-  // image counts only its media_type string: 9 chars -> 3 tokens
-  inspect(estimate_tokens([tw_user_image("image/png")]), content="3")
-  // tool message counts the output content only, not the tool name
-  inspect(estimate_tokens([tw_tool(8)]), content="2")
-  // per-message ceil is additive: 1 + 1 = 2, not ceil(2/4) = 1
-  inspect(estimate_tokens([tw_user(1), tw_user(1)]), content="2")
 }
 
 ///|

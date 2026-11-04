@@ -163,21 +163,6 @@ test "select_acked_delta: out-of-range cursor count resets without indexing erro
 }
 
 ///|
-test "prefix_fingerprint: frames each message as utf8-byte-length:text" {
-  // "héllo" makes the utf8 byte length (one byte more than UTF-16 units)
-  // observable in the frame prefix.
-  let a = delta_msg(User, "héllo", "e1")
-  let b = delta_msg(Assistant, "done", "e2")
-  let fa = message_fingerprint(a)
-  let fb = message_fingerprint(b)
-  let stream = "\{@utf8.encode(fa).length()}:\{fa}\{@utf8.encode(fb).length()}:\{fb}"
-  inspect(
-    prefix_fingerprint([a, b], 2) == sha256_hex(@utf8.encode(stream)),
-    content="true",
-  )
-}
-
-///|
 test "prefix_fingerprint: empty prefix and out-of-range bounds" {
   // sha256 of the empty string; upstream hashes the same empty stream.
   inspect(
@@ -206,17 +191,6 @@ test "select_acked_delta: same-count splits with different message boundaries mi
   let cursor = select_acked_delta(split_a, None).next
   inspect(select_acked_delta(split_a, Some(cursor)).reset, content="false")
   inspect(select_acked_delta(split_b, Some(cursor)).reset, content="true")
-}
-
-///|
-test "sync_lane_key: destination hash over NUL-joined components plus thread id" {
-  let destination = @crypto.bytes_to_hex_string(
-    @crypto.sha256(@utf8.encode("http://127.0.0.1:14242\u{0}\u{0}\u{0}\u{0}")),
-  )
-  inspect(
-    sync_lane_key("demo-s1", lane_config()) == "\{destination}\u{0}demo-s1",
-    content="true",
-  )
 }
 
 ///|

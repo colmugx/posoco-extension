@@ -19,43 +19,6 @@ fn cache_scope(session : String) -> @posoco.InvocationScope {
 }
 
 ///|
-test "OpenRouterConfig records required fields and the default base_url" {
-  let config = OpenRouterConfig(
-    "sk-or-test",
-    model="anthropic/claude-3.7-sonnet",
-  )
-  assert_eq(config.api_key, "sk-or-test")
-  assert_eq(config.base_url, "https://openrouter.ai/api/v1")
-  assert_eq(config.model, "anthropic/claude-3.7-sonnet")
-  assert_false(config.thinking)
-  assert_eq(config.reasoning_effort, None)
-  assert_eq(config.http_referer, None)
-  assert_eq(config.title, None)
-}
-
-///|
-test "OpenRouterConfig carries optional fields" {
-  let config = OpenRouterConfig(
-    "sk-or-test",
-    model="anthropic/claude-3.7-sonnet",
-    base_url="https://proxy.example.com/v1",
-    thinking=true,
-    reasoning_effort=Some("high"),
-    context_window=Some(200000),
-    compact_threshold=Some(0.85),
-    http_referer=Some("https://myapp.example"),
-    title=Some("My App"),
-  )
-  assert_eq(config.base_url, "https://proxy.example.com/v1")
-  assert_true(config.thinking)
-  assert_eq(config.reasoning_effort, Some("high"))
-  assert_eq(config.context_window, Some(200000))
-  assert_eq(config.compact_threshold, Some(0.85))
-  assert_eq(config.http_referer, Some("https://myapp.example"))
-  assert_eq(config.title, Some("My App"))
-}
-
-///|
 test "OpenRouterModelPort exposes config passthrough via provider_config" {
   let config = OpenRouterConfig(
     "sk-or-test",

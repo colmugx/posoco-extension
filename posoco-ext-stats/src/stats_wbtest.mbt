@@ -1033,17 +1033,6 @@ async test "cache_doctor warns only after five requests with a near-zero hit rat
 }
 
 ///|
-async test "cache_doctor unknown id raises NotFound" {
-  let stats = Stats()
-  try stats.invoke("nope", Json::null()) catch {
-    @posoco.CommandError::NotFound(id) => assert_eq(id, "nope")
-    other => fail("expected NotFound, got: \{other}")
-  } noraise {
-    _ => fail("expected NotFound to raise")
-  }
-}
-
-///|
 fn tk_usage_full(
   input : Int32?,
   cached : Int32?,

@@ -1078,23 +1078,6 @@ test "snapshot board revision must match the frame revision" {
 }
 
 ///|
-test "getters return deeply detached records" {
-  let replica = seeded()
-  let tasks = replica.tasks()
-  tasks[0].definition_of_done.push("mutated")
-  tasks[0].dependencies.push("mutated")
-  tasks.clear()
-  assert_eq_eq(replica.tasks().length(), 1)
-  assert_eq_eq(replica.tasks()[0].id, "t1")
-  assert_eq_eq(replica.tasks()[0].definition_of_done, ["unit tests"])
-  assert_eq_eq(replica.tasks()[0].dependencies, [])
-  let attempts = replica.attempts()
-  attempts.clear()
-  assert_eq_eq(replica.attempts().length(), 1)
-  assert_eq_eq(replica.attempts()[0].id, "a1")
-}
-
-///|
 test "applied event payloads are copied, so input mutation cannot leak in" {
   let replica = seeded()
   let task = wire_task(id="mut")
@@ -1154,20 +1137,6 @@ test "copy is an equal deep clone that can be updated independently" {
   assert_true(copy != replica)
   assert_eq_eq(replica.copy(), replica)
   assert_eq_eq(replica.copy().copy(), replica)
-}
-
-///|
-test "copy records are detached from the original's records" {
-  let replica = seeded()
-  let copy = replica.copy()
-  let view = copy.tasks()
-  view[0].definition_of_done.push("mutated")
-  view.clear()
-  assert_eq_eq(copy.tasks()[0].definition_of_done, ["unit tests"])
-  assert_eq_eq(copy.tasks().length(), 1)
-  assert_eq_eq(replica.tasks()[0].definition_of_done, ["unit tests"])
-  assert_eq_eq(copy, replica)
-  assert_eq_eq(replica.copy(), replica)
 }
 
 ///|

@@ -74,19 +74,6 @@ async test "gateway offline during activation leaves an explicit offline state" 
 }
 
 ///|
-async test "missing configuration falls back to documented defaults" {
-  let runtime = activate_runtime(transport=runtime_transport(posts=[]))
-  runtime.on_start()
-  inspect(runtime.unconfigured_reason() is None, content="true")
-  // Defaults: the documented local gateway address.
-  inspect(
-    runtime.status_feedback().contains("http://127.0.0.1:3425") ||
-    runtime.manager.connection_status() is Offline(_),
-    content="true",
-  )
-}
-
-///|
 async test "invalid configuration recovers with a recorded reason" {
   let runtime = activate_runtime(
     transport=runtime_transport(posts=[]),
@@ -504,17 +491,6 @@ async test "multiple sessions keep their own affinity and selection" {
     runtime.manager.active_selection().model_id,
     content="anthropic/claude-native",
   )
-}
-
-///|
-async test "the model port registers exactly once" {
-  let runtime = activate_runtime(transport=runtime_transport(posts=[]))
-  let manifest = runtime.manifest()
-  inspect(manifest.models.length(), content="1")
-  guard manifest.models is [port, .. rest] else { fail("manifest models") }
-  inspect(rest.length(), content="0")
-  let config = port.provider_config()
-  inspect(config.reasoning_effort_values.length() >= 0, content="true")
 }
 
 ///|

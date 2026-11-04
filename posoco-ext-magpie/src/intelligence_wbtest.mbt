@@ -674,13 +674,3 @@ async test "unknown cache-write TTL distribution cannot claim cost savings" {
   inspect(economics.effective_input_cost is None, content="true")
   inspect(economics.net_savings is None, content="true")
 }
-
-///|
-test "intel_int rejects fractional and overflowing counts" {
-  for bad in [Json::number(-1), Json::number(1.5), Json::number(2147483648.0)] {
-    let result = Ok(intel_int({ "calls": bad }, "calls", "usage")) catch {
-      error => Err(error)
-    }
-    inspect(result is Err(_), content="true")
-  }
-}

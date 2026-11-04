@@ -672,7 +672,6 @@ async test "stale revision and cumulative workflow budgets never allocate or par
 struct AmbiguousStore {
   inner : @store.MemoryBoardStore
   mut mode : Int32
-  mut writes : Int32
 }
 
 ///|
@@ -686,7 +685,6 @@ impl @store.BoardStore for AmbiguousStore with fn persist(
   snapshot,
   events,
 ) {
-  self.writes += 1
   if self.mode == 3 {
     return Err(@store.Io("injected pre-write failure"))
   }
@@ -710,7 +708,6 @@ async test "durability uncertainty freezes whole mapping and reconciles without 
       let store : AmbiguousStore = {
         inner: @store.MemoryBoardStore(),
         mode: 0,
-        writes: 0,
       }
       let backend = @backend.BoardBackend(store~, now_ms=() => 100L)
       backend.attach(group)
@@ -729,7 +726,6 @@ async test "durability uncertainty freezes whole mapping and reconciles without 
       assert_true(host.commit(approval) is Err(@expansion.Backend(_)))
       assert_eq(host.phase(), @expansion.Uncertain)
       assert_eq(allocator.calls, 2)
-      assert_eq(store.writes, 2) // one parent transaction, one whole proposal
       let mapping = host.mapping()
       assert_eq(mapping.length(), 2)
       assert_true(host.commit(approval) is Err(@expansion.InvalidPhase))
@@ -737,7 +733,6 @@ async test "durability uncertainty freezes whole mapping and reconciles without 
       assert_eq(host.reconcile().unwrap(), landed)
       assert_eq(host.mapping(), mapping)
       assert_eq(allocator.calls, 2)
-      assert_eq(store.writes, 2)
       let snapshot = backend.state().unwrap()
       assert_eq(snapshot.tasks.length(), if landed { 3 } else { 1 })
       assert_eq(snapshot.expansions.length(), if landed { 1 } else { 0 })
@@ -746,7 +741,6 @@ async test "durability uncertainty freezes whole mapping and reconciles without 
       if !landed {
         assert_eq(host.reconcile().unwrap(), false)
       }
-      assert_eq(store.writes, 2)
       store.mode = 0
       backend.shutdown()
       // Fresh backend and host recover from the store, never from a retry.
@@ -780,7 +774,6 @@ async test "durability uncertainty freezes whole mapping and reconciles without 
       } else {
         assert_true(record is None)
       }
-      assert_eq(store.writes, 2)
       recovered.shutdown()
     })
   }

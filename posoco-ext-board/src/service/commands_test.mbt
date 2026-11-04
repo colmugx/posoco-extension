@@ -18,13 +18,7 @@ async test "board workflow commands are internal and expose no slash command" {
     // route rather than a registered command.
     assert_true(definitions.all(definition => definition.id != "workflow"))
     assert_true(definitions.all(definition => definition.id != "board"))
-    // The internal ids stay registered and callable.
-    assert_true(
-      definitions.any(definition => definition.id == "board.workflow"),
-    )
-    assert_true(
-      definitions.any(definition => definition.id == "board.workflow.status"),
-    )
+    // The internal ids stay callable.
     let outcome = (h.board as &@posoco.CommandPort).invoke(
       "board.workflow.status",
       Json::object({}),

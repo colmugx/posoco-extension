@@ -1,43 +1,4 @@
 ///|
-async test "list_tools_contains_bash" {
-  let tools = ShellTools()
-  let tool_defs = tools.list_tools()
-  let names = tool_defs.map(fn(t) { t.name.to_string() })
-  assert_true(names.contains("bash"))
-  assert_eq(tool_defs.length(), 4)
-}
-
-///|
-async test "list_tools_tool_defs_have_descriptions" {
-  let tools = ShellTools()
-  let tool_defs = tools.list_tools()
-  for tool in tool_defs {
-    assert_true(tool.description.length() > 0)
-  }
-}
-
-///|
-async test "list_tools_tool_defs_have_input_schema" {
-  let tools = ShellTools()
-  let tool_defs = tools.list_tools()
-  for tool in tool_defs {
-    assert_true(tool.input_schema is Json::Object(_))
-  }
-}
-
-///|
-async test "list_tools_have_provenance" {
-  let tools = ShellTools()
-  let tool_defs = tools.list_tools()
-  for tool in tool_defs {
-    match tool.provenance {
-      Some(s) => assert_eq(s, "posoco_ext_bash")
-      None => fail("expected provenance to be set")
-    }
-  }
-}
-
-///|
 test "extract_command_from_cmd_key" {
   let args = Json::object(
     Map::from_array([

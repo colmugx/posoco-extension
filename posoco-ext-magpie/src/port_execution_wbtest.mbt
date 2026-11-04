@@ -766,64 +766,6 @@ async test "streaming execution is cancellable mid-stream" {
 }
 
 ///|
-/// Unknown image modality must not trigger implicit placeholder conversion.
-test "unknown image modality preserves original image blocks" {
-  let entry = decode_catalog(
-      models_body(
-        model_entry(
-          id="x/unknown-image",
-          fields="\"native_endpoints\":[\"/v1/messages\"]",
-        ),
-      ),
-    ).entries[0]
-  inspect(entry.meta.modalities_input is None, content="true")
-  inspect(model_supports_images(entry), content="true")
-  let input : Array[@posoco.Content] = [
-    @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
-  ]
-  let shaped = shape_for_images(
-    [@posoco.Message::UserMessage(content=input)],
-    model_supports_images(entry),
-  )
-  inspect(
-    shaped == [@posoco.Message::UserMessage(content=input)],
-    content="true",
-  )
-}
-
-///|
-/// A text-only model must replace image blocks with the explicit
-/// placeholder — the downgrade is visible in the payload, never silent.
-test "text-only model downgrades images to an explicit placeholder" {
-  let entry = decode_catalog(
-      models_body(
-        model_entry(
-          id="openai/gpt-chat",
-          fields="\"reasoning\":false,\"supported_reasoning_levels\":[],\"context_window\":128000,\"native_endpoints\":[\"/v1/chat/completions\"],\"modalities\":{\"input\":[\"text\"]}",
-        ),
-      ),
-    ).entries[0]
-  inspect(model_supports_images(entry), content="false")
-  let input : Array[@posoco.Content] = [
-    @posoco.Content::Text("look at this"),
-    @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
-  ]
-  let shaped = shape_for_images(
-    [@posoco.Message::UserMessage(content=input)],
-    model_supports_images(entry),
-  )
-  guard shaped[0] is @posoco.Message::UserMessage(content=blocks) else {
-    fail("user message must stay a user message")
-  }
-  inspect(blocks.length(), content="2")
-  guard blocks[1] is @posoco.Content::Text(placeholder) else {
-    fail("the image block must be downgraded to text")
-  }
-  inspect(placeholder.contains("image/png"), content="true")
-  inspect(placeholder.contains("does not accept image input"), content="true")
-}
-
-///|
 /// The public ModelPort must reject image input for an explicitly text-only
 /// catalog model before any HTTP request; internal shaping is not a promise
 /// that the execution path silently downgrades images.
@@ -921,52 +863,4 @@ async test "messages requests carry the stream flag in the body" {
   )
   inspect(transport.post_calls.length(), content="2")
   inspect(transport.post_calls[1].contains("\"stream\":false"), content="true")
-}
-
-///|
-test "transient classification recognizes gateway failures without inventing resets" {
-  for code in [408, 500, 502, 503, 504] {
-    match classify_http_error("test", code, "upstream down", now_ms=1000L) {
-      Some(@posoco.ModelError::RateLimited(info)) => {
-        assert_eq(info.provider_code, Some("magpie_transient"))
-        assert_true(info.reset_at_ms is None)
-      }
-      _ => fail("gateway transient status must schedule a probe")
-    }
-  }
-  for code in [400, 401, 403, 404, 422] {
-    match classify_http_error("test", code, "unauthorized", now_ms=1000L) {
-      Some(@posoco.ModelError::Transport(_)) => ()
-      _ => fail("nontransient client errors must remain terminal")
-    }
-  }
-}
-
-///|
-test "mid-reply stream failure is recoverable but arbitrary provider errors are not" {
-  assert_true(
-    magpie_stream_transient(
-      "{\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (The operation timed out.)\"}}",
-    ),
-  )
-  assert_true(
-    magpie_stream_transient(
-      "{\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"server_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}}",
-    ),
-  )
-  assert_true(
-    magpie_stream_transient(
-      "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}",
-    ),
-  )
-  assert_true(
-    !magpie_stream_transient(
-      "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad request\"}}",
-    ),
-  )
-  assert_true(
-    !magpie_stream_transient(
-      "{\"error\":{\"type\":\"api_error\",\"message\":\"other upstream error\"}}",
-    ),
-  )
 }

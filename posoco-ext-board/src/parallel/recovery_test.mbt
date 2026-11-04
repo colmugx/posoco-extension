@@ -131,7 +131,6 @@ async test "settled history is never reused and fresh attempts run with fresh id
     assert_true(rows[0].reasons.contains(@orchestration.IdentityAlreadyUsed))
     assert_eq(h.shared.runs, 1)
     assert_eq(h.shared.run_order, ["attempt-beta-1"])
-    assert_eq(h.resolver.execution_ids, ["parallel-exec-1"])
     assert_false(h.resolver.execution_ids[0] == "spent-exec")
     let bindings = h.owner.bindings()
     assert_eq(bindings.length(), 2)

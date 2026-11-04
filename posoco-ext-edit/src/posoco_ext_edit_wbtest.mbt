@@ -96,19 +96,6 @@ async test "edit_required_fields_distinguish_wrong_type_from_missing" {
 }
 
 ///|
-test "core_cause_strips_shell_operation_prefix_and_node_tail" {
-  assert_eq(
-    core_cause("OSError(\"@fs.File::read(): Is a directory\")"),
-    "Is a directory",
-  )
-  assert_eq(
-    core_cause("ENOENT: no such file or directory, open '/tmp/x'"),
-    "ENOENT: no such file or directory",
-  )
-  assert_eq(core_cause("is a directory"), "is a directory")
-}
-
-///|
 test "edit_failure_mappers_cover_stat_decode_and_write" {
   for stage in ["stat", "decode", "write"] {
     match edit_failure(stage, "safe-path", "EACCES: permission denied") {

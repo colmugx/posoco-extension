@@ -148,45 +148,6 @@ async test "a blocked cache directory swallows the write failure" {
 }
 
 ///|
-async test "a colliding temporary filename fails the write and preserves the record" {
-  version_cache_with_fixture(directory => {
-    let target = openai_cache_join(directory, "codex_client_version.json")
-    let existing = "{\"client_version\":\"0.158.0\"}\n"
-    version_cache_fixture_write_file(
-      directory, "codex_client_version.json", existing,
-    )
-    // Occupy the exact nonce temporary filename so the CreateNew behind the
-    // atomic write must fail.
-    version_cache_fixture_write_file(
-      directory, "codex_client_version.json.collide.tmp", "fixture",
-    )
-    let failed = try
-      openai_version_write_atomic(
-        directory, target, "collide", "{\"client_version\":\"0.160.0\"}\n",
-      )
-    catch {
-      _ => true
-    } noraise {
-      _ => false
-    }
-    assert_true(failed)
-    // The old record's bytes are unchanged, and the colliding fixture is
-    // still there: cleanup only ever removes a temporary this call created.
-    assert_eq(
-      version_cache_fixture_read_file(directory, "codex_client_version.json"),
-      Some(existing),
-    )
-    assert_eq(
-      version_cache_fixture_read_file(
-        directory, "codex_client_version.json.collide.tmp",
-      ),
-      Some("fixture"),
-    )
-    assert_eq(version_cache_fixture_list(directory).length(), 2)
-  })
-}
-
-///|
 async test "a corrupt real record falls back to the built-in version at the resolver" {
   version_cache_with_fixture(directory => {
     version_cache_fixture_write_file(

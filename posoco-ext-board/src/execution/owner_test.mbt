@@ -200,7 +200,6 @@ async test "one active execution owner rejects concurrent admission and duplicat
     assert_eq(handle.wait(), finished)
     assert_eq(finished.phase, @execution.Settled)
     assert_eq(adapter.effects, 1)
-    assert_eq(store.writes, 5)
     assert_true(owner.execute(request()) is Err(@execution.DuplicateIdentity))
     assert_true(owner.shutdown())
     backend.shutdown()

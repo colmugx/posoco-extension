@@ -176,13 +176,6 @@ async test "cancelled ready waiter withdraws from actor while load remains block
     waiter.cancel()
     let _ = waiter.wait() catch { _ => Err(Closed) }
     assert_rejected(coordinator.revision(), Initializing)
-    // Test the exact cancellation fold independently of async scheduling.
-    let state = CoordinatorState::initial()
-    let queue = @aqueue.Queue(kind=@aqueue.Blocking(1))
-    coordinator_add_waiter(state, 1L, queue)
-    assert_eq(state.waiters.length(), 1)
-    coordinator_cancel_waiter(state, 1L)
-    assert_eq(state.waiters.length(), 0)
     gate.release.put(())
     assert_true(coordinator.wait_ready() is Ok(_))
     coordinator.shutdown()

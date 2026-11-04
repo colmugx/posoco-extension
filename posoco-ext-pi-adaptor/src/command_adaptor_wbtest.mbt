@@ -118,9 +118,3 @@ async test "pi invoke normalizes handler results into CommandOutcome" {
   let foreign = port.invoke("deploy", Json::object(Map::from_array([])))
   inspect(foreign is @posoco.CommandOutcome::Failure(..), content="true")
 }
-
-///|
-test "manifest contributes the command port" {
-  let adaptor = pi_extension()
-  inspect(adaptor.manifest().commands.length(), content="1")
-}

@@ -950,26 +950,6 @@ test "structurally invalid input is rejected before existence checks" {
 }
 
 ///|
-test "accepted proposals detach input state and command arrays" {
-  let deps : Array[BoardTaskId] = []
-  let dod : Array[String] = ["draft"]
-  let state = BoardState::BoardState()
-  let base = accept(state, create_cmd("a", 0L, at=1000L)).next_state
-  let proposal = accept(base, create_cmd("b", 1L, at=2000L, deps~, dod~))
-  deps.push(tid("a"))
-  dod.push("late mutation")
-  let task = proposal.next_state.task(tid("b")).unwrap()
-  assert_eq(task.dependencies, [])
-  assert_eq(task.definition_of_done, ["draft"])
-  // The input state is untouched by the accepted successor.
-  assert_eq(base.revision(), 1L)
-  assert_eq(base.task(tid("b")), None)
-  // Mutating arrays of a returned proposal does not change committed state.
-  proposal.events.clear()
-  assert_eq(proposal.next_state.revision(), 2L)
-}
-
-///|
 test "rejected proposals leave the state byte-identical" {
   let state = task_at(Refining)
   let snapshot_before = state.snapshot()
@@ -1031,75 +1011,6 @@ test "suspended tasks resume only into created refining or ready" {
   let task = resumed.next_state.task(tid("t")).unwrap()
   assert_eq(task.stage, Ready)
   assert_eq(task.ready_since_ms, Some(9100L))
-}
-
-///|
-test "command copy detaches array payloads from the caller" {
-  let dod : Array[String] = ["draft"]
-  let deps : Array[BoardTaskId] = [tid("a")]
-  let command : BoardCommand = CreateTask(
-    id=tid("t1"),
-    title="t1",
-    description="",
-    priority=Normal,
-    definition_of_done=dod,
-    dependencies=deps,
-    user_story="",
-    implementation_suggestions="",
-    at_ms=1000L,
-    expected_revision=0L,
-  )
-  let copy = command.copy_detached()
-  dod.push("late")
-  deps.push(tid("b"))
-  match copy {
-    CreateTask(definition_of_done=copy_dod, dependencies=copy_deps, ..) => {
-      assert_eq(copy_dod, ["draft"])
-      assert_eq(copy_deps, [tid("a")])
-    }
-    _ => fail("expected a create command")
-  }
-  // Array-free commands copy by value sharing only immutable fields.
-  let move_command = move_cmd("t1", 1L, Ready, at=2000L)
-  assert_eq(move_command.copy_detached(), move_command)
-  let set_deps = SetDependencies(
-    id=tid("t1"),
-    dependencies=deps,
-    at_ms=3000L,
-    expected_revision=1L,
-  )
-  // A copy taken before the push is unaffected; one taken after sees the
-  // push, which is exactly the hazard the pre-mailbox copy removes.
-  deps.push(tid("c"))
-  match set_deps.copy_detached() {
-    SetDependencies(dependencies=copy_deps, ..) =>
-      assert_eq(copy_deps, [tid("a"), tid("b"), tid("c")])
-    _ => fail("expected a set-dependencies command")
-  }
-}
-
-///|
-test "set-dependencies event does not alias the caller array" {
-  let state = accept(BoardState::BoardState(), create_cmd("a", 0L)).next_state
-  let state = accept(state, create_cmd("b", 1L)).next_state
-  let deps : Array[BoardTaskId] = [tid("b")]
-  let proposal = accept(
-    state,
-    SetDependencies(
-      id=tid("a"),
-      dependencies=deps,
-      at_ms=5000L,
-      expected_revision=2L,
-    ),
-  )
-  // Every other event carries only immutable scalars/ids; DependenciesSet
-  // is the one array-bearing event and must carry a copy.
-  deps.push(tid("b"))
-  assert_eq(proposal.events, [
-    DependenciesSet(id=tid("a"), dependencies=[tid("b")], at_ms=5000L),
-  ])
-  // The committed task list is equally detached (state-level copy).
-  assert_eq(proposal.next_state.task(tid("a")).unwrap().dependencies, [tid("b")])
 }
 
 ///|

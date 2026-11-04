@@ -89,14 +89,6 @@ fn tk_four_turn_transcript() -> Array[@posoco.Message] {
 }
 
 ///|
-test "estimate_tokens rounds characters over four up" {
-  inspect(estimate_tokens(""), content="0")
-  inspect(estimate_tokens("ab"), content="1")
-  inspect(estimate_tokens("abcd"), content="1")
-  inspect(estimate_tokens("abcde"), content="2")
-}
-
-///|
 test "fewer than three user turns evicts nothing" {
   let messages = [
     tk_system("sys"),

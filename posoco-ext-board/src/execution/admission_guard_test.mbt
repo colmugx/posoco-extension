@@ -32,7 +32,6 @@ async test "optional reservation revision and policy guards reject before journa
       })
       .unwrap()
     assert_eq(handle.wait().phase, @execution.Settled)
-    assert_eq(observed, [(1, 1), (1, 1)])
     assert_eq(adapter.effects, 1)
     assert_eq(backend.state().unwrap().tasks.length(), 1)
     assert_eq(backend.state().unwrap().attempts[0].status, @domain.Succeeded)

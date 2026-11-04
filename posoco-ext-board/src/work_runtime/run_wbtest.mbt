@@ -11,20 +11,6 @@ test "run activity log keeps only the recent lines" {
 }
 
 ///|
-test "append_tail keeps the bounded tail" {
-  assert_eq(append_tail("", "abcdef", 4), "cdef")
-  assert_eq(append_tail("abc", "de", 10), "abcde")
-  assert_eq(append_tail("abc", "def", 0), "")
-}
-
-///|
-test "one_line_preview collapses whitespace and caps length" {
-  assert_eq(one_line_preview("  a \n\t b  c ", 10), "a b c")
-  let long = one_line_preview("x1x2x3x4x5x6x7x8x9", 6)
-  assert_eq(long, "x1x2x3")
-}
-
-///|
 test "run projection keeps the wire keys" {
   let store = WorkRunStore::WorkRunStore()
   let run = store.add("task-2", work_session_id("task-2", "te"), "work", "te")

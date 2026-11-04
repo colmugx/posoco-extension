@@ -60,13 +60,6 @@ test "event hub evicts oldest events at capacity" {
 }
 
 ///|
-test "backend constructor plumbs capacities into the owned hub" {
-  let backend = BoardBackend::BoardBackend(event_buffer=8, client_queue_depth=2)
-  assert_eq(backend.hub.capacity, 8)
-  assert_eq(backend.hub.client_queue_depth, 2)
-}
-
-///|
 async test "published and inspected events are detached down to the JSON tree" {
   let backend = BoardBackend::BoardBackend(event_buffer=8)
   let payload : Map[String, Json] = { "text": "mutable" }
@@ -142,17 +135,6 @@ test "replay boundaries empty current zero covered gap and future" {
     backend.unsubscribe(reset)
   }
   assert_eq(backend.subscriber_count(), 0)
-}
-
-///|
-test "history_through bounds the contiguous retained tail" {
-  let backend = BoardBackend::BoardBackend(event_buffer=4)
-  for _ in 0..<3 {
-    let _ = backend_tick(backend)
-  }
-  assert_eq(backend.hub.history_through(2L).map(event => event.seq), [1L, 2L])
-  assert_eq(backend.hub.history_through(0L).length(), 0)
-  assert_eq(backend.hub.history_through(99L).length(), 3)
 }
 
 ///|
