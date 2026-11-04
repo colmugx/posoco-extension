@@ -6,6 +6,7 @@ import {
 
 import {
   "moonbitlang/async",
+  "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
 // The async runtime is required by native-gated async tests only; default

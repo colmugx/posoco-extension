@@ -351,8 +351,8 @@ test "pending_results_are_ordered_and_deduplicated" {
 test "deep_defer_strips_tools_and_prompt_sections_keeps_other_ports" {
   let ext : &@posoco.Extension = FakeProfileExt::{
     id: "fake_nmem",
-    tools: [@posoco.RecordingToolProvider([], Map::from_array([]))],
-    observers: [@posoco.RecordingObserver()],
+    tools: [@tk.RecordingToolProvider([], Map::from_array([]))],
+    observers: [@tk.RecordingObserver()],
     prompts: [FixedPrompt::{ text: "Memory manual.", }],
   }
   let resident : &@posoco.Extension = FakeProfileExt::{
@@ -401,7 +401,7 @@ test "deep_defer_joins_contributors_and_skips_empty_text" {
 test "deep_defer_tools_only_extension_gets_view_but_no_prompt_entry" {
   let ext : &@posoco.Extension = FakeProfileExt::{
     id: "fake_tools_only",
-    tools: [@posoco.RecordingToolProvider([], Map::from_array([]))],
+    tools: [@tk.RecordingToolProvider([], Map::from_array([]))],
     observers: [],
     prompts: [],
   }

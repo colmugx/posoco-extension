@@ -479,7 +479,7 @@ test "on_compose registers the model segment and leaves ctx unregistered" {
   )
   let ui = @posoco.NoopUiPort()
   router.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[],
       model=router as &@posoco.ModelPort,
       ui=ui as &@posoco.UiPort,
@@ -854,7 +854,7 @@ pub impl @posoco.ModelPort for RouterChatTestPort with fn chat(
   _options : @posoco.ChatOptions,
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  @posoco.tk_stop_response("done")
+  @tk.tk_stop_response("done")
 }
 
 ///|
@@ -1153,7 +1153,7 @@ fn router_decision_slot(
   id : String,
   provider_id : String,
   model_id : String,
-  decision : @posoco.ScriptedDecisionPort,
+  decision : @tk.ScriptedDecisionPort,
 ) -> ModelSlot {
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],
@@ -1209,8 +1209,8 @@ async test "decision port selects per-call reasoning effort without mutating sel
       }
     }),
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::ScoreAnswer(
           id="llm.reasoning_effort",
@@ -1251,7 +1251,7 @@ async test "decision port selects per-call reasoning effort without mutating sel
 ///|
 async test "explicit reasoning effort suppresses decision port auto selection" {
   let base = router_effort_slot("slot", "test", "model")
-  let decision = @posoco.ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort([])
   let judge = router_decision_slot("judge", "test", "judge-model", decision)
   let router = RouterModelPort(slots=[base, judge])
   router.switch_decision_slot("judge") catch {
@@ -1285,7 +1285,7 @@ test "router manifest leaves the decision capability to the active decision slot
 ///|
 async test "decision effort is not recomputed after the user-ended model round" {
   let slot = router_effort_slot("slot", "test", "model")
-  let decision = @posoco.ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort([])
   let judge = router_decision_slot("judge", "test", "judge-model", decision)
   let router = RouterModelPort(slots=[slot, judge])
   router.switch_decision_slot("judge") catch {
@@ -1302,8 +1302,8 @@ async test "decision effort is not recomputed after the user-ended model round" 
 ///|
 async test "low-confidence decision effort falls back to the active slot" {
   let slot = router_effort_slot("slot", "test", "model")
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::ScoreAnswer(
           id="llm.reasoning_effort",
@@ -1363,7 +1363,7 @@ test "switch_decision_slot only moves among decision slots" {
     "judge",
     "two",
     "judge-model",
-    @posoco.ScriptedDecisionPort([]),
+    @tk.ScriptedDecisionPort([]),
   )
   let router = RouterModelPort(slots=[chat, decision])
   let wrong_kind = Ok(router.switch_decision_slot("chat")) catch {
@@ -1397,7 +1397,7 @@ test "a decision slot never becomes the conversation default" {
     "judge",
     "two",
     "judge-model",
-    @posoco.ScriptedDecisionPort([]),
+    @tk.ScriptedDecisionPort([]),
   )
   let result = Ok(RouterModelPort(slots=[decision])) catch {
     error => Err(error)
@@ -1476,7 +1476,7 @@ test "switching decision republishes the decision_selection event" {
     "judge",
     "two",
     "judge-model",
-    @posoco.ScriptedDecisionPort([]),
+    @tk.ScriptedDecisionPort([]),
   )
   let router = RouterModelPort(slots=[chat, judge], bus=Some(bus))
   capture.events.clear()
@@ -1502,7 +1502,7 @@ test "decision selection rides the pending rule through provider replacement" {
     "one/judge",
     "one",
     "judge-model",
-    @posoco.ScriptedDecisionPort([]),
+    @tk.ScriptedDecisionPort([]),
   )
   let router = RouterModelPort(slots=[chat, judge])
   router.switch_decision_slot("one/judge") catch {

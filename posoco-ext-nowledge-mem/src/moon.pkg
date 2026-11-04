@@ -19,6 +19,7 @@ import {
 import {
   "moonbitlang/async",
   "colmugx/posoco/kernel",
+  "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
 warnings = "-unused_package"

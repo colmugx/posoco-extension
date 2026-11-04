@@ -25,9 +25,9 @@ fn deferred_def(name : String, description : String) -> @posoco.ToolDef {
 ///|
 fn recording(
   defs : Array[@posoco.ToolDef],
-  outcomes : Map[String, @posoco.ScriptedToolOutcome],
-) -> @posoco.RecordingToolProvider {
-  @posoco.RecordingToolProvider(defs, outcomes)
+  outcomes : Map[String, @tk.ScriptedToolOutcome],
+) -> @tk.RecordingToolProvider {
+  @tk.RecordingToolProvider(defs, outcomes)
 }
 
 ///|
@@ -278,8 +278,8 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
     Map::from_array([]),
   )
   let ext = build_ok([memory, obsidian])
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::ChoiceAnswer(
           id="lazytools.group",
@@ -295,10 +295,10 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
       usage: None,
     }),
   ])
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   (ext as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Decision],
       model~,
       decision=Some(decision),
@@ -333,8 +333,8 @@ async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
   let a = recording([prov("alpha_tool", "alpha")], Map::from_array([]))
   let b = recording([prov("beta_tool", "beta")], Map::from_array([]))
   let ext = build_ok([a, b])
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::ChoiceAnswer(
           id="lazytools.group",
@@ -350,10 +350,10 @@ async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
       usage: None,
     }),
   ])
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   (ext as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Decision],
       model~,
       decision=Some(decision),
@@ -377,10 +377,10 @@ async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
 
 ///|
 async test "tool_execute_routes_to_owner_and_preserves_call_id" {
-  let outcomes : Map[String, @posoco.ScriptedToolOutcome] = Map::from_array([
+  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
     (
       "github_create_issue",
-      @posoco.OutcomeOk(
+      @tk.OutcomeOk(
         @posoco.ToolOutcome::Success(content="created #1", structured=None),
       ),
     ),
@@ -420,12 +420,10 @@ async test "tool_execute_routes_to_owner_and_preserves_call_id" {
 
 ///|
 async test "tool_execute_defaults_missing_arguments_to_empty_object" {
-  let outcomes : Map[String, @posoco.ScriptedToolOutcome] = Map::from_array([
+  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
     (
       "list_all",
-      @posoco.OutcomeOk(
-        @posoco.ToolOutcome::Success(content="ok", structured=None),
-      ),
+      @tk.OutcomeOk(@posoco.ToolOutcome::Success(content="ok", structured=None)),
     ),
   ])
   let child = recording(
@@ -482,10 +480,10 @@ async test "tool_execute_unknown_tool_is_tool_reported_error_with_steering" {
 
 ///|
 async test "child_runtime_error_propagates_verbatim" {
-  let outcomes : Map[String, @posoco.ScriptedToolOutcome] = Map::from_array([
+  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
     (
       "read",
-      @posoco.OutcomeErr(@posoco.RuntimeError::InvocationFailed("disk on fire")),
+      @tk.OutcomeErr(@posoco.RuntimeError::InvocationFailed("disk on fire")),
     ),
   ])
   let child = recording([deferred_def("read", "Read a file")], outcomes)
@@ -850,8 +848,8 @@ async test "tool_list_semantic_fallback_supports_a_single_folded_group" {
     Map::from_array([]),
   )
   let ext = build_ok([child])
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="lazytools.group_relevance",
@@ -862,10 +860,10 @@ async test "tool_list_semantic_fallback_supports_a_single_folded_group" {
       usage: None,
     }),
   ])
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   (ext as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Decision],
       model~,
       decision=Some(decision),

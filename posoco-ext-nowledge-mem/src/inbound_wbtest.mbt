@@ -206,7 +206,7 @@ test "is_injected_memory_message: the core lead prefix hits, plain input does no
     ),
   ])
   inspect(is_injected_memory_message(injected), content="true")
-  let plain = @posoco.tk_user_msg("hello there")
+  let plain = @tk.tk_user_msg("hello there")
   inspect(is_injected_memory_message(plain), content="false")
   let reply = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text(@posoco.MEMORY_INBOUND_LEAD + " echoed")],

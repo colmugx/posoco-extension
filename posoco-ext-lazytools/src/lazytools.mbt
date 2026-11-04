@@ -115,7 +115,10 @@ pub struct LazyTools {
 ///     policy=@posoco.ExecutionPolicy::Parallel,
 ///     provenance=Some("test_child"),
 ///   )
-///   let child = @posoco.RecordingToolProvider([child_def], Map::from_array([]))
+///   let child = @posoco.ToolRegistry()
+///   child.register(child_def, fn(_) {
+///     @posoco.ToolOutcome::Success(content="ok", structured=None)
+///   })
 ///   let ext = match @posoco-ext-lazytools.LazyTools::build(providers=[child]) {
 ///     Ok(ext) => ext
 ///     Err(msg) => fail("unexpected build error: \{msg}")

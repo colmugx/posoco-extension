@@ -8,7 +8,6 @@ import {
   "posoco/devkit@0.4.1",
   "moonbitlang/async@0.22.7",
   "moonbitlang/x@0.5.5",
-  "colmugx/cetas-testkit@0.1.0",
 }
 
 readme = "README.mbt.md"

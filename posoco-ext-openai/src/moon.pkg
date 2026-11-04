@@ -58,3 +58,7 @@ options(
     "intelligence_metrics_wbtest.mbt": [ "native" ],
   },
 )
+
+import {
+  "posoco/devkit/testkit" @tk,
+} for "wbtest"

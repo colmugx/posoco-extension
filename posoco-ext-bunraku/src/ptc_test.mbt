@@ -54,7 +54,7 @@ async test "settled nested calls emit one append-only event each" {
     call_observers=[fn(event) { observed.push(event) }],
   )
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Trace probe",
       "code": (
         #|let value = ctx.call("read", {"path": "README.md"})
@@ -80,7 +80,7 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
     exposed=test_ptc_tools(),
     scoped_invoker=mock,
   )
-  let ctx = @posoco.tk_tool_call_ctx(name="run_code", arguments={
+  let ctx = @tk.tk_tool_call_ctx(name="run_code", arguments={
     "description": "Select tool name",
     "code": (
       #|let value = ctx.call("read", {"path": "README.md"})
@@ -106,7 +106,7 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
 async test "PTC refuses nested tool use without trusted bridge" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension(exposed=test_ptc_tools())
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Fail closed",
       "code": (
         #|let value = ctx.call("read", {})
@@ -131,7 +131,7 @@ async test "PTC rejects names outside exposed capabilities before invoking bridg
     scoped_invoker=mock,
   )
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Reject write",
       "code": (
         #|let value = ctx.call("write", {"path": "secret"})
@@ -153,7 +153,7 @@ async test "PTC rejects names outside exposed capabilities before invoking bridg
 async test "PTC rejects invalid code without spawning a guest" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Invalid",
       "code": "",
     }),
@@ -165,7 +165,7 @@ async test "PTC rejects invalid code without spawning a guest" {
 async test "PTC background mode fails closed when no Agent task scope exists" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Schedule a program",
       "code": "{\"ok\": true}",
       "background": true,
@@ -182,7 +182,7 @@ async test "PTC background mode fails closed when no Agent task scope exists" {
 async test "PTC complete script and inline code are mutually exclusive" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Reject ambiguous source",
       "source": "async fn main {}",
       "code": "{}",
@@ -195,7 +195,7 @@ async test "PTC complete script and inline code are mutually exclusive" {
 async test "run_code rejects a code argument that includes a function signature" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Wrapped probe",
       "code": "async fn ptc_run(ctx : PtcContext, input : Json) -> Json {\n  input\n}",
     }),
@@ -211,7 +211,7 @@ async test "run_code rejects a code argument that includes a function signature"
 async test "run_code rejects a complete program pasted as code" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Full program probe",
       "code": "import { \"moonbitlang/async\" }\n\nasync fn main { println(1) }",
     }),
@@ -229,7 +229,7 @@ async test "run_code rejects a complete program pasted as code" {
 async test "run_code build failure carries compiler diagnostics" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    @tk.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Broken probe",
       "code": "let broken :",
     }),

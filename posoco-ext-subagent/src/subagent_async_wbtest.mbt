@@ -82,7 +82,7 @@ impl @posoco.ModelPort for ConcurrencyProbeModel with fn chat(
     },
   )
   self.active = self.active - 1
-  @posoco.tk_stop_response("released")
+  @tk.tk_stop_response("released")
 }
 
 ///|
@@ -296,17 +296,17 @@ async test "parallel_subagent_failure_does_not_poison_sibling_or_parent" {
     composer=composer as &ChildComposer,
     config=config_with_spawn_budget(2),
   )
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(sibling_failure_wave()),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("parent recovered after sibling failure"),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(sibling_failure_wave()),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("parent recovered after sibling failure"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let result = parent.run_scoped(async fn(agent) {
     agent.run_turn(
-      @posoco.tk_user_msg("run two independent children"),
+      @tk.tk_user_msg("run two independent children"),
       "parent_sibling_isolation",
     )
   })
@@ -552,10 +552,10 @@ async test "unbound_kind_face_inherits_default_as_none" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_face")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_face")
     ()
   })
   assert_true(composer.specs[0].tools is None)
@@ -941,16 +941,12 @@ impl @posoco.ModelPort for BgParentModel with fn chat(
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   self.calls = self.calls + 1
   if self.calls == 1 {
-    return @posoco.tk_tool_call_response(
-      "subagent",
-      "call_1",
-      self.agent_arguments,
-    )
+    return @tk.tk_tool_call_response("subagent", "call_1", self.agent_arguments)
   }
   if self.calls == 2 && self.mid_sleep_ms > 0 {
     @async.sleep(self.mid_sleep_ms)
   }
-  @posoco.tk_stop_response("parent step \{self.calls}")
+  @tk.tk_stop_response("parent step \{self.calls}")
 }
 
 ///|
@@ -983,15 +979,15 @@ impl @posoco.ModelPort for BgParentModel with fn provider_config(
 fn build_parent_agent(
   tools : SubagentTools,
   model : &@posoco.ModelPort,
-  store : @posoco.RecordingSessionPort,
+  store : @tk.RecordingSessionPort,
 ) -> @posoco.Agent raise @error.CompositionError {
   @posoco.Agent::with_runtime(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       tools as &@posoco.Extension,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
     runtime=@runtime.PortRuntime(model~),
   )
 }
@@ -1014,11 +1010,11 @@ async test "background_child_holds_global_slot_until_task_exit" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
 
   parent.run_scoped(async fn(agent) {
-    ignore(agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg_slot"))
+    ignore(agent.run_turn(@tk.tk_user_msg("start"), "parent_bg_slot"))
     ignore(probe.entered.get())
     assert_eq(probe.peak, 1)
     assert_eq(composer.specs.length(), 1)
@@ -1072,11 +1068,11 @@ async test "background_cancellation_releases_global_slot" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
 
   parent.run_scoped(async fn(agent) {
-    ignore(agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg_cancel"))
+    ignore(agent.run_turn(@tk.tk_user_msg("start"), "parent_bg_cancel"))
     ignore(probe.entered.get())
     assert_false(tools.global_slots.try_acquire())
     // Returning closes the parent task scope. Core cancels the live
@@ -1103,17 +1099,17 @@ async test "background_completed_delivers_on_next_turn_and_records_terminal" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("go dig"), "parent_bg")
     // turn1 = tool-request call + post-tool stop; no same-turn delivery.
     assert_eq(model.calls, 2)
     @async.sleep(500)
     // The child's outcome is already enqueued but not yet observed: the
     // terminal is only recorded at the delivery point (turn 2's before_model).
     assert_eq(tools.background_children(), [("subagent-1", "running")])
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   // turn2 delivered the outcome: one stop call.
   assert_eq(model.calls, 3)
@@ -1180,12 +1176,12 @@ async test "background_timeout_maps_to_timed_out_via_delivery" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("start slow"), "parent_bg")
     @async.sleep(500)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   // Core timed the task out at 100ms and delivered the terminal on turn 2.
   match tools.registry.get("subagent-1") {
@@ -1218,12 +1214,12 @@ async test "subscribe_receives_spawned_and_terminal_events" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionPort::RecordingSessionPort(),
+    @tk.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("go dig"), "parent_bg")
     @async.sleep(400)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   let mut spawned = 0
   let mut terminal = 0
@@ -1325,10 +1321,10 @@ async test "background_exit_declares_completed_at_task_exit" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionPort::RecordingSessionPort(),
+    @tk.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("go dig"), "parent_bg")
     @async.sleep(300)
     // Child has exited; the declaration is already out, the authoritative
     // terminal is not (delivery happens at turn 2).
@@ -1358,7 +1354,7 @@ async test "background_exit_declares_completed_at_task_exit" {
     assert_true(exited_at >= 0)
     assert_true(terminal_at < 0)
     assert_eq(tools.background_children(), [("subagent-1", "running")])
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   let mut exited = 0
   let mut terminal = 0
@@ -1406,10 +1402,10 @@ async test "background_exit_declares_failed_on_child_error" {
     ]),
     mid_sleep_ms=0,
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("start"), "parent_bg")
     @async.sleep(300)
     let mut failed_exit = false
     for event in events {
@@ -1429,7 +1425,7 @@ async test "background_exit_declares_failed_on_child_error" {
       }
     }
     assert_true(failed_exit)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   match tools.registry.get("subagent-1") {
     Some(record) =>
@@ -1467,12 +1463,12 @@ async test "background_timeout_exits_cancelled_then_records_timed_out" {
   let parent = build_parent_agent(
     tools,
     model as &@posoco.ModelPort,
-    @posoco.RecordingSessionPort::RecordingSessionPort(),
+    @tk.RecordingSessionPort::RecordingSessionPort(),
   )
   let _ = parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("start slow"), "parent_bg")
     @async.sleep(500)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   let mut exited_state = ""
   let mut terminal_state = ""
@@ -1658,11 +1654,11 @@ impl ChildComposer for AskingComposer with fn compose(
   }
   let exts : Array[&@posoco.Extension] = []
   if asks {
-    let steps : Array[@posoco.ScriptedModelStep] = []
+    let steps : Array[@tk.ScriptedModelStep] = []
     for i in 0..<self.asks {
       steps.push(
-        @posoco.ScriptedModelStep::Respond(
-          @posoco.tk_tool_call_response(
+        @tk.ScriptedModelStep::Respond(
+          @tk.tk_tool_call_response(
             "ask_parent",
             "child-ask-\{i + 1}",
             Json::object(Map::from_array([])),
@@ -1671,16 +1667,12 @@ impl ChildComposer for AskingComposer with fn compose(
       )
     }
     steps.push(
-      @posoco.ScriptedModelStep::Respond(
-        @posoco.tk_stop_response(self.finish_text),
-      ),
+      @tk.ScriptedModelStep::Respond(@tk.tk_stop_response(self.finish_text)),
     )
-    let model = @posoco.ScriptedModel(steps)
+    let model = @tk.ScriptedModel(steps)
+    exts.push(@tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)))
     exts.push(
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-    )
-    exts.push(
-      @posoco.tk_ext(id="ask", tools=[
+      @tk.tk_ext(id="ask", tools=[
         {
           child_session: spec.session_id,
           channel: self.channel,
@@ -1693,26 +1685,21 @@ impl ChildComposer for AskingComposer with fn compose(
       ]),
     )
   } else {
-    let model = @posoco.ScriptedModel([
-      @posoco.ScriptedModelStep::Respond(
-        @posoco.tk_stop_response(self.finish_text),
-      ),
+    let model = @tk.ScriptedModel([
+      @tk.ScriptedModelStep::Respond(@tk.tk_stop_response(self.finish_text)),
     ])
-    exts.push(
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-    )
+    exts.push(@tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)))
   }
   exts.push(
-    @posoco.tk_ext(
+    @tk.tk_ext(
       id="io",
       sessions=[
-        @posoco.RecordingSessionPort::RecordingSessionPort()
-        as &@posoco.SessionPort,
+        @tk.RecordingSessionPort::RecordingSessionPort() as &@posoco.SessionPort,
       ],
       observers~,
     ),
   )
-  @posoco.Agent(exts~, config=@posoco.tk_config()) catch {
+  @posoco.Agent(exts~, config=@tk.tk_config()) catch {
     error => raise ComposerError::Failed("child compose failed: \{error}")
   }
 }
@@ -1779,7 +1766,7 @@ impl @posoco.ModelPort for SceneParentModel with fn chat(
   if self.calls <= self.steps.length() {
     self.steps[self.calls - 1]
   } else {
-    @posoco.tk_stop_response("parent step \{self.calls}")
+    @tk.tk_stop_response("parent step \{self.calls}")
   }
 }
 
@@ -1863,7 +1850,7 @@ async test "interactive_child_roundtrip_input_question" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-1",
         args_object([
@@ -1871,7 +1858,7 @@ async test "interactive_child_roundtrip_input_question" {
           ("kind", Json::string("loose")),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-1",
         args_object([
@@ -1879,16 +1866,16 @@ async test "interactive_child_roundtrip_input_question" {
           ("text", Json::string("src/lib/agent.mbt")),
         ]),
       ),
-      @posoco.tk_stop_response("parent done"),
+      @tk.tk_stop_response("parent done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_scene")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_scene")
     @async.sleep(50)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_scene")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_scene")
     ()
   })
   // The receipt reached the parent model before any answer existed.
@@ -1926,7 +1913,7 @@ async test "interactive_child_select_validation_and_double_answer" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-1",
         args_object([
@@ -1935,7 +1922,7 @@ async test "interactive_child_select_validation_and_double_answer" {
         ]),
       ),
       // Out-of-range select answer: recoverable error, child keeps waiting.
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-oob",
         args_object([
@@ -1944,7 +1931,7 @@ async test "interactive_child_select_validation_and_double_answer" {
         ]),
       ),
       // Type mismatch: text field against a select question.
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-mismatch",
         args_object([
@@ -1952,7 +1939,7 @@ async test "interactive_child_select_validation_and_double_answer" {
           ("text", Json::string("neither")),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-ok",
         args_object([
@@ -1961,7 +1948,7 @@ async test "interactive_child_select_validation_and_double_answer" {
         ]),
       ),
       // Duplicate answer: explicitly rejected.
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-dupe",
         args_object([
@@ -1969,16 +1956,16 @@ async test "interactive_child_select_validation_and_double_answer" {
           ("index", Json::number(0.0)),
         ]),
       ),
-      @posoco.tk_stop_response("parent done"),
+      @tk.tk_stop_response("parent done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_select")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_select")
     @async.sleep(50)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_select")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_select")
     ()
   })
   assert_true(model.inputs[2].contains("out of range"))
@@ -2010,7 +1997,7 @@ async test "two_interactive_children_same_wave_no_deadlock" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       two_agent_wave("first task", "second task"),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-1",
         args_object([
@@ -2018,7 +2005,7 @@ async test "two_interactive_children_same_wave_no_deadlock" {
           ("text", Json::string("fact-one")),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-2",
         args_object([
@@ -2026,16 +2013,16 @@ async test "two_interactive_children_same_wave_no_deadlock" {
           ("text", Json::string("fact-two")),
         ]),
       ),
-      @posoco.tk_stop_response("parent done"),
+      @tk.tk_stop_response("parent done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_wave")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_wave")
     @async.sleep(50)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_wave")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_wave")
     ()
   })
   // Both receipts came back in the same wave, each carrying its own id.
@@ -2069,7 +2056,7 @@ async test "interactive_child_answer_deadline_times_out" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-1",
         args_object([
@@ -2078,14 +2065,14 @@ async test "interactive_child_answer_deadline_times_out" {
         ]),
       ),
       // Parent never answers; the next step is a plain stop.
-      @posoco.tk_stop_response("parent shrugs"),
+      @tk.tk_stop_response("parent shrugs"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_timeout")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_timeout")
     // The deadline fires while the scope (and the child task) is alive.
     @async.sleep(120)
     // A late answer is explicitly refused.
@@ -2103,7 +2090,7 @@ async test "interactive_child_answer_deadline_times_out" {
         assert_true(content.contains("expired"))
       _ => fail("expected late answer to be refused")
     }
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_timeout")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_timeout")
     ()
   })
   // The child saw the deadline, not a hang; it finished on its own.
@@ -2128,10 +2115,10 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
     question=Some(broker),
   )
   let model = SceneParentModel::SceneParentModel(
-    steps=[@posoco.tk_stop_response("parent done")],
+    steps=[@tk.tk_stop_response("parent done")],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let scope : @posoco.EventScope = {
     session_id: @posoco.SessionId::unchecked("parent_cancel"),
@@ -2215,7 +2202,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
     )
     assert_true(again is @posoco.ToolOutcome::Success(_))
     // One ordinary turn delivers the cancelled children's envelopes.
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_cancel")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_cancel")
     ()
   })
   let children = tools.background_children()
@@ -2250,7 +2237,7 @@ async test "background_child_question_roundtrip_lazy_injection" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-bg",
         args_object([
@@ -2259,8 +2246,8 @@ async test "background_child_question_roundtrip_lazy_injection" {
           ("background", Json::boolean(true)),
         ]),
       ),
-      @posoco.tk_stop_response("turn one done"),
-      @posoco.tk_tool_call_response(
+      @tk.tk_stop_response("turn one done"),
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-1",
         args_object([
@@ -2268,18 +2255,18 @@ async test "background_child_question_roundtrip_lazy_injection" {
           ("text", Json::string("fact-from-envelope")),
         ]),
       ),
-      @posoco.tk_stop_response("turn two done"),
+      @tk.tk_stop_response("turn two done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_ask")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_bg_ask")
     @async.sleep(60)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_bg_ask")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_bg_ask")
     @async.sleep(60)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg_ask")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg_ask")
     ()
   })
   // Turn two's first chat saw the injected envelope (not the tool receipt:
@@ -2312,7 +2299,7 @@ async test "two_background_children_questions_do_not_cross" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-a",
         args_object([
@@ -2321,7 +2308,7 @@ async test "two_background_children_questions_do_not_cross" {
           ("background", Json::boolean(true)),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-b",
         args_object([
@@ -2330,8 +2317,8 @@ async test "two_background_children_questions_do_not_cross" {
           ("background", Json::boolean(true)),
         ]),
       ),
-      @posoco.tk_stop_response("turn one done"),
-      @posoco.tk_tool_call_response(
+      @tk.tk_stop_response("turn one done"),
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-1",
         args_object([
@@ -2339,7 +2326,7 @@ async test "two_background_children_questions_do_not_cross" {
           ("text", Json::string("fact-one")),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-2",
         args_object([
@@ -2347,18 +2334,18 @@ async test "two_background_children_questions_do_not_cross" {
           ("text", Json::string("fact-two")),
         ]),
       ),
-      @posoco.tk_stop_response("turn two done"),
+      @tk.tk_stop_response("turn two done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_two")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_bg_two")
     @async.sleep(80)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_bg_two")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_bg_two")
     @async.sleep(80)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg_two")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg_two")
     ()
   })
   // One injected message carried both envelopes before any answer existed.
@@ -2392,7 +2379,7 @@ async test "interactive_child_second_question_flows_through_queue" {
   )
   let model = SceneParentModel::SceneParentModel(
     steps=[
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "subagent",
         "spawn-1",
         args_object([
@@ -2400,7 +2387,7 @@ async test "interactive_child_second_question_flows_through_queue" {
           ("kind", Json::string("loose")),
         ]),
       ),
-      @posoco.tk_tool_call_response(
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-1",
         args_object([
@@ -2408,8 +2395,8 @@ async test "interactive_child_second_question_flows_through_queue" {
           ("text", Json::string("first-answer")),
         ]),
       ),
-      @posoco.tk_stop_response("turn one done"),
-      @posoco.tk_tool_call_response(
+      @tk.tk_stop_response("turn one done"),
+      @tk.tk_tool_call_response(
         "answer_question",
         "answer-2",
         args_object([
@@ -2417,22 +2404,22 @@ async test "interactive_child_second_question_flows_through_queue" {
           ("text", Json::string("second-answer")),
         ]),
       ),
-      @posoco.tk_stop_response("turn two done"),
+      @tk.tk_stop_response("turn two done"),
     ],
     children=fn() { tools.background_children() },
   )
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
-    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_second_q")
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_second_q")
     // Turn one ends around the first answer (~400ms); the child's second
     // ask registers ~400ms later, safely after the turn and before the
     // next driven turn below — the second question queues with the parent
     // idle.
     @async.sleep(900)
-    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_second_q")
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_second_q")
     @async.sleep(60)
-    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_second_q")
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_second_q")
     ()
   })
   // The first question rode the in-wave receipt...

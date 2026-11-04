@@ -18,11 +18,12 @@
 
 ///|
 /// Lifecycle state of one task.
+#derive(Eq, Debug)
 pub(all) enum TodoStatus {
   Pending
   InProgress
   Completed
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TodoStatus with Eq::{not_equal, equal}
@@ -55,10 +56,11 @@ fn TodoStatus::parse(text : String) -> TodoStatus? {
 
 ///|
 /// One checklist entry: short imperative content plus lifecycle status.
+#derive(Eq, Debug)
 pub(all) struct TodoItem {
   content : String
   status : TodoStatus
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TodoItem with Eq::{not_equal, equal}
@@ -168,10 +170,13 @@ pub struct TodoList {
 /// Create an empty todo list at revision 0.
 ///
 /// # Example
-/// ```mbt check
+/// Not checked: the snippet builds its tool-call context with the testkit
+/// helper `@tk.tk_tool_call_ctx` (`posoco/devkit/testkit`), which only test
+/// packages may import. `posoco_ext_todo_wbtest.mbt` runs the same round-trip.
+/// ```mbt nocheck
 /// async test "todo_write round-trips through todo_read" {
 ///   let todos = @posoco-ext-todo.TodoList::TodoList()
-///   let write = @posoco.tk_tool_call_ctx(
+///   let write = @tk.tk_tool_call_ctx(
 ///     name="todo_write",
 ///     arguments=Json::object({
 ///       "todos": Json::array([
@@ -190,7 +195,7 @@ pub struct TodoList {
 ///     @posoco.ToolOutcome::Success(..) => ()
 ///     _ => fail("expected Success")
 ///   }
-///   let read = @posoco.tk_tool_call_ctx(name="todo_read")
+///   let read = @tk.tk_tool_call_ctx(name="todo_read")
 ///   match todos.execute(read) {
 ///     @posoco.ToolOutcome::Success(content~, ..) =>
 ///       assert_true(content.contains("Patch the parser"))

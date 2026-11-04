@@ -72,9 +72,9 @@ fn new_composed_bar() -> (StatusBar, RecordingUi, @devkit.EventBus) raise @posoc
   let ui = RecordingUi()
   let bus = @devkit.EventBus()
   let bar = StatusBar(bus=Some(bus))
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   bar.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=ui as &@posoco.UiPort,
@@ -113,9 +113,9 @@ test "compose with no announced segments stays silent" {
   let ui = RecordingUi()
   let bus = @devkit.EventBus()
   let bar = StatusBar(bus=Some(bus))
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   bar.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=ui as &@posoco.UiPort,
@@ -381,9 +381,9 @@ test "direct set_segment matches the bus path" {
   let bus_ui = RecordingUi()
   let bus = @devkit.EventBus()
   let wired = StatusBar(bus=Some(bus))
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   wired.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=bus_ui as &@posoco.UiPort,
@@ -392,7 +392,7 @@ test "direct set_segment matches the bus path" {
   let direct_ui = RecordingUi()
   let direct = StatusBar()
   direct.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=direct_ui as &@posoco.UiPort,
@@ -464,9 +464,9 @@ test "segments announced before the UI project at compose" {
   // Applied (registry updated) but silent: no UI to render through.
   assert_eq(ui.renders.length(), 0)
   assert_eq(bar.segments().length(), 1)
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   bar.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=ui as &@posoco.UiPort,

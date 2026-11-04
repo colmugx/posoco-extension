@@ -8,4 +8,5 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "moonbitlang/async",
+  "posoco/devkit/testkit" @tk,
 } for "wbtest"

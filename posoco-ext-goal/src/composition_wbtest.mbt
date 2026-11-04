@@ -7,21 +7,21 @@
 /// Compose a real Agent from a ScriptedModel, an io extension, and the goal
 /// extension under test.
 fn cw_compose_agent(
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
   goal : GoalRunner,
   observers~ : Array[&@posoco.Observer] = [],
 ) -> @posoco.Agent {
   goal.set_verifier(TestGoalVerifier::{ calls: 0, reject_first: false, })
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionPort::RecordingSessionPort(),
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id="io", sessions=[
+        @tk.RecordingSessionPort::RecordingSessionPort(),
       ]),
-      @posoco.tk_ext(id="obs", observers~),
+      @tk.tk_ext(id="obs", observers~),
       goal,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   ) catch {
     e => abort("Agent failed: \{e}")
   }
@@ -32,7 +32,7 @@ fn cw_compose_agent(
 /// ToolCallRejected directly — no ToolCallPending precedes them, and exactly
 /// one terminal event carries the call.
 fn cw_assert_rejected_without_pending(
-  observer : @posoco.RecordingObserver,
+  observer : @tk.RecordingObserver,
   call_id : String,
 ) -> Unit raise {
   let mut terminals = 0
@@ -63,7 +63,7 @@ async fn cw_run_turn(
   text : String,
   session_id : String,
 ) -> @posoco.TurnResult {
-  agent.run_turn(@posoco.tk_user_msg(text), session_id) catch {
+  agent.run_turn(@tk.tk_user_msg(text), session_id) catch {
     e => abort("run_turn raised: \{e.to_string()}")
   }
 }
@@ -80,7 +80,7 @@ fn cw_plan_item(title : String, status : String) -> Json {
 
 ///|
 /// Concatenated text of every message in one recorded model-call input.
-fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int32) -> String {
+fn cw_call_text(model : @tk.ScriptedModel, call_index : Int32) -> String {
   if model.received_messages.length() <= call_index {
     abort("model call \{call_index} was never made")
   }
@@ -95,7 +95,7 @@ fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int32) -> String {
 /// Text of the freshly appended input message (the last one) of a recorded
 /// model call.
 fn cw_latest_input_text(
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
   call_index : Int32,
 ) -> String {
   if model.received_messages.length() <= call_index {
@@ -119,8 +119,8 @@ test "manifest_reports_v2_ports" {
 ///|
 test "agent_composes_with_goal" {
   let goal = goal_extension(goal_condition="compose check")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = cw_compose_agent(model, goal)
   ignore(agent)
@@ -129,8 +129,8 @@ test "agent_composes_with_goal" {
 ///|
 async test "plan_tool_in_catalog" {
   let goal = goal_extension(goal_condition="catalog check")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = cw_compose_agent(model, goal)
   let turn = cw_run_turn(agent, "hello", "session_catalog")
@@ -164,11 +164,11 @@ async test "update_plan_tool_rewrites_state_through_agent" {
       ),
     ]),
   )
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "c1", args),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "c1", args),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("planned")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("planned")),
   ])
   let agent = cw_compose_agent(model, goal)
   let turn = cw_run_turn(agent, "make a plan", "session_rewrite")
@@ -210,10 +210,10 @@ async test "update_plan_tool_rewrites_state_through_agent" {
 /// goal-authored SystemMessage.
 async test "charter_rides_first_work_turn_input" {
   let goal = goal_extension(goal_condition="make tests green")
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("working")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("working")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
   let agent = cw_compose_agent(model, goal)
@@ -269,11 +269,11 @@ async test "bad_tool_args_reported_not_crashed" {
   goal.status = Running
   goal.executing_turn = true
   let args = Json::object(Map::from_array([("items", Json::array([]))]))
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "c9", args),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "c9", args),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("recovered")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("recovered")),
   ])
   let agent = cw_compose_agent(model, goal)
   let turn = cw_run_turn(agent, "bad args", "session_bad_args")
@@ -295,15 +295,15 @@ async test "bad_tool_args_reported_not_crashed" {
 /// pins the ext's own unknown-name guard.
 async test "unknown_tool_name_reported" {
   let goal = goal_extension(goal_condition="unknown tool recovery")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan_typo", "c2", Json::null()),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan_typo", "c2", Json::null()),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("recovered")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("recovered")),
   ])
-  let observer = @posoco.RecordingObserver::RecordingObserver()
+  let observer = @tk.RecordingObserver::RecordingObserver()
   let agent = cw_compose_agent(model, goal, observers=[observer])
-  let turn = agent.run_turn(@posoco.tk_user_msg("typo tool"), "session_typo")
+  let turn = agent.run_turn(@tk.tk_user_msg("typo tool"), "session_typo")
   assert_eq(goal.plan().items.length(), 0)
   assert_eq(turn.tool_results.length(), 1)
   match turn.tool_results[0] {
@@ -339,11 +339,11 @@ async test "dormant goal refuses plan rewrites" {
       ("items", Json::array([cw_plan_item("unexpected work", "in_progress")])),
     ]),
   )
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "inactive-1", args),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "inactive-1", args),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ignored")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ignored")),
   ])
   let agent = cw_compose_agent(model, goal)
   let turn = cw_run_turn(agent, "normal chat", "no_goal")

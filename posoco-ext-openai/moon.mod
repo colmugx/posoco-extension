@@ -13,7 +13,6 @@ import {
   "posoco/kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-responses@0.1.0",
   "moonbit-community/flate@0.3.0",
-  "colmugx/cetas-testkit@0.1.0",
 }
 
 readme = "README.mbt.md"

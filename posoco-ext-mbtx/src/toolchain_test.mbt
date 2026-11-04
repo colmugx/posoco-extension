@@ -2,8 +2,8 @@
 /// Wire fixture independent of the unpublished SDK, exercising real script imports.
 let script_source : String =
   #|import {
-  #|  "moonbitlang/async@0.22.5",
-  #|  "moonbitlang/async@0.22.5/stdio",
+  #|  "moonbitlang/async@0.22.7",
+  #|  "moonbitlang/async@0.22.7/stdio",
   #|  "moonbitlang/core/json",
   #|}
   #|async fn main {
@@ -26,7 +26,7 @@ let script_source : String =
 /// solving and never reaches the compiler that would name `unknown_value`.
 let invalid_script_source : String =
   #|import {
-  #|  "moonbitlang/async@0.22.5",
+  #|  "moonbitlang/async@0.22.7",
   #|}
   #|fn main {
   #|  unknown_value

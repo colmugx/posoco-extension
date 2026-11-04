@@ -43,10 +43,10 @@ fn new_wired_policy(
 fn compose_with_ui(
   policy : @posoco-ext-permission.PermissionPolicy,
 ) -> Unit raise @posoco.CompositionError {
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   (policy as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(requires=[], model~, ui~),
+    @tk.tk_view(requires=[], model~, ui~),
   )
 }
 

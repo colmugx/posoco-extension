@@ -21,38 +21,35 @@ fn memoh_tool_loop_final_text(result : @posoco.TurnResult) -> String {
 /// the tool result path and continue to a second model call before anything is
 /// durably persisted.
 async test "ephemeral Memoh store preserves one-turn tool loop" {
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response(
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response(
         "echo",
         "call_1",
         Json::object(Map::from_array([])),
       ),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
-  let outcomes : Map[String, @posoco.ScriptedToolOutcome] = Map::from_array([])
-  outcomes["echo"] = @posoco.ScriptedToolOutcome::OutcomeOk(
-    @posoco.tk_ok_result("echoed"),
+  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([])
+  outcomes["echo"] = @tk.ScriptedToolOutcome::OutcomeOk(
+    @tk.tk_ok_result("echoed"),
   )
-  let tools = @posoco.RecordingToolProvider(
-    [@posoco.tk_tool_def("echo", "echo tool")],
+  let tools = @tk.RecordingToolProvider(
+    [@tk.tk_tool_def("echo", "echo tool")],
     outcomes,
   )
   let memoh = Memoh()
   let agent = @posoco.Agent(
     exts=[
       memoh as &@posoco.Extension,
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="tools", tools=[tools]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="tools", tools=[tools]),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
 
-  let result = agent.run_turn(
-    @posoco.tk_user_msg("use echo"),
-    "memoh-tool-loop",
-  )
+  let result = agent.run_turn(@tk.tk_user_msg("use echo"), "memoh-tool-loop")
   assert_eq(model.call_count(), 2)
   assert_eq(tools.exec_records().length(), 1)
   assert_eq(memoh_tool_loop_final_text(result), "done")

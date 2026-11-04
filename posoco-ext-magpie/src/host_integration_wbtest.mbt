@@ -43,7 +43,7 @@ async test "host composition discovers the extension, its model port and command
       Respond(code=200, body=exec_catalog_body()),
     ]),
   )
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   let ids = composed_command_ids(agent)
   for
     expected in [
@@ -70,7 +70,7 @@ async test "first turn flows through the composed model port with selection" {
     ],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   // Host startup loads the catalog before selection is possible.
   runtime.on_start()
   // Model selection through the composed command surface.
@@ -123,7 +123,7 @@ async test "first agent turn automatically starts magpie lifecycle exactly once"
     ),
     transport~,
   )
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   inspect(transport.calls.length(), content="0")
   let first = agent.run_turn(
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
@@ -157,7 +157,7 @@ async test "duplicate extension registration is rejected by composition" {
   // The same instance twice would double-register commands and the model
   // slot; composition must refuse rather than silently merge.
   try
-    @posoco.Agent::Agent(exts=[runtime, runtime], config=@posoco.tk_config())
+    @posoco.Agent::Agent(exts=[runtime, runtime], config=@tk.tk_config())
   catch {
     _ => ()
   } noraise {
@@ -182,10 +182,7 @@ async test "two model managers cannot share one agent; separate agents keep sele
   // Both declare a ModelPort; the single model slot makes co-registration a
   // composition error, not a silent override.
   try
-    @posoco.Agent::Agent(
-      exts=[runtime_a, runtime_b],
-      config=@posoco.tk_config(),
-    )
+    @posoco.Agent::Agent(exts=[runtime_a, runtime_b], config=@tk.tk_config())
   catch {
     _ => ()
   } noraise {
@@ -225,7 +222,7 @@ async test "invalid configuration starts degraded, never silently on the default
   guard runtime.unconfigured_reason() is Some(_) else {
     fail("invalid settings must record the reason")
   }
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   guard host_invoke(agent, id="magpie_status", args=Json::null())
     is @posoco.CommandOutcome::Success(structured=Some(status), ..) else {
     fail("status must answer after degraded startup")
@@ -253,7 +250,7 @@ async test "offline gateway does not crash host startup and recovers on reconnec
     Respond(code=200, body=exec_catalog_body()),
   ])
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   // Host startup: on_start must swallow the offline gateway.
   runtime.on_start()
   guard host_invoke(agent, id="magpie_status", args=Json::null())
@@ -296,7 +293,7 @@ async test "repeated lifecycle transitions keep the command surface consistent" 
     posts=[buffered_post(status=200, body=messages_nonstream_body(text="ok"))],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   runtime.on_start()
   runtime.on_shutdown()
   // After shutdown the command surface must refuse work, not serve stale state.
@@ -324,7 +321,7 @@ async test "shutdown drops owned observation state; reactivation rebuilds it" {
     posts=[buffered_post(status=200, body=messages_nonstream_body(text="done"))],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   runtime.on_start()
   let _ = host_invoke(
     agent,
@@ -355,7 +352,7 @@ async test "shutdown is idempotent and construction performs no network I/O" {
   runtime.on_shutdown()
   runtime.on_shutdown()
   inspect(transport.calls.length(), content="0")
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   // The command surface stays consistent after repeated shutdowns.
   inspect(composed_command_ids(agent).length() >= 10, content="true")
 }
@@ -369,7 +366,7 @@ async test "agent shutdown is idempotent and prevents later turns" {
     Respond(code=200, body=exec_catalog_body()),
   ])
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@tk.tk_config())
   agent.shutdown()
   agent.shutdown()
   inspect(transport.calls.length(), content="0")

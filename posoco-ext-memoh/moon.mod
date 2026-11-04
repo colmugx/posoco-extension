@@ -9,7 +9,7 @@ import {
   "colmugx/posoco-ext-permission@0.2.0",
   "colmugx/mcp@0.18.2",
   "moonbitlang/async@0.22.7",
-  "colmugx/cetas-testkit@0.1.0",
+  "posoco/devkit@0.4.1",
 }
 
 readme = "README.mbt.md"

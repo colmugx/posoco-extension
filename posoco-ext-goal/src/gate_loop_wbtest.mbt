@@ -38,8 +38,8 @@ pub impl GoalVerifier for TestGoalVerifier with fn verify(
 /// Compose model + sessions + one GoalRunner into an Agent (testkit shape).
 fn gate_build_agent(
   goal : GoalRunner,
-  model : @posoco.ScriptedModel,
-  store : @posoco.RecordingSessionPort,
+  model : @tk.ScriptedModel,
+  store : @tk.RecordingSessionPort,
   verified~ : Bool = true,
   reject_first_verification~ : Bool = false,
 ) -> @posoco.Agent {
@@ -51,11 +51,11 @@ fn gate_build_agent(
   }
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       goal,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   ) catch {
     e => abort("Agent failed: \{e}")
   }
@@ -64,7 +64,7 @@ fn gate_build_agent(
 ///|
 /// Stop response reporting `total` tokens (split evenly input/output) so the
 /// Observer accumulates usage.
-fn gate_usage_step(text : String, total : Int32) -> @posoco.ScriptedModelStep {
+fn gate_usage_step(text : String, total : Int32) -> @tk.ScriptedModelStep {
   let usage : @posoco.Usage = {
     input_tokens: Some(total / 2),
     output_tokens: Some(total / 2),
@@ -80,7 +80,7 @@ fn gate_usage_step(text : String, total : Int32) -> @posoco.ScriptedModelStep {
     usage=Some(usage),
   )
   let result : @posoco.ModelCallResult = { completion, processed_messages: [], }
-  @posoco.ScriptedModelStep::Respond(result)
+  @tk.ScriptedModelStep::Respond(result)
 }
 
 ///|
@@ -105,10 +105,7 @@ fn gate_plan_args() -> Json {
 
 ///|
 /// Concatenated text of every message in one recorded model-call input.
-fn gate_model_input_text(
-  model : @posoco.ScriptedModel,
-  index : Int32,
-) -> String {
+fn gate_model_input_text(model : @tk.ScriptedModel, index : Int32) -> String {
   let parts : Array[String] = []
   for msg in model.received_messages[index] {
     parts.push(text_of_message(msg))
@@ -120,13 +117,13 @@ fn gate_model_input_text(
 /// Work claim, then a verifier turn that confirms → Completed after exactly
 /// work + claim + verifier turns.
 async test "gate_confirm_completes" {
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("working")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("working")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let goal = goal_extension(goal_condition="make the build green")
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_confirm")
@@ -143,16 +140,16 @@ async test "gate_confirm_completes" {
 /// Verifier rejection retracts the claim; the next work turn's input carries
 /// the failed-verification intro; a later claim is confirmed.
 async test "gate_retract_then_confirm" {
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("working")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("claim\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("working")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("claim\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("fixed\n<goal-complete/>"),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("fixed\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let goal = goal_extension(goal_condition="make the build green")
   let agent = gate_build_agent(
     goal,
@@ -179,12 +176,12 @@ async test "verifier_budget_exhausted" {
   let options = GoalOptions::default(goal_condition="no verifier rounds")
   options.max_verifier_rounds = 0
   let goal = GoalRunner(options~)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_no_verifier")
   match result.final_status {
@@ -201,12 +198,12 @@ async test "verifier_turns_count_against_budget" {
   let options = GoalOptions::default(goal_condition="cap the run")
   options.budget.max_turns = 2
   let goal = GoalRunner(options~)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("claim\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("claim\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_budget_cap")
   match result.final_status {
@@ -226,16 +223,16 @@ async test "wrapup_updates_plan_and_claims" {
   options.budget.max_total_tokens = 100
   options.wrapup_ratio = 0.5
   let goal = GoalRunner(options~)
-  let model = @posoco.ScriptedModel::ScriptedModel([
+  let model = @tk.ScriptedModel::ScriptedModel([
     gate_usage_step("step", 80),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "c1", gate_plan_args()),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "c1", gate_plan_args()),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("updated\n<goal-complete/>"),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("updated\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_wrapup")
   match result.final_status {
@@ -261,17 +258,17 @@ async test "stall_repeated_tool_calls_pause" {
   options.stall_min_tokens = 0
   let goal = GoalRunner(options~)
   let args = gate_plan_args()
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "c1", args),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "c1", args),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("no signal")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("goal_update_plan", "c2", args),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("no signal")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("goal_update_plan", "c2", args),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("no signal")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("no signal")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_repeat")
   match result.final_status {
@@ -295,13 +292,11 @@ async test "stall_plan_frozen_pause" {
   options.stall_turn_threshold = 2
   options.stall_min_tokens = 0
   let goal = GoalRunner(options~)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("still thinking"),
-    ),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("thinking")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("still thinking")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_frozen")
   match result.final_status {
@@ -322,14 +317,12 @@ async test "budget exhaustion stops without consuming extra model steps" {
   let options = GoalOptions::default(goal_condition="never finishes")
   options.budget.max_turns = 2
   let goal = GoalRunner(options~)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("still working"),
-    ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("more work")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("unreached")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("still working")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("more work")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unreached")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_exhaust")
   match result.final_status {
@@ -342,13 +335,13 @@ async test "budget exhaustion stops without consuming extra model steps" {
 
 ///|
 async test "goal resume preserves charter, history and turn budget" {
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("step one")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let goal = goal_extension(goal_condition="test resume")
   // Force a pause after exactly one productive working turn.
   goal.options.budget.max_turns = 4
@@ -373,10 +366,10 @@ async test "goal resume preserves charter, history and turn budget" {
 
 ///|
 async test "goal execute rejects foreign resume session without resetting state" {
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("step one")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let goal = goal_extension(goal_condition="test isolation")
   goal.options.stall_turn_threshold = 1
   goal.options.stall_min_tokens = 1000000
@@ -398,15 +391,13 @@ async test "goal execute rejects foreign resume session without resetting state"
 /// produces an inconclusive result, never Completed.
 async test "unverified_claim_pauses_not_completes" {
   let goal = goal_extension(goal_condition="cannot self-certify")
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("<goal-complete/>")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store, verified=false)
   let result = goal.execute(agent, "unverified_session")
   assert_true(result.final_status == Paused)
@@ -420,9 +411,9 @@ async test "unverified_claim_pauses_not_completes" {
 /// A paused goal survives a runner restart when a host persists the
 /// checkpoint together with the original session store.
 async test "goal checkpoint round trip resumes on a new runner" {
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
-  let first_model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
+  let first_model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("step one")),
   ])
   let first_goal = goal_extension(goal_condition="durable goal")
   first_goal.options.stall_turn_threshold = 1
@@ -442,9 +433,9 @@ async test "goal checkpoint round trip resumes on a new runner" {
   assert_eq(next_goal.current_turn, 1)
   assert_eq(next_goal.history.length(), 1)
   assert_true(next_goal.charter_delivered)
-  let next_model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let next_model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
   let next_agent = gate_build_agent(next_goal, next_model, store)
@@ -482,8 +473,8 @@ test "checkpoint rejects another goal without touching runner state" {
 ///|
 /// Semantic DecisionPort advice cannot certify the goal on its own.
 async test "decision adviser is optional and not completion authority" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="goal_satisfied",
@@ -496,15 +487,13 @@ async test "decision adviser is optional and not completion authority" {
   ])
   let goal = goal_extension(goal_condition="no evidence despite confidence")
   goal.set_decision_adviser(decision)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("<goal-complete/>")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store, verified=false)
   let result = goal.execute(agent, "semantic_session")
   assert_true(result.final_status == Paused)
@@ -541,10 +530,10 @@ test "partial evidence never validates as completed" {
 test "opted in goal composes without decision capability" {
   let goal = goal_extension(goal_condition="plain Cetas JS host")
   goal.options.enable_semantic_advice = true
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("fine")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("fine")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   ignore(agent)
   assert_true(goal.adviser is None)
@@ -555,8 +544,8 @@ test "opted in goal composes without decision capability" {
 /// remains advisory: the trusted GoalVerifier is still the sole completion
 /// authority.
 async test "composed decision provider gives optional semantic advice" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="goal_satisfied",
@@ -570,20 +559,20 @@ async test "composed decision provider gives optional semantic advice" {
   let goal = goal_extension(goal_condition="semantic composition")
   goal.options.enable_semantic_advice = true
   goal.set_verifier(TestGoalVerifier::{ calls: 0, reject_first: false, })
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="decision", decision=Some(decision)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="decision", decision=Some(decision)),
+      @tk.tk_ext(id="io", sessions=[store]),
       goal,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   ) catch {
     e => abort("composition failed: \{e}")
   }
@@ -597,20 +586,20 @@ async test "composed decision provider gives optional semantic advice" {
 /// A failing DecisionPort is a missing advisory signal, not a hard
 /// dependency or a reason to discard authoritative verifier evidence.
 async test "decision provider failure falls back without changing verdict" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Fail(
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("provider unavailable"),
     ),
   ])
   let goal = goal_extension(goal_condition="decision service down")
   goal.set_decision_adviser(decision)
   goal.set_verifier(TestGoalVerifier::{ calls: 0, reject_first: false, })
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store, verified=false)
   let result = goal.execute(agent, "semantic_failure")
   assert_true(result.final_status == Completed)
@@ -622,8 +611,8 @@ async test "decision provider failure falls back without changing verdict" {
 /// A high confidence semantic prediction can defer one deterministic stall,
 /// but cannot extend a hard turn budget or confer completion authority.
 async test "semantic adviser can defer a stall for one bounded work turn" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="goal_continue_has_value",
@@ -633,7 +622,7 @@ async test "semantic adviser can defer a stall for one bounded work turn" {
       model: None,
       usage: None,
     }),
-    @posoco.ScriptedDecisionStep::Return({
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="goal_satisfied",
@@ -648,15 +637,15 @@ async test "semantic adviser can defer a stall for one bounded work turn" {
   goal.options.stall_turn_threshold = 1
   goal.options.stall_min_tokens = 0
   goal.set_decision_adviser(decision)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("thinking before evidence"),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("thinking before evidence"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_stop_response("done\n<goal-complete/>"),
     ),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "stall_deferral")
   assert_true(result.final_status == Completed)
@@ -669,8 +658,8 @@ async test "semantic adviser can defer a stall for one bounded work turn" {
 /// A semantic provider must never indefinitely override a deterministic
 /// stall. The policy defaults to at most one override.
 async test "semantic stall deferral count is strictly bounded" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return({
       answers: [
         @posoco.DecisionAnswer::BooleanAnswer(
           id="goal_continue_has_value",
@@ -685,13 +674,11 @@ async test "semantic stall deferral count is strictly bounded" {
   goal.options.stall_turn_threshold = 1
   goal.options.stall_min_tokens = 0
   goal.set_decision_adviser(decision)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("still thinking"),
-    ),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("thinking")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("still thinking")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "bounded_stall")
   assert_true(result.final_status == Paused)
@@ -704,16 +691,16 @@ async test "semantic stall deferral count is strictly bounded" {
 /// Even a confident semantic continuation cannot evade the user's hard
 /// max_turns limit.
 async test "semantic adviser cannot override an exhausted turn budget" {
-  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort::ScriptedDecisionPort([])
   let goal = goal_extension(goal_condition="hard budget wins")
   goal.options.budget.max_turns = 1
   goal.options.stall_turn_threshold = 1
   goal.options.stall_min_tokens = 0
   goal.set_decision_adviser(decision)
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("thinking")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "hard_budget")
   assert_true(result.final_status == BudgetExhausted)

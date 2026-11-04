@@ -28,7 +28,7 @@ fn decision_test_router() -> RouterModelPort raise @posoco.CompositionError {
       model_id="judge-b",
       port=judge_port,
       kind=ModelKind::Decision,
-      decision_port=Some(@posoco.ScriptedDecisionPort([])),
+      decision_port=Some(@tk.ScriptedDecisionPort([])),
     ),
     ModelSlot::ModelSlot(
       id="judge-2",
@@ -37,7 +37,7 @@ fn decision_test_router() -> RouterModelPort raise @posoco.CompositionError {
       model_id="judge-c",
       port=judge_second,
       kind=ModelKind::Decision,
-      decision_port=Some(@posoco.ScriptedDecisionPort([])),
+      decision_port=Some(@tk.ScriptedDecisionPort([])),
     ),
   ])
 }
@@ -109,7 +109,7 @@ async test "decision command hints the unconfigured selection in the listing" {
         model_id="judge-b",
         port=judge_port,
         kind=ModelKind::Decision,
-        decision_port=Some(@posoco.ScriptedDecisionPort([])),
+        decision_port=Some(@tk.ScriptedDecisionPort([])),
       ),
     ],
     default_decision_slot_id="gone/judge",

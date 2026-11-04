@@ -107,7 +107,7 @@ test "last non-empty line controls the signal" {
 ///|
 test "only final assistant text may signal completion" {
   debug_inspect(
-    scan(@posoco.tk_user_msg("need a key\n<goal-blocked/>")),
+    scan(@tk.tk_user_msg("need a key\n<goal-blocked/>")),
     content="NoSignal",
   )
   debug_inspect(scan(sys("all good\n<goal-complete/>")), content="NoSignal")
@@ -152,7 +152,7 @@ test "text_of_message variants" {
       @posoco.Message::ToolMessage(
         call_id=@posoco.CallId::unchecked("c1"),
         tool_name=@posoco.ToolName::unchecked("grep"),
-        outcome=@posoco.tk_ok_result("ok"),
+        outcome=@tk.tk_ok_result("ok"),
       ),
     ),
     content="",

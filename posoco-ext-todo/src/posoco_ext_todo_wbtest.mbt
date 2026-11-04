@@ -413,10 +413,10 @@ async test "without a composed UI writes still succeed" {
 ///|
 async test "on_compose stores the composed UI and writes render through it" {
   let ui = RecordingUi()
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let todo = TodoList::TodoList()
   todo.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
       model=model as &@posoco.ModelPort,
       ui=ui as &@posoco.UiPort,

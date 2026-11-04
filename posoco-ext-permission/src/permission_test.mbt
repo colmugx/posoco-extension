@@ -240,8 +240,8 @@ async test "a tool-level grant short-circuits the auto judge" {
   // Switch to Auto afterwards: explicit user consent recorded earlier
   // outranks a fresh judgement, so the judge is never consulted.
   policy.mode = Auto
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Fail(
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("judge must not be reached"),
     ),
   ])
@@ -1290,12 +1290,12 @@ fn semantic_risk_result(
 ///|
 fn compose_permission_decision(
   policy : @posoco-ext-permission.PermissionPolicy,
-  decision : @posoco.ScriptedDecisionPort,
+  decision : @tk.ScriptedDecisionPort,
 ) -> Unit raise @posoco.CompositionError {
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   (policy as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Decision],
       model~,
       decision=Some(decision),
@@ -1315,8 +1315,8 @@ async test "semantic risk can tighten an interactive read into per-call consent"
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   match policy.before_tool(test_call("read")) {
@@ -1334,8 +1334,8 @@ async test "semantic risk rejects a read in readonly mode" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.8, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.8, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1349,8 +1349,8 @@ async test "low semantic risk preserves deterministic preapproval" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.2, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.2, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1364,8 +1364,8 @@ async test "decision failure preserves deterministic preapproval" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Fail(
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("semantic backend unavailable"),
     ),
   ])
@@ -1387,7 +1387,7 @@ async test "decision port never relaxes an existing gated write" {
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
-  let decision = @posoco.ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort([])
   compose_permission_decision(policy, decision)
   assert_true(
     policy.before_tool(test_call("write"))
@@ -1401,7 +1401,7 @@ async test "decision port never relaxes an existing gated write" {
 ///|
 async test "yolo preapproval does not consult decision port" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Yolo)
-  let decision = @posoco.ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort([])
   compose_permission_decision(policy, decision)
   assert_true(
     policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
@@ -1457,8 +1457,8 @@ async test "auto mode approves on a high grant probability without asking the so
     Auto,
     approval=Some(source as &ApprovalSource),
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1475,8 +1475,8 @@ async test "auto mode approves on a high grant probability without asking the so
 ///|
 async test "auto mode rejects a low grant probability, citing it" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.2, 0.1, 0.1, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(auto_judge_result(0.2, 0.1, 0.1, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   match policy.before_tool(test_call_cmd("bash", "npm run build")) {
@@ -1488,8 +1488,8 @@ async test "auto mode rejects a low grant probability, citing it" {
 ///|
 async test "auto mode risk veto overrides a high grant probability" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.95, 0.1, 0.1, 0.9)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(auto_judge_result(0.95, 0.1, 0.1, 0.9)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1501,8 +1501,8 @@ async test "auto mode risk veto overrides a high grant probability" {
 ///|
 async test "auto mode fails closed when the judge errors" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Fail(
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("semantic backend unavailable"),
     ),
   ])
@@ -1541,8 +1541,8 @@ async test "auto mode judges escalated mbtx instead of asking the source" {
     Auto,
     approval=Some(source as &ApprovalSource),
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+  let decision = @tk.ScriptedDecisionPort([
+    @tk.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1564,11 +1564,11 @@ async test "auto mode judges escalated mbtx instead of asking the source" {
 ///|
 async test "auto mode judges a risky read through the grant question" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
-  let decision = @posoco.ScriptedDecisionPort([
+  let decision = @tk.ScriptedDecisionPort([
     // Risk probe on the statically pre-approved read...
-    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
+    @tk.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
     // ...then the judge decides the grant.
-    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+    @tk.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
   ])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1584,7 +1584,7 @@ async test "explicit session approval outranks the auto judge" {
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
-  let decision = @posoco.ScriptedDecisionPort([])
+  let decision = @tk.ScriptedDecisionPort([])
   compose_permission_decision(policy, decision)
   // Interactive records an explicit user approval for `write`.
   assert_true(
@@ -1623,11 +1623,11 @@ async test "/permission auto without a DecisionPort fails and keeps the mode" {
 ///|
 async test "auto policy without a decision port fails composition" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
-  let model = @posoco.ScriptedModel([])
+  let model = @tk.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   try
     (policy as &@posoco.Lifecycle).on_compose(
-      @posoco.tk_view(requires=[], model~, ui~),
+      @tk.tk_view(requires=[], model~, ui~),
     )
   catch {
     @posoco.CompositionError::ExtensionComposeFailed(manifest_id~, detail~) => {

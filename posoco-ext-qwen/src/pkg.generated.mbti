@@ -17,6 +17,7 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct QwenConfig {
   api_key : String
   base_url : String
@@ -29,7 +30,7 @@ pub(all) struct QwenConfig {
   tool_stream : Bool
   supports_images : Bool
   context_window : Int32?
-} derive(Eq, @debug.Debug)
+}
 pub fn QwenConfig::QwenConfig(String, base_url~ : String, model? : String, endpoint_prefix? : String, reasoning_effort? : String?, enable_thinking? : Bool?, preserve_thinking? : Bool?, tool_stream? : Bool?, supports_images? : Bool?, context_window? : Int32?) -> Self
 pub fn QwenConfig::equal(Self, Self) -> Bool
 pub fn QwenConfig::not_equal(Self, Self) -> Bool

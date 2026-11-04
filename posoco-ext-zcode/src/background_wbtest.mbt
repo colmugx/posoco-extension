@@ -129,9 +129,9 @@ test "background with session_id is refused at parse" {
 async test "background receipt accepted and outcome delivered next turn" {
   let summary = "delegated!\n\nsession_id: sess_child"
   let runs : Ref[Int32] = Ref(0)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response(
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response(
         "zcode",
         "call-1",
         Json::object(
@@ -142,10 +142,10 @@ async test "background receipt accepted and outcome delivered next turn" {
         ),
       ),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("receipt ok")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("outcome seen")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("receipt ok")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("outcome seen")),
   ])
-  let store = @posoco.RecordingSessionPort()
+  let store = @tk.RecordingSessionPort()
   let ext = zcode_ext(
     run=Some(fn(_args : ZcodeTaskArgs) {
       runs.val = runs.val + 1
@@ -154,17 +154,17 @@ async test "background receipt accepted and outcome delivered next turn" {
   )
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       ext as &@posoco.Extension,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   ignore(
     agent.run_scoped(async fn(agent) {
-      ignore(agent.run_turn(@posoco.tk_user_msg("go"), "sess_1"))
+      ignore(agent.run_turn(@tk.tk_user_msg("go"), "sess_1"))
       @async.sleep(300)
-      ignore(agent.run_turn(@posoco.tk_user_msg("again"), "sess_1"))
+      ignore(agent.run_turn(@tk.tk_user_msg("again"), "sess_1"))
     }),
   )
   // Turn 1 ended with a Success receipt and the delegation actually ran.
@@ -195,9 +195,9 @@ async test "background receipt accepted and outcome delivered next turn" {
 async test "background timeout survives cancellation masked as a return" {
   let summary = "masked garbage"
   let runs : Ref[Int32] = Ref(0)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response(
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response(
         "zcode",
         "call-1",
         Json::object(
@@ -208,10 +208,10 @@ async test "background timeout survives cancellation masked as a return" {
         ),
       ),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("receipt ok")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("outcome seen")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("receipt ok")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("outcome seen")),
   ])
-  let store = @posoco.RecordingSessionPort()
+  let store = @tk.RecordingSessionPort()
   let ext = zcode_ext(
     config={ ..zcode_config(), timeout_ms: 150, },
     run=Some(async fn(_args : ZcodeTaskArgs) {
@@ -224,17 +224,17 @@ async test "background timeout survives cancellation masked as a return" {
   )
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       ext as &@posoco.Extension,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   ignore(
     agent.run_scoped(async fn(agent) {
-      ignore(agent.run_turn(@posoco.tk_user_msg("go"), "sess_1"))
+      ignore(agent.run_turn(@tk.tk_user_msg("go"), "sess_1"))
       @async.sleep(600)
-      ignore(agent.run_turn(@posoco.tk_user_msg("again"), "sess_1"))
+      ignore(agent.run_turn(@tk.tk_user_msg("again"), "sess_1"))
     }),
   )
   // The delegation actually started before the timer fired.

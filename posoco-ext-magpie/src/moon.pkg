@@ -11,3 +11,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
+
+import {
+  "posoco/devkit/testkit" @tk,
+} for "wbtest"

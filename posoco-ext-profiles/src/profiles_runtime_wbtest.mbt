@@ -401,7 +401,7 @@ impl ProfileActivationSink for RecordingActivationSink with fn submit(
 ///|
 async test "profiles_command_select_submits_through_host_sink" {
   let sink = RecordingActivationSink::{ calls: [], failure: None, }
-  let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
+  let ui = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit", exts=["nmem"])],
     defer_set=["nmem"],
@@ -410,9 +410,9 @@ async test "profiles_command_select_submits_through_host_sink" {
     activation_sink=Some(sink),
   )
   profiles.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
-      model=@posoco.ScriptedModel::ScriptedModel([]),
+      model=@tk.ScriptedModel::ScriptedModel([]),
       ui~,
     ),
   )
@@ -447,7 +447,7 @@ async test "profiles_command_sink_failure_does_not_publish_activation" {
   let bus = @devkit.EventBus::EventBus()
   let recorder = RecordingBus::RecordingBus()
   bus.subscribe(recorder)
-  let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
+  let ui = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
@@ -457,9 +457,9 @@ async test "profiles_command_sink_failure_does_not_publish_activation" {
     activation_sink=Some(sink),
   )
   profiles.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
-      model=@posoco.ScriptedModel::ScriptedModel([]),
+      model=@tk.ScriptedModel::ScriptedModel([]),
       ui~,
     ),
   )
@@ -478,7 +478,7 @@ async test "profiles_command_sink_failure_does_not_publish_activation" {
 
 ///|
 async test "profiles_command_cancelled_fails" {
-  let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Cancelled])
+  let ui = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Cancelled])
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
@@ -486,9 +486,9 @@ async test "profiles_command_cancelled_fails" {
     attribution=Map::from_array([]),
   )
   profiles.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
-      model=@posoco.ScriptedModel::ScriptedModel([]),
+      model=@tk.ScriptedModel::ScriptedModel([]),
       ui~,
     ),
   )
@@ -504,7 +504,7 @@ async test "profiles_command_cancelled_fails" {
 
 ///|
 async test "profiles_command_selection_without_wiring_fails" {
-  let ui = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
+  let ui = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   // No activation sink wired at all.
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
@@ -513,9 +513,9 @@ async test "profiles_command_selection_without_wiring_fails" {
     attribution=Map::from_array([]),
   )
   profiles.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
-      model=@posoco.ScriptedModel::ScriptedModel([]),
+      model=@tk.ScriptedModel::ScriptedModel([]),
       ui~,
     ),
   )
@@ -530,7 +530,7 @@ async test "profiles_command_selection_without_wiring_fails" {
   }
   // Sink wired, but args carry no session_id.
   let sink = RecordingActivationSink::{ calls: [], failure: None, }
-  let ui2 = @posoco.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
+  let ui2 = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles2 = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
@@ -539,9 +539,9 @@ async test "profiles_command_selection_without_wiring_fails" {
     activation_sink=Some(sink),
   )
   profiles2.on_compose(
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[@posoco.Capability::Ui],
-      model=@posoco.ScriptedModel::ScriptedModel([]),
+      model=@tk.ScriptedModel::ScriptedModel([]),
       ui=ui2,
     ),
   )

@@ -12,7 +12,7 @@ fn prefix_stability_def(name : String) -> @posoco.ToolDef {
 
 ///|
 async test "manifest recent-tool views stay stable after usage events" {
-  let child = @posoco.RecordingToolProvider(
+  let child = @tk.RecordingToolProvider(
     [prefix_stability_def("webfetch")],
     Map::from_array([]),
   )
@@ -51,7 +51,7 @@ async test "manifest recent-tool views stay stable after usage events" {
 
 ///|
 async test "manifest hook removes a legacy recent-tools envelope once" {
-  let child = @posoco.RecordingToolProvider(
+  let child = @tk.RecordingToolProvider(
     [prefix_stability_def("webfetch")],
     Map::from_array([]),
   )
@@ -88,7 +88,7 @@ async test "manifest hook removes a legacy recent-tools envelope once" {
 
 ///|
 test "stable prompt tells the model to reuse schemas already in history" {
-  let child = @posoco.RecordingToolProvider(
+  let child = @tk.RecordingToolProvider(
     [prefix_stability_def("webfetch")],
     Map::from_array([]),
   )

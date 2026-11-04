@@ -265,12 +265,12 @@ fn first_system_text(messages : Array[@posoco.Message]) -> String {
 ///|
 fn nmem_agent(
   ext : NowledgeMem,
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
 ) -> @posoco.Agent raise {
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
@@ -278,13 +278,13 @@ fn nmem_agent(
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
-      @posoco.tk_ext(
+      @tk.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
-        observers=[@posoco.RecordingObserver::RecordingObserver()],
+        sessions=[@tk.RecordingSessionPort::RecordingSessionPort()],
+        observers=[@tk.RecordingObserver::RecordingObserver()],
       ),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
 }
 
@@ -300,13 +300,13 @@ async test "e2e: the system prompt carries guidance only, never data" {
     ]),
   )
   let ext = nmem_ext(mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     assert_true(model.received_messages.length() > 0)
     let messages = model.received_messages[0]
     let prompt = first_system_text(messages)
@@ -356,14 +356,14 @@ async test "on_start configures the mcp client with the resolved endpoint" {
 async test "e2e: completed turns sync create then incremental append" {
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     // The attached turn-end drain commits the create before run_turn
     // returns.
     inspect(transport.requests.length(), content="1")
@@ -379,7 +379,7 @@ async test "e2e: completed turns sync create then incremental append" {
         inspect(source == config.source_app, content="true")
       _ => fail("create body should carry a string source")
     }
-    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("more"), "session_1"))
     inspect(transport.requests.length(), content="2")
     let (append_url, append_body) = transport.requests[1]
     assert_true(
@@ -399,8 +399,8 @@ async test "e2e: completed turns sync create then incremental append" {
 async test "attach runs the flusher loop inside a host task group" {
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
@@ -408,7 +408,7 @@ async test "attach runs the flusher loop inside a host task group" {
     // The turn stages its create and the attached turn-end drain commits
     // it; the flusher's ticks then find the lane clean — no explicit
     // flush_pending call anywhere.
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     @async.sleep(1100)
     ext.engine.stop()
   })
@@ -450,15 +450,15 @@ async test "on_shutdown stops the flusher, drains pending lanes, closes mcp" {
   let mcp = FakeNmemMcp::FakeNmemMcp()
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
     // The attached turn-end drain commits the create before run_turn
     // returns; on_shutdown's final drain then finds nothing pending.
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
     @posoco.Lifecycle::on_shutdown(ext)
     inspect(transport.requests.length(), content="1")
@@ -478,7 +478,7 @@ async test "on_event: TurnFailed stages a turn_failed sync request" {
   }
   @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   let snapshot : Array[@posoco.Message] = [
-    @posoco.tk_user_msg("hello"),
+    @tk.tk_user_msg("hello"),
     assistant_msg("hi"),
   ]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
@@ -502,7 +502,7 @@ async test "on_event: TurnFailed stages a turn_failed sync request" {
 async test "on_event: ModelResponseReceived completes the snapshot deduplicated" {
   let ext = nmem_ext()
   ext.config = Some(lane_config())
-  let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("hello")]
+  let snapshot : Array[@posoco.Message] = [@tk.tk_user_msg("hello")]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
   @posoco.Observer::on_event(
     ext,
@@ -530,14 +530,14 @@ async test "on_event: ModelResponseReceived completes the snapshot deduplicated"
 async test "on_event: SessionRedirect stages the old lane and switches the session" {
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     guard ext.config is Some(config) else { fail("config was not resolved") }
     // A manual redirect: the snapshot is staged under the OLD session id with
     // the redirect reason (best effort — the observer slot cannot flush), and
@@ -570,7 +570,7 @@ async test "on_event: SessionRedirect stages the old lane and switches the sessi
     // the new session's create (request 1): the redirected old-lane snapshot
     // carried no messages beyond turn 1's acknowledged ones, so it coalesces
     // to no POST.
-    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_2"))
+    ignore(agent.run_turn(@tk.tk_user_msg("more"), "session_2"))
     inspect(transport.requests.length(), content="2")
     inspect(
       body_thread_id(transport.requests[0].1),
@@ -632,7 +632,7 @@ fn observer_tool_call() -> @posoco.ToolCall {
 async test "on_event: terminal tool events complete the snapshot with current-round outcomes" {
   let ext = nmem_ext()
   ext.config = Some(lane_config())
-  let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("run the check")]
+  let snapshot : Array[@posoco.Message] = [@tk.tk_user_msg("run the check")]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
   @posoco.Observer::on_event(
     ext,

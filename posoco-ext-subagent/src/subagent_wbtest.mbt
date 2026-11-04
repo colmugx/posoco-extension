@@ -12,8 +12,8 @@ priv struct FakeComposer {
   /// When set, the child uses this model instead of a ScriptedModel
   /// (used by the timeout test).
   slow_model : &@posoco.ModelPort?
-  child_recorder : @posoco.RecordingObserver
-  store : @posoco.RecordingSessionPort
+  child_recorder : @tk.RecordingObserver
+  store : @tk.RecordingSessionPort
   specs : Array[ChildSpec]
   fail_with : String?
 }
@@ -27,8 +27,8 @@ fn FakeComposer::FakeComposer(
   {
     response_text,
     slow_model,
-    child_recorder: @posoco.RecordingObserver::RecordingObserver(),
-    store: @posoco.RecordingSessionPort::RecordingSessionPort(),
+    child_recorder: @tk.RecordingObserver::RecordingObserver(),
+    store: @tk.RecordingSessionPort::RecordingSessionPort(),
     specs: [],
     fail_with,
   }
@@ -52,21 +52,19 @@ impl ChildComposer for FakeComposer with fn compose(
   let model : &@posoco.ModelPort = match self.slow_model {
     Some(slow) => slow
     None =>
-      @posoco.ScriptedModel([
-        Respond(@posoco.tk_stop_response(self.response_text)),
-      ])
+      @tk.ScriptedModel([Respond(@tk.tk_stop_response(self.response_text))])
       as &@posoco.ModelPort
   }
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(
         id="io",
         sessions=[self.store as &@posoco.SessionPort],
         observers~,
       ),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   ) catch {
     error => raise ComposerError::Failed("child compose failed: \{error}")
   }
@@ -94,7 +92,7 @@ impl @posoco.ModelPort for SlowModel with fn chat(
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   @async.sleep(self.delay_ms)
-  @posoco.tk_stop_response("too late")
+  @tk.tk_stop_response("too late")
 }
 
 ///|
@@ -274,7 +272,7 @@ fn args_object(pairs : Array[(String, Json)]) -> Json {
 
 ///|
 fn store_contains_user_text(
-  store : @posoco.RecordingSessionPort,
+  store : @tk.RecordingSessionPort,
   session_id : String,
   needle : String,
 ) -> Bool {
@@ -528,7 +526,7 @@ fn custom_payloads(
 
 ///|
 fn outcome_envelope(task_id~ : String, detail~ : String) -> @posoco.Message {
-  @posoco.tk_user_msg(
+  @tk.tk_user_msg(
     "[posoco-task-outcome id=\{task_id}] extension=posoco_ext_subagent label=subagent-1: \{detail}",
   )
 }
@@ -576,7 +574,7 @@ test "observe_deliveries_duplicate_scans_ack_once" {
   tools.observe_deliveries([envelope])
   // Re-delivery scans (replayed session, later turn) are no-ops.
   tools.observe_deliveries([envelope])
-  tools.observe_deliveries([@posoco.tk_user_msg("plain follow-up")])
+  tools.observe_deliveries([@tk.tk_user_msg("plain follow-up")])
   assert_eq(custom_payloads(events, want="background_delivered").length(), 1)
   assert_eq(custom_payloads(events, want="background_terminal").length(), 1)
   assert_eq(tools.background_children(), [("subagent-1", "completed")])

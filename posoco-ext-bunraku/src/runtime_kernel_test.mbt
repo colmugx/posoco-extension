@@ -12,8 +12,8 @@
 
 ///|
 struct KernelNestedProbe {
-  read : @posoco.RecordingToolProvider
-  grep : @posoco.RecordingToolProvider
+  read : @tk.RecordingToolProvider
+  grep : @tk.RecordingToolProvider
 }
 
 ///|
@@ -47,12 +47,12 @@ fn kernel_nested_defs() -> Array[@kernel.ToolDef] {
 ///|
 fn kernel_nested_probe() -> KernelNestedProbe {
   let defs = kernel_nested_defs()
-  let read = @posoco.RecordingToolProvider(
+  let read = @tk.RecordingToolProvider(
     [defs[0]],
     Map::from_array([
       (
         "read",
-        @posoco.ScriptedToolOutcome::OutcomeOk(
+        @tk.ScriptedToolOutcome::OutcomeOk(
           @kernel.ToolOutcome::Success(
             content="ok",
             structured=Some({ "read": true }),
@@ -61,12 +61,12 @@ fn kernel_nested_probe() -> KernelNestedProbe {
       ),
     ]),
   )
-  let grep = @posoco.RecordingToolProvider(
+  let grep = @tk.RecordingToolProvider(
     [defs[1]],
     Map::from_array([
       (
         "grep",
-        @posoco.ScriptedToolOutcome::OutcomeOk(
+        @tk.ScriptedToolOutcome::OutcomeOk(
           @kernel.ToolOutcome::Success(content="ok", structured=None),
         ),
       ),
@@ -77,7 +77,7 @@ fn kernel_nested_probe() -> KernelNestedProbe {
 
 ///|
 fn kernel_agent(
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
   probe : KernelNestedProbe,
 ) -> @posoco.Agent raise @posoco.CompositionError {
   // Target-contract composition: every tool (run_code included) is a
@@ -91,18 +91,16 @@ fn kernel_agent(
   )
   @posoco.Agent::with_runtime(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
       // Manifest ids become ToolDef owners after aggregation, so the read
       // provider must ride an extension whose id is an allowed nested owner.
-      @posoco.tk_ext(id="posoco_ext_read", tools=[
+      @tk.tk_ext(id="posoco_ext_read", tools=[
         probe.read as &@posoco.ToolProvider,
       ]),
-      @posoco.tk_ext(id="outside_face", tools=[
-        probe.grep as &@posoco.ToolProvider,
-      ]),
+      @tk.tk_ext(id="outside_face", tools=[probe.grep as &@posoco.ToolProvider]),
       ptc_runtime.extension(),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
     runtime=ptc_runtime as &@runtime.Runtime,
   )
 }
@@ -113,9 +111,9 @@ fn kernel_agent(
 /// structured guest return rides the tool result back to the model.
 async test "kernel turn runs a guest through the scoped nested dispatch" {
   let probe = kernel_nested_probe()
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("run_code", "call_1", {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("run_code", "call_1", {
         "description": "Read probe via guest",
         "code": (
           #|let value = ctx.call("read", { "path": "probe.txt" })
@@ -123,12 +121,12 @@ async test "kernel turn runs a guest through the scoped nested dispatch" {
         ),
       }),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = kernel_agent(model, probe) catch {
     error => fail("composition failed: \{error}")
   }
-  let result = agent.run_turn(@posoco.tk_user_msg("hello"), "session_1")
+  let result = agent.run_turn(@tk.tk_user_msg("hello"), "session_1")
   assert_eq(result.tool_results.length(), 1)
   guard result.tool_results[0]
     is @kernel.ToolOutcome::Success(structured=Some({ "read": true, .. }), ..) else {

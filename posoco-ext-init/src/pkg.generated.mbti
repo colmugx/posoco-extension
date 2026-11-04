@@ -4,6 +4,7 @@ package "colmugx/posoco-ext-init"
 import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -18,7 +19,7 @@ pub struct Init {
 pub fn Init::Init() -> Self
 pub fn Init::commands(Self) -> Array[@port.CommandDef]
 pub fn Init::extension_id(Self) -> String
-pub async fn Init::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn Init::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Init::manifest(Self) -> @port.ExtensionManifest
 pub fn Init::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn Init::on_shutdown(Self) -> Unit

@@ -57,18 +57,18 @@ async test "hook events mutate only actor-owned recovery state" {
   ) {
     @async.sleep(60000)
   })
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("unused")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
   ])
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionPort::RecordingSessionPort(),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[
+        @tk.RecordingSessionPort::RecordingSessionPort(),
       ]),
       guard_ext,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)
@@ -91,18 +91,18 @@ async test "cancel_pending invalidates actor schedule" {
   ) {
     @async.sleep(60000)
   })
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("unused")),
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
   ])
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionPort::RecordingSessionPort(),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[
+        @tk.RecordingSessionPort::RecordingSessionPort(),
       ]),
       guard_ext,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)
@@ -118,30 +118,30 @@ async test "cancel_pending invalidates actor schedule" {
 
 ///|
 async test "429 failed turn auto-resumes through supervised event timer" {
-  let model = @posoco.ScriptedModel::ScriptedModel([
-    @posoco.ScriptedModelStep::Fail(
+  let model = @tk.ScriptedModel::ScriptedModel([
+    @tk.ScriptedModelStep::Fail(
       @posoco.ModelError::RateLimited(@posoco.RateLimitInfo::{
         message: "quota exhausted",
         reset_at_ms: Some(0L),
         provider_code: Some("429"),
       }),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("resumed")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("resumed")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 0L })
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       guard_ext,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)
     let first : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
-      agent.run_turn(@posoco.tk_user_msg("task"), "s1"),
+      agent.run_turn(@tk.tk_user_msg("task"), "s1"),
     ) catch {
       error => Err(error)
     }
@@ -188,7 +188,7 @@ pub impl @posoco.ModelPort for DelayedModel with fn chat(
   self.started = self.started + 1
   @async.sleep(self.delay_ms)
   self.finished = self.finished + 1
-  @posoco.tk_stop_response("done")
+  @tk.tk_stop_response("done")
 }
 
 ///|
@@ -224,22 +224,22 @@ async test "simultaneous due sessions serialize resume execution" {
   ) {
     @async.sleep(60000)
   })
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   store.seed("s1", {
-    messages: [@posoco.tk_user_msg("task one")],
+    messages: [@tk.tk_user_msg("task one")],
     metadata: Map::from_array([]),
   })
   store.seed("s2", {
-    messages: [@posoco.tk_user_msg("task two")],
+    messages: [@tk.tk_user_msg("task two")],
     metadata: Map::from_array([]),
   })
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[store]),
+      @tk.tk_ext(id="model", model=Some(model)),
+      @tk.tk_ext(id="io", sessions=[store]),
       guard_ext,
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   @async.with_task_group(group => {
     guard_ext.start(group~, agent~)

@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -35,40 +36,45 @@ pub fn DecisionGoalAdviser::DecisionGoalAdviser(&@port.DecisionPort) -> Self
 pub async fn DecisionGoalAdviser::assess(Self, GoalVerificationRequest) -> Double?
 pub async fn DecisionGoalAdviser::assess_progress(Self, String, String, String, String) -> Double?
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GoalAssessment {
   Verified(Array[GoalEvidence])
   Rejected(String)
   Inconclusive(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalAssessment::equal(Self, Self) -> Bool
 pub fn GoalAssessment::not_equal(Self, Self) -> Bool
 pub fn GoalAssessment::to_repr(Self) -> @debug.Repr
 pub fn GoalAssessment::validated(Self, Array[String]) -> Self
 
+#derive(@debug.Debug)
 pub(all) struct GoalBudget {
   mut max_turns : Int32
   mut max_total_tokens : Int32
-} derive(@debug.Debug)
+}
 pub fn GoalBudget::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalEvidence {
   criterion : String
   source : String
   reference : String
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalEvidence::equal(Self, Self) -> Bool
 pub fn GoalEvidence::not_equal(Self, Self) -> Bool
 pub fn GoalEvidence::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalHistoryEntry {
   turn : Int32
   usage : GoalUsage
   summary : String
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalHistoryEntry::equal(Self, Self) -> Bool
 pub fn GoalHistoryEntry::not_equal(Self, Self) -> Bool
 pub fn GoalHistoryEntry::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct GoalOptions {
   goal_condition : String
   budget : GoalBudget
@@ -84,17 +90,18 @@ pub(all) struct GoalOptions {
   mut enable_semantic_advice : Bool
   mut max_semantic_stall_deferrals : Int32
   mut semantic_stall_threshold : Double
-} derive(@debug.Debug)
+}
 pub fn GoalOptions::default(goal_condition~ : String) -> Self
 pub fn GoalOptions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalPlan {
   items : Array[GoalPlanItem]
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalPlan::empty() -> Self
 pub fn GoalPlan::equal(Self, Self) -> Bool
 pub fn GoalPlan::fingerprint(Self) -> String
-pub fn GoalPlan::from_tool_args(Json) -> Result[Self, String]
+pub fn GoalPlan::from_tool_args(@json.Json) -> Result[Self, String]
 pub fn GoalPlan::next_step(Self) -> String?
 pub fn GoalPlan::normalize(Self) -> Self
 pub fn GoalPlan::not_equal(Self, Self) -> Bool
@@ -102,19 +109,21 @@ pub fn GoalPlan::progress_line(Self) -> String
 pub fn GoalPlan::render(Self) -> String
 pub fn GoalPlan::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalPlanItem {
   title : String
   status : GoalPlanStatus
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalPlanItem::equal(Self, Self) -> Bool
 pub fn GoalPlanItem::not_equal(Self, Self) -> Bool
 pub fn GoalPlanItem::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GoalPlanStatus {
   Pending
   InProgress
   Done
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalPlanStatus::equal(Self, Self) -> Bool
 pub fn GoalPlanStatus::not_equal(Self, Self) -> Bool
 pub fn GoalPlanStatus::output(Self, &Logger) -> Unit
@@ -122,6 +131,7 @@ pub fn GoalPlanStatus::to_repr(Self) -> @debug.Repr
 pub fn GoalPlanStatus::to_string(Self) -> String
 pub impl Show for GoalPlanStatus
 
+#derive(@debug.Debug)
 pub(all) struct GoalResult {
   final_status : GoalStatus
   total_usage : GoalUsage
@@ -131,7 +141,7 @@ pub(all) struct GoalResult {
   stall_reason : String?
   assessment : GoalAssessment
   semantic_probability : Double?
-} derive(@debug.Debug)
+}
 pub fn GoalResult::to_repr(Self) -> @debug.Repr
 
 pub struct GoalRunner {
@@ -171,7 +181,7 @@ pub struct GoalRunner {
 }
 pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> Self
 pub fn GoalRunner::assessment(Self) -> GoalAssessment
-pub fn GoalRunner::checkpoint(Self) -> Result[Json, String]
+pub fn GoalRunner::checkpoint(Self) -> Result[@json.Json, String]
 pub fn GoalRunner::clear(Self) -> Unit
 pub async fn GoalRunner::execute(Self, @posoco.Agent, String) -> GoalResult
 pub fn GoalRunner::extension_id(Self) -> String
@@ -184,7 +194,7 @@ pub async fn GoalRunner::on_start(Self) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit
 pub fn GoalRunner::plan(Self) -> GoalPlan
 pub fn GoalRunner::prepare_goal(Self, String) -> Result[Unit, String]
-pub fn GoalRunner::restore_checkpoint(Self, Json) -> Result[Unit, String]
+pub fn GoalRunner::restore_checkpoint(Self, @json.Json) -> Result[Unit, String]
 pub fn GoalRunner::resume_goal(Self) -> Unit
 pub fn GoalRunner::set_decision_adviser(Self, &@port.DecisionPort) -> Unit
 pub fn GoalRunner::set_verifier(Self, &GoalVerifier) -> Unit
@@ -194,6 +204,7 @@ pub impl @port.Lifecycle for GoalRunner
 pub impl @port.Observer for GoalRunner
 pub impl @port.ToolProvider for GoalRunner
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GoalStatus {
   Idle
   Running
@@ -202,7 +213,7 @@ pub(all) enum GoalStatus {
   Blocked(String)
   BudgetExhausted
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalStatus::equal(Self, Self) -> Bool
 pub fn GoalStatus::not_equal(Self, Self) -> Bool
 pub fn GoalStatus::output(Self, &Logger) -> Unit
@@ -210,27 +221,30 @@ pub fn GoalStatus::to_repr(Self) -> @debug.Repr
 pub fn GoalStatus::to_string(Self) -> String
 pub impl Show for GoalStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalUsage {
   mut turns : Int32
   mut total_tokens : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalUsage::equal(Self, Self) -> Bool
 pub fn GoalUsage::not_equal(Self, Self) -> Bool
 pub fn GoalUsage::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct GoalVerificationRequest {
   goal : String
   criteria : Array[String]
   session_id : String
   claim : String
-} derive(@debug.Debug)
+}
 pub fn GoalVerificationRequest::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TurnVerdict {
   NoSignal
   CompletionClaimed
   BlockedClaimed(reason~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn TurnVerdict::equal(Self, Self) -> Bool
 pub fn TurnVerdict::not_equal(Self, Self) -> Bool
 pub fn TurnVerdict::to_repr(Self) -> @debug.Repr

@@ -8,4 +8,5 @@ import {
 
 import {
   "moonbitlang/async",
+  "posoco/devkit/testkit" @tk,
 } for "test"

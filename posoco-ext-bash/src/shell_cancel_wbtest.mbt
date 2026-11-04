@@ -12,10 +12,8 @@
 
 ///|
 fn shell_port_runtime() -> @runtime.PortRuntime {
-  let no_steps : Array[@posoco.ScriptedModelStep] = []
-  @runtime.PortRuntime(
-    model=@posoco.ScriptedModel(no_steps) as &@posoco.ModelPort,
-  )
+  let no_steps : Array[@tk.ScriptedModelStep] = []
+  @runtime.PortRuntime(model=@tk.ScriptedModel(no_steps) as &@posoco.ModelPort)
 }
 
 ///|

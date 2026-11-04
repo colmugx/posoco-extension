@@ -32,9 +32,9 @@ async test "normal imports and embedded policy do not bypass host guest filesyst
     #|//   fs:
     #|//     read: ["."]
     #|import {
-    #|  "moonbitlang/async@0.22.5",
-    #|  "moonbitlang/async@0.22.5/stdio",
-    #|  "moonbitlang/async@0.22.5/fs",
+    #|  "moonbitlang/async@0.22.7",
+    #|  "moonbitlang/async@0.22.7/stdio",
+    #|  "moonbitlang/async@0.22.7/fs",
     #|}
     #|async fn main {
     #|  @stdio.stdout.write("{\"type\":\"hello\",\"protocol\":1}\n")

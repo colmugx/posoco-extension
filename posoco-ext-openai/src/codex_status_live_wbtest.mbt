@@ -89,9 +89,9 @@ fn live_status_compose(
   router : @llm.RouterModelPort,
   status : CodexQuotaStatus,
 ) -> Unit raise {
-  let view = @posoco.tk_view(
+  let view = @tk.tk_view(
     requires=[],
-    model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
   @posoco.Lifecycle::on_compose(status, view)
@@ -371,14 +371,14 @@ async test "provider switch reads only the active provider's live source" {
     label="Other",
     provider_id="other",
     model_id="other-model",
-    port=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    port=@tk.ScriptedModel([]) as &@posoco.ModelPort,
   )
   let codex_slot = @llm.ModelSlot::ModelSlot(
     id="codex-live",
     label="Codex",
     provider_id="openai",
     model_id="gpt-codex",
-    port=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    port=@tk.ScriptedModel([]) as &@posoco.ModelPort,
   )
   let router = @llm.RouterModelPort(
     slots=[other_slot, codex_slot],

@@ -505,7 +505,7 @@ async test "transient retry retries transient failures during compact" {
     inner~,
     policy=zero_delay_policy(),
   )
-  let tools = [@posoco.tk_tool_def("echo", "compact context")]
+  let tools = [@tk.tk_tool_def("echo", "compact context")]
   let result = port.compact(
     flaky_scope(),
     [],
@@ -602,7 +602,7 @@ async test "router compact forwards explicit tools to the active slot without ch
     ),
   ])
   let port : &@posoco.ModelPort = router
-  let tools = [@posoco.tk_tool_def("echo", "snapshot tools")]
+  let tools = [@tk.tk_tool_def("echo", "snapshot tools")]
   ignore(
     port.compact(
       flaky_scope(),

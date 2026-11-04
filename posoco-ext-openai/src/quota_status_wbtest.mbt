@@ -216,9 +216,9 @@ test "codex quota status publishes at compose" {
   let status = tk_quota_status(bus, tracker)
   @posoco.Lifecycle::on_compose(
     status,
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[],
-      model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+      model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
       ui=@posoco.NoopUiPort() as &@posoco.UiPort,
     ),
   )
@@ -308,9 +308,9 @@ test "codex quota status hides windows when another provider activates" {
   let status = tk_quota_status(bus, tracker)
   @posoco.Lifecycle::on_compose(
     status,
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[],
-      model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+      model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
       ui=@posoco.NoopUiPort() as &@posoco.UiPort,
     ),
   )
@@ -377,9 +377,9 @@ test "codex quota status re-shows windows when codex re-activates" {
   let status = tk_quota_status(bus, tracker)
   @posoco.Lifecycle::on_compose(
     status,
-    @posoco.tk_view(
+    @tk.tk_view(
       requires=[],
-      model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+      model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
       ui=@posoco.NoopUiPort() as &@posoco.UiPort,
     ),
   )
@@ -439,7 +439,7 @@ async test "startup usage probe publishes quota and /status reports it before an
     label="Codex",
     provider_id="openai",
     model_id="gpt-5-codex",
-    port=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    port=@tk.ScriptedModel([]) as &@posoco.ModelPort,
   )
   let source : &@devkit.QuotaSource = tracker
   let router = @llm.RouterModelPort(
@@ -447,9 +447,9 @@ async test "startup usage probe publishes quota and /status reports it before an
     bus=Some(bus),
     extra_quota_sources=Map::from_array([("openai", source)]),
   )
-  let view = @posoco.tk_view(
+  let view = @tk.tk_view(
     requires=[],
-    model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
   @posoco.Lifecycle::on_compose(status, view)
@@ -590,7 +590,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
     label="Codex",
     provider_id="openai",
     model_id="gpt-5-codex",
-    port=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    port=@tk.ScriptedModel([]) as &@posoco.ModelPort,
   )
   let source : &@devkit.QuotaSource = tracker
   let router_b = @llm.RouterModelPort(
@@ -598,9 +598,9 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
     bus=Some(bus_b),
     extra_quota_sources=Map::from_array([("openai", source)]),
   )
-  let view = @posoco.tk_view(
+  let view = @tk.tk_view(
     requires=[],
-    model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
   // bus B's router composes: its provider event scopes the newer publisher
@@ -700,9 +700,9 @@ async test "stopped publisher ignores late provider and observer events" {
   tracker.capture_readings(
     expect_codex_usage(codex_usage_fixture(), fetched_at_ms=1757000000000L),
   )
-  let view = @posoco.tk_view(
+  let view = @tk.tk_view(
     requires=[],
-    model=@posoco.ScriptedModel([]) as &@posoco.ModelPort,
+    model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
   // First lifetime: compose publishes normally, then it stops.

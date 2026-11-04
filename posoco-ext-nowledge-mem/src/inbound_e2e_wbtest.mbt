@@ -10,13 +10,9 @@ fn wm_read_call_count(mcp : FakeNmemMcp) -> Int32 {
 /// inbound injection and the built-in memory tools.
 fn mem_agent(
   ext : NowledgeMem,
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
 ) -> @posoco.Agent raise {
-  mem_agent_store(
-    ext,
-    model,
-    @posoco.RecordingSessionPort::RecordingSessionPort(),
-  )
+  mem_agent_store(ext, model, @tk.RecordingSessionPort::RecordingSessionPort())
 }
 
 ///|
@@ -24,13 +20,13 @@ fn mem_agent(
 /// second extension and agent on the same store.
 fn mem_agent_store(
   ext : NowledgeMem,
-  model : @posoco.ScriptedModel,
-  store : @posoco.RecordingSessionPort,
+  model : @tk.ScriptedModel,
+  store : @tk.RecordingSessionPort,
 ) -> @posoco.Agent raise {
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
@@ -38,11 +34,11 @@ fn mem_agent_store(
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
-      @posoco.tk_ext(id="io", sessions=[store], observers=[
-        @posoco.RecordingObserver::RecordingObserver(),
+      @tk.tk_ext(id="io", sessions=[store], observers=[
+        @tk.RecordingObserver::RecordingObserver(),
       ]),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
 }
 
@@ -63,15 +59,15 @@ async test "e2e A: first-turn inbound lands as a memory message before the real 
     ]),
   )
   let ext = nmem_ext(mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = mem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
     ignore(
       agent.run_turn(
-        @posoco.tk_user_msg("how do I ship the zephyr widget"),
+        @tk.tk_user_msg("how do I ship the zephyr widget"),
         "session_1",
       ),
     )
@@ -113,29 +109,22 @@ async test "e2e: same-turn second model call does not re-read and keeps the inje
     ]),
   )
   let ext = nmem_ext(mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response(
-        "noop",
-        "c1",
-        Json::object(Map::from_array([])),
-      ),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("noop", "c1", Json::object(Map::from_array([]))),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
-  let tools = @posoco.RecordingToolProvider(
-    [@posoco.tk_tool_def("noop", "no-op")],
+  let tools = @tk.RecordingToolProvider(
+    [@tk.tk_tool_def("noop", "no-op")],
     Map::from_array([
-      (
-        "noop",
-        @posoco.ScriptedToolOutcome::OutcomeOk(@posoco.tk_ok_result("ok")),
-      ),
+      ("noop", @tk.ScriptedToolOutcome::OutcomeOk(@tk.tk_ok_result("ok"))),
     ]),
   )
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
@@ -143,20 +132,18 @@ async test "e2e: same-turn second model call does not re-read and keeps the inje
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
-      @posoco.tk_ext(id="tools", tools=[tools]),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="tools", tools=[tools]),
+      @tk.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
-        observers=[@posoco.RecordingObserver::RecordingObserver()],
+        sessions=[@tk.RecordingSessionPort::RecordingSessionPort()],
+        observers=[@tk.RecordingObserver::RecordingObserver()],
       ),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(
-      agent.run_turn(@posoco.tk_user_msg("beta flags please"), "session_1"),
-    )
+    ignore(agent.run_turn(@tk.tk_user_msg("beta flags please"), "session_1"))
     inspect(model.received_messages.length(), content="2")
     // One working-memory read for the whole session, not one per model call.
     inspect(wm_read_call_count(mcp), content="1")
@@ -183,28 +170,28 @@ async test "e2e: composition carries core's builtin memory tools without collisi
     ]),
   )
   let ext = nmem_ext(mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   // Composition itself succeeding is the ToolCollision fail-fast passing.
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(
         id="nowledge_mem",
         tools=[ext as &@posoco.ToolProvider],
         memory=[ext as &@posoco.MemoryPort],
         lifecycle=[ext as &@posoco.Lifecycle],
       ),
-      @posoco.tk_ext(
+      @tk.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
-        observers=[@posoco.RecordingObserver::RecordingObserver()],
+        sessions=[@tk.RecordingSessionPort::RecordingSessionPort()],
+        observers=[@tk.RecordingObserver::RecordingObserver()],
       ),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+  ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
   let names : Array[String] = []
   for def in model.received_tools[0] {
     names.push(def.name.to_string())
@@ -268,7 +255,7 @@ async test "e2e B: add-delete round trip drains both ops to the server" {
 /// derived under that injection, so it is never swapped for a newer one.
 /// Both compositions attach (the read slot is attach-gated).
 async test "e2e: a resumed process keeps the persisted injection and reads nothing" {
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let mcp1 = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       (
@@ -280,8 +267,8 @@ async test "e2e: a resumed process keeps the persisted injection and reads nothi
     ]),
   )
   let ext1 = nmem_ext(mcp=mcp1)
-  let model1 = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model1 = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent1 = mem_agent_store(ext1, model1, store)
   let mcp2 = FakeNmemMcp::FakeNmemMcp(
@@ -295,14 +282,14 @@ async test "e2e: a resumed process keeps the persisted injection and reads nothi
     ]),
   )
   let ext2 = nmem_ext(mcp=mcp2)
-  let model2 = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+  let model2 = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent2 = mem_agent_store(ext2, model2, store)
   @async.with_task_group(group => {
     ext1.attach(group)
     ext2.attach(group)
-    ignore(agent1.run_turn(@posoco.tk_user_msg("first question"), "session_1"))
+    ignore(agent1.run_turn(@tk.tk_user_msg("first question"), "session_1"))
     guard injected_memory_text(model1.received_messages[0]) is Some(first) else {
       fail("expected the first process to inject memory")
     }
@@ -310,7 +297,7 @@ async test "e2e: a resumed process keeps the persisted injection and reads nothi
     let first_count = model1.received_messages[0].length()
     // A fresh process on the same session: even though the server's working
     // memory changed, the persisted injection wins.
-    ignore(agent2.run_turn(@posoco.tk_user_msg("second question"), "session_1"))
+    ignore(agent2.run_turn(@tk.tk_user_msg("second question"), "session_1"))
     let messages = model2.received_messages[0]
     guard injected_memory_text(messages) is Some(second) else {
       fail("expected the persisted injection to survive the resume")
@@ -350,13 +337,13 @@ async test "e2e C: source_app propagates to thread ids, guidance, and markers" {
   assert_true(prompt.contains("Cetas"))
   assert_true(prompt.contains("\"cetas\""))
   assert_false(prompt.contains("Posoco"))
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     // The attached turn-end drain commits the create before run_turn
     // returns; the group also carries the flusher until engine.stop().
     inspect(transport.requests.length(), content="1")

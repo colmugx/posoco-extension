@@ -13,27 +13,27 @@
 /// Agent wiring for the blind-zone cases, mirroring the e2e conventions.
 fn turn_end_agent(
   ext : NowledgeMem,
-  model : @posoco.ScriptedModel,
+  model : @tk.ScriptedModel,
   tools~ : Array[&@posoco.ToolProvider] = [],
 ) -> @posoco.Agent raise {
   @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(id="tools", tools~),
-      @posoco.tk_ext(
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id="tools", tools~),
+      @tk.tk_ext(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
-      @posoco.tk_ext(
+      @tk.tk_ext(
         id="io",
-        sessions=[@posoco.RecordingSessionPort::RecordingSessionPort()],
-        observers=[@posoco.RecordingObserver::RecordingObserver()],
+        sessions=[@tk.RecordingSessionPort::RecordingSessionPort()],
+        observers=[@tk.RecordingObserver::RecordingObserver()],
       ),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
 }
 
@@ -48,13 +48,13 @@ async test "turn_end: completed turn commits the create before run_turn returns"
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = turn_end_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    let result = agent.run_turn(@posoco.tk_user_msg("hello"), "session_1")
+    let result = agent.run_turn(@tk.tk_user_msg("hello"), "session_1")
     inspect(result.final_session_id, content="session_1")
     inspect(transport.requests.length(), content="1")
     guard ext.config is Some(config) else { fail("config was not resolved") }
@@ -89,16 +89,16 @@ async test "turn_end: second turn commits only the incremental append" {
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = turn_end_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
-    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("more"), "session_1"))
     inspect(transport.requests.length(), content="2")
     guard ext.config is Some(config) else { fail("config was not resolved") }
     let (url, body) = transport.requests[1]
@@ -125,16 +125,16 @@ async test "turn_end: failed turn still commits before run_turn raises" {
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Fail(@posoco.ModelError::Transport("boom")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Fail(@posoco.ModelError::Transport("boom")),
   ])
   let agent = turn_end_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
-    try agent.run_turn(@posoco.tk_user_msg("more"), "session_1") catch {
+    try agent.run_turn(@tk.tk_user_msg("more"), "session_1") catch {
       @posoco.AgentError::Model(_) => ()
       _ => fail("expected the scripted model failure to raise")
     } noraise {
@@ -174,13 +174,13 @@ async test "turn_end: queued memory write drains before run_turn returns" {
     ),
   )
   inspect(ext.mem.queue.length(), content="1")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = turn_end_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(ext.mem.queue.length(), content="0")
     inspect(call_count(mcp, "memory_add"), content="1")
     // Retire the flusher before scope close; the group waits for it.
@@ -249,19 +249,19 @@ async test "turn_end: drain timeout is bounded and stays silent" {
   )
   let transport = HangingAppendTransport::HangingAppendTransport()
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = turn_end_agent(ext, model)
   @async.with_task_group(group => {
     ext.attach(group)
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
     ext.timeout_ms = 200
     transport.hang_ms = 1000
     let started = @async.now()
-    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("more"), "session_1"))
     let elapsed = @async.now() - started
     inspect(transport.requests.length(), content="2")
     // 200ms budget vs 1000ms hang: far below the hang, above the budget.
@@ -346,7 +346,7 @@ impl @posoco.ToolProvider for LogToolProvider with fn list_tools(
   self : LogToolProvider,
 ) -> Array[@posoco.ToolDef] {
   ignore(self)
-  [@posoco.tk_tool_def("probe", "records execution order")]
+  [@tk.tk_tool_def("probe", "records execution order")]
 }
 
 ///|
@@ -355,7 +355,7 @@ impl @posoco.ToolProvider for LogToolProvider with fn execute(
   _ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome {
   self.log.push("tool")
-  @posoco.tk_ok_result("ok")
+  @tk.tk_ok_result("ok")
 }
 
 ///|
@@ -376,16 +376,16 @@ async test "before_tool: mid-turn drain is throttled to one per interval" {
   let log : Array[String] = []
   let transport = LoggingEchoTransport::LoggingEchoTransport(log)
   let ext = nmem_ext(transport~, mcp~)
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("probe", "c1", Json::null()),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("probe", "c1", Json::null()),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_tool_call_response("probe", "c2", Json::null()),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("probe", "c2", Json::null()),
     ),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("fin")),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("fin")),
   ])
   let agent = turn_end_agent(ext, model, tools=[
     LogToolProvider::{ log, } as &@posoco.ToolProvider,
@@ -393,16 +393,16 @@ async test "before_tool: mid-turn drain is throttled to one per interval" {
   @async.with_task_group(group => {
     ext.attach(group)
     // Turn 1 (no tools): the create commits at turn end.
-    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     // A fresh lane staged now would surface any before_tool drain as a create.
     ext.stage_session_sync("session_2", "probe")
     // Turn 2 starts within 750ms of turn 1's turn-end drain: the tool runs
     // with NO new POST from before_tool; both staged lanes commit at turn end.
-    ignore(agent.run_turn(@posoco.tk_user_msg("probe please"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("probe please"), "session_1"))
     // After the interval elapses, the next before_tool drains first.
     @async.sleep(800)
     ext.stage_session_sync("session_3", "probe")
-    ignore(agent.run_turn(@posoco.tk_user_msg("again"), "session_1"))
+    ignore(agent.run_turn(@tk.tk_user_msg("again"), "session_1"))
     debug_inspect(
       log,
       content=(

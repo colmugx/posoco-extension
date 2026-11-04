@@ -11,7 +11,13 @@ import {
   "posoco/devkit",
   "colmugx/fuwaroid",
   "moonbitlang/async",
+  "posoco/devkit/testkit" @tk,
 } for "wbtest"
+
+// The testkit import above is only exercised by native-only white-box
+// files, so `--target js` checks would report it as unused.
+
+warnings = "-unused_package"
 
 options(
   targets: { "rate_limit_guard_wbtest.mbt": [ "native" ] },

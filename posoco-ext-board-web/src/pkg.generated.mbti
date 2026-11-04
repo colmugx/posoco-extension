@@ -90,13 +90,14 @@ pub fn ui_stage_label(@client.ClientBoardStage) -> String
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum ConnectionState {
   Connecting
   Online
   Reconnecting
   Offline
   ProtocolError(String)
-} derive(Eq)
+}
 pub fn ConnectionState::equal(Self, Self) -> Bool
 pub fn ConnectionState::not_equal(Self, Self) -> Bool
 

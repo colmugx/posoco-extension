@@ -13,6 +13,7 @@ import {
 
 import {
   "colmugx/posoco/kernel",
+  "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
 supported_targets = "+native +js"

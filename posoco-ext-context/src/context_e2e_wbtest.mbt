@@ -11,21 +11,21 @@ async test "e2e: context contributor injects configured envelope into model requ
     warnings: [],
   }
   let contributor = ContextPromptContributor(bundle~, ns="posoco")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
-  let observer = @posoco.RecordingObserver::RecordingObserver()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
+  let observer = @tk.RecordingObserver::RecordingObserver()
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(id="io", sessions=[store], observers=[observer], prompt_contributors=[
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id="io", sessions=[store], observers=[observer], prompt_contributors=[
         contributor as &@posoco.SystemPromptContributor,
       ]),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "s1"))
+  ignore(agent.run_turn(@tk.tk_user_msg("hello"), "s1"))
   assert_true(model.received_messages.length() > 0)
   let msgs = model.received_messages[0]
   assert_true(msgs.length() > 0)
@@ -52,21 +52,21 @@ async test "e2e: context contributor injects configured envelope into model requ
 async test "e2e: empty bundle contributes no configured envelope" {
   let bundle = ContextBundle::empty()
   let contributor = ContextPromptContributor(bundle~, ns="posoco")
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
-  let store = @posoco.RecordingSessionPort::RecordingSessionPort()
-  let observer = @posoco.RecordingObserver::RecordingObserver()
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
+  let observer = @tk.RecordingObserver::RecordingObserver()
   let agent = @posoco.Agent(
     exts=[
-      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
-      @posoco.tk_ext(id="io", sessions=[store], observers=[observer], prompt_contributors=[
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id="io", sessions=[store], observers=[observer], prompt_contributors=[
         contributor as &@posoco.SystemPromptContributor,
       ]),
     ],
-    config=@posoco.tk_config(),
+    config=@tk.tk_config(),
   )
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "s1"))
+  ignore(agent.run_turn(@tk.tk_user_msg("hello"), "s1"))
   assert_true(model.received_messages.length() > 0)
   let msgs = model.received_messages[0]
   match msgs[0] {

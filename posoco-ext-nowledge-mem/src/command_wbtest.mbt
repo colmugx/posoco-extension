@@ -89,7 +89,7 @@ async test "/nmem url: switches api base, re-derives mcp, flushes, persists" {
   @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   ignore(
     @posoco.PipelineHook::before_model(ext, [
-      @posoco.tk_user_msg("hi"),
+      @tk.tk_user_msg("hi"),
       assistant_msg("hello"),
     ]),
   )
@@ -324,7 +324,7 @@ async test "/memory status: connectivity, lanes, queue, and the session inbound"
     ignore(
       @posoco.PipelineHook::before_model(ext, [
         injected,
-        @posoco.tk_user_msg("hi"),
+        @tk.tk_user_msg("hi"),
         assistant_msg("hello"),
       ]),
     )

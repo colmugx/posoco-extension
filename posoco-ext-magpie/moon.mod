@@ -23,5 +23,5 @@ import {
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",
   "moonbitlang/async@0.22.7",
-  "colmugx/cetas-testkit@0.1.0",
+  "posoco/devkit@0.4.1",
 }
