@@ -119,13 +119,13 @@ async test "native file store commits one atomic expansion and reloads the durab
   assert_eq(record.mapping, mapping)
   assert_eq(record.content_digest, digest)
   assert_eq(record.created_at_ms, 50L)
-  let board_text = @fs.read_file(data + "/board.json").text()
+  let board_text = @fs.read_text(data + "/board.json")
   assert_true(board_text.contains("s4e1-native"))
   assert_true(board_text.contains("plan/one"))
   // Exactly one audit record carries the whole graph; audit stays audit only.
   assert_eq(loaded.journal, records(18L, proposal.events))
   assert_eq(
-    decode_journal_events(@fs.read_file(data + "/events.jsonl").text()),
+    decode_journal_events(@fs.read_text(data + "/events.jsonl")),
     Ok(proposal.events),
   )
   // Loaded results are detached from the store.
@@ -179,8 +179,8 @@ async test "native restart recovery keeps the expansion identity and rejects dup
     expected,
   )
   let state = @domain.BoardState::from_snapshot(recovered.snapshot).unwrap()
-  let board = @fs.read_file(data + "/board.json").binary()
-  let journal = @fs.read_file(data + "/events.jsonl").binary()
+  let board = @fs.read_binary(data + "/board.json")
+  let journal = @fs.read_binary(data + "/events.jsonl")
   // Same identity, same content, now-current revision: typed rejection.
   let again = @domain.BoardDomain::propose(
     state,
@@ -214,8 +214,8 @@ async test "native restart recovery keeps the expansion identity and rejects dup
   )
   assert_true(conflicting is Err(@domain.DuplicateExpansion(..)))
   // The rejections are pure domain decisions: nothing durable changed.
-  assert_eq(@fs.read_file(data + "/board.json").binary(), board)
-  assert_eq(@fs.read_file(data + "/events.jsonl").binary(), journal)
+  assert_eq(@fs.read_binary(data + "/board.json"), board)
+  assert_eq(@fs.read_binary(data + "/events.jsonl"), journal)
   assert_false(@fs.exists(data + "/board.json.tmp"))
   assert_eq(
     FileBoardStore::FileBoardStore(root~).load().unwrap().snapshot,
@@ -239,10 +239,10 @@ async test "all six native failure stages keep the expansion graph atomic includ
     let data = root + "/.cetas/board/default"
     let good = FileBoardStore::FileBoardStore(root~)
     assert_eq(good.persist(fixture(), []), Ok(()))
-    let seed_bytes = @fs.read_file(data + "/board.json").binary()
+    let seed_bytes = @fs.read_binary(data + "/board.json")
     let proposal = native_proposal()
     let expanded = proposal.next_state.snapshot()
-    @fs.write_file(data + "/board.json.tmp", "stale temp")
+    @fs.write_text(data + "/board.json.tmp", "stale temp")
     let failing = FileBoardStore::FileBoardStore(root~, fail_at=Some(stage))
     if stage == DirectoryFsync {
       // Rename is the visibility boundary: this failure lands after it, so
@@ -266,7 +266,7 @@ async test "all six native failure stages keep the expansion graph atomic includ
     } else {
       // No partial graph: no candidate task, no record, no revision bump.
       assert_eq(loaded.snapshot, fixture())
-      assert_eq(@fs.read_file(data + "/board.json").binary(), seed_bytes)
+      assert_eq(@fs.read_binary(data + "/board.json"), seed_bytes)
     }
     // Audit records may sit ahead of the authoritative board once the
     // journal synced; they are never replayed into state.
