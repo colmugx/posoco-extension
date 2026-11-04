@@ -7,22 +7,23 @@ import {
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
   "posoco/kit-chat-completions" @chatkit,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_package-unused_value-unused_constructor"
 
 options(
-  targets: {
-    // HTTP-backed ports: native+wasm+js (moonbitlang/async/http is
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+targets: {
+    // HTTP-backed ports: native+wasm+js (moonbitlang/core/async/http is
     // unavailable on wasm-gc). Config, protocol vocabulary, the chat-wire
     // codec, the responses/messages request shapes, header construction,
     // failure classification, the catalog/factory, and provider_config live

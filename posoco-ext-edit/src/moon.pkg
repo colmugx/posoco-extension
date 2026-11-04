@@ -1,7 +1,7 @@
 import {
   "colmugx/posoco",
   "posoco/devkit",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
 }
 
@@ -10,14 +10,15 @@ import {
 // are simply excluded by the compiler.
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
 } for "wbtest"
 
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "posoco_ext_edit.js.mbt": [ "js" ],
     "posoco_ext_edit.native.mbt": [ "native", "wasm" ],
   },

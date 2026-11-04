@@ -2,13 +2,13 @@ import {
   "colmugx/posoco",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 warnings = "-unused_package"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // The only HandoffStore impls live in the native/js gated files above, so the
@@ -16,7 +16,8 @@ import {
 // backend set so default-target checks skip instead of failing on the trait.
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "default_store.native.mbt": [ "native", "wasm" ],
     "default_store.js.mbt": [ "js" ],
   },

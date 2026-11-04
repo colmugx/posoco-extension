@@ -7,8 +7,8 @@ import {
   "colmugx/posoco-kit-responses" @responses,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -17,7 +17,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/env",
 } for "wbtest"
 
@@ -27,7 +27,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  "native-stub": [ "identity_stub.c" ],
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+"native-stub": [ "identity_stub.c" ],
   targets: {
     "identity.js.mbt": [ "js" ],
     "identity.native.mbt": [ "native" ],

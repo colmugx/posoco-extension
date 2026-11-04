@@ -5,7 +5,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // @env and @utf8 are used by herdr_native.mbt only but must stay imported
@@ -15,7 +15,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  "native-stub": [ "herdr_system_stub.c" ],
+    "allow-experimental-packages": [ "moonbitlang/core/async" ],
+"native-stub": [ "herdr_system_stub.c" ],
   targets: {
     "herdr_native.mbt": [ "native" ],
     "herdr_js.mbt": [ "js" ],
