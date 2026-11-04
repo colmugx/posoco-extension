@@ -6,7 +6,7 @@ import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco/port",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -69,7 +69,7 @@ pub struct BoardExecutionOwner {
   // private fields
 }
 pub fn BoardExecutionOwner::BoardExecutionOwner(backend~ : @backend.BoardBackend, adapter~ : &BoardExecutionAdapter, store~ : &BoardExecutionStore) -> Self
-pub async fn BoardExecutionOwner::attach(Self, @async.TaskGroup[Unit]) -> Result[Unit, BoardExecutionError]
+pub async fn BoardExecutionOwner::attach(Self, @async.TaskGroup) -> Result[Unit, BoardExecutionError]
 pub fn BoardExecutionOwner::bindings(Self) -> Array[BoardExecutionBinding]
 pub async fn BoardExecutionOwner::board_state(Self) -> Result[@domain.BoardStateSnapshot, BoardExecutionError]
 pub fn BoardExecutionOwner::cancel(Self, String) -> Result[Unit, BoardExecutionError]
