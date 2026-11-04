@@ -20,7 +20,7 @@ pub struct ShellTools {
   /// exited entry, pruned by the next cancel.
   in_flight : Map[Int32, ShellChildHandle]
   /// Background work must be hosted by an explicit owner task group.
-  mut host_group : @async.TaskGroup[Unit]?
+  mut host_group : @async.TaskGroup?
   bus : @devkit.EventBus?
   sessions : Map[String, ShellSession]
   mut next_session : Int32
@@ -81,7 +81,7 @@ pub struct ShellSession {
 /// calls. Detached execution is disabled until the host explicitly attaches.
 pub fn ShellTools::attach(
   self : ShellTools,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   self.host_group = Some(group)
 }

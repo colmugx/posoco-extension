@@ -49,7 +49,7 @@ pub struct BoardExecutionOwner {
   priv backend : @backend.BoardBackend
   priv store : &BoardExecutionStore
   priv mutex : @async.Mutex
-  priv mut group : @async.TaskGroup[Unit]?
+  priv mut group : @async.TaskGroup?
   priv mut records_ : Array[BoardExecutionBinding]
   priv mut loaded : Bool
   priv mut closed : Bool
@@ -150,7 +150,7 @@ pub fn BoardExecutionOwner::with_slots(
 /// external termination.
 pub async fn BoardExecutionOwner::attach(
   self : BoardExecutionOwner,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Result[Unit, BoardExecutionError] {
   if self.closed {
     return Err(Closed)

@@ -75,7 +75,7 @@ fn board_native_items(value : Json) -> Array[Json] raise {
 /// server and one backend through the adapter constructor. Readiness is
 /// gated by the authoritative bootstrap instead of coordinator internals.
 async fn board_native_runtime_store(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   store~ : &@store.BoardStore,
   now_ms~ : () -> Int64,
 ) -> BoardRuntime {
@@ -92,7 +92,7 @@ async fn board_native_runtime_store(
 ///|
 /// Memory-backed variant of `board_native_runtime_store`.
 async fn board_native_runtime(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   now_ms~ : () -> Int64,
 ) -> BoardRuntime {
   let store : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore()
