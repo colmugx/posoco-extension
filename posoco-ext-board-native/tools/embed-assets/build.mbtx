@@ -40,7 +40,7 @@ async fn copy_tree(source : String, target : String) -> Unit {
 /// Newest modification time under `path`, recursing into directories while
 /// skipping build output, dependencies and `dist` itself. Returns `None` for a
 /// missing path.
-async fn newest_mtime(path : String) -> (Int64, Int)? {
+async fn newest_mtime(path : String) -> @fs.Timestamp? {
   if !@fs.exists(path) {
     return None
   }
@@ -53,7 +53,7 @@ async fn newest_mtime(path : String) -> (Int64, Int)? {
         }
         match newest_mtime(path + "/" + name) {
           Some(stamp) =>
-            if stamp.0 > newest.0 || (stamp.0 == newest.0 && stamp.1 > newest.1) {
+            if stamp > newest {
               newest = stamp
             }
           None => ()
@@ -139,8 +139,7 @@ async fn ensure_dist(web : String) -> String {
     for source in frontend_sources {
       match newest_mtime(web + "/" + source) {
         Some(stamp) =>
-          if stamp.0 > dist_stamp.0 ||
-            (stamp.0 == dist_stamp.0 && stamp.1 > dist_stamp.1) {
+          if stamp > dist_stamp {
             fail(
               "board-web/dist is older than its source `" +
               source +
