@@ -2,10 +2,14 @@ import {
   "colmugx/posoco-ext-board/client",
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 } for "test"
 
 supported_targets = "native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+)

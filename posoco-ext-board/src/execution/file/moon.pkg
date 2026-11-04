@@ -4,8 +4,8 @@ warnings = "-unused_package"
 import {
   "colmugx/posoco-ext-board/execution",
   "colmugx/posoco-ext-board/internal/storage" @node_fs,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 }
 
 import {
@@ -15,7 +15,8 @@ import {
 supported_targets = "+native+js"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+targets: {
     "store.native.mbt": [ "native" ],
     "store.js.mbt": [ "js" ],
     "inspect.native.mbt": [ "native" ],

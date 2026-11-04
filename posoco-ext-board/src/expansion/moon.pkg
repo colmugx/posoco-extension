@@ -3,7 +3,7 @@ import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/coordinator",
   "colmugx/posoco-ext-board/orchestration",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/crypto",
@@ -14,3 +14,7 @@ import {
 } for "test"
 
 supported_targets = "+native+js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
