@@ -7,9 +7,9 @@ import {
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",
   "colmugx/fuwaroid",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/js_async",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -22,7 +22,8 @@ supported_targets = "+native+js"
 warnings = "-unused_package"
 
 options(
-  targets: {
+    "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async" ],
+targets: {
     "config_wbtest.mbt": [ "native" ],
     "resilience_e2e_wbtest.mbt": [ "native" ],
   },
