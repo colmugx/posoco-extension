@@ -19,7 +19,7 @@ pub extend DefaultHandoffStore with HandoffStore::{
 
 ///|
 pub impl HandoffStore for DefaultHandoffStore with fn read(_self, path) {
-  let data = @fs.read_file(path) catch {
+  let data = @fs.read_binary(path) catch {
     _ => return Err("handoff store read failed: " + path)
   }
   let text = data.text() catch {
@@ -44,7 +44,7 @@ pub impl HandoffStore for DefaultHandoffStore with fn write_atomic(
 ) {
   handoff_atomic_counter.val += 1
   let tmp = "\{path}.tmp-\{handoff_atomic_counter.val}"
-  @fs.write_file(tmp, content, create_mode=OpenOrCreate, permission=0o644) catch {
+  @fs.write_text(tmp, content, create_mode=OpenOrCreate, permission=0o644) catch {
     _ => {
       @fs.remove(tmp) catch {
         _ => ()

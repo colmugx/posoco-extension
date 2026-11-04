@@ -25,7 +25,7 @@ async fn read_file_text(path : String) -> ReadFileOutcome noraise {
   if !exists {
     return Missing
   }
-  let data = @fs.read_file(path) catch { _ => return IoFailed }
+  let data = @fs.read_binary(path) catch { _ => return IoFailed }
   let text = data.text() catch { _ => return NotUtf8 }
   Text(text)
 }

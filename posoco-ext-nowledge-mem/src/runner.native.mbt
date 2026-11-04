@@ -33,7 +33,7 @@ pub impl NmemPlatform for PlatformFs with fn read_home_file(
   match home_path(rel) {
     None => None
     Some(path) => {
-      let data = @fs.read_file(path) catch { _ => return None }
+      let data = @fs.read_binary(path) catch { _ => return None }
       let text = data.text() catch { _ => return None }
       Some(text)
     }
@@ -61,7 +61,7 @@ pub impl NmemPlatform for PlatformFs with fn write_home_file(
       @fs.mkdir(dir, recursive=true) catch {
         _ => ()
       }
-      @fs.write_file(path, content) catch {
+      @fs.write_text(path, content) catch {
         err => return Err(err.to_string())
       }
       Ok(())

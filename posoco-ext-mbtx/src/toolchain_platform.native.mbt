@@ -41,7 +41,7 @@ async fn tc_fs_exists(path : String) -> Bool {
 
 ///|
 async fn tc_fs_copy_executable(source : String, destination : String) -> Unit {
-  @fs.write_file(destination, @fs.read_file(source))
+  @fs.write_binary(destination, @fs.read_binary(source))
   if !mbtx_is_windows() {
     @fs.chmod(destination, 0o755)
   }
