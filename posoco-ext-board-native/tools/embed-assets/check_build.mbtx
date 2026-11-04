@@ -68,7 +68,7 @@ async fn main {
     ] {
     copy_sources("../" + module_name, root + "/" + module_name)
   }
-  @fs.write_text(
+  @fs.write_binary(
     root + "/moon.work",
     "members = [\"./posoco-ext-board-native\", \"./posoco-ext-board\", \"./posoco-ext-board-web\", \"./posoco-ext-askquestion\"]\n",
   )
@@ -95,7 +95,7 @@ async fn main {
   let css = dist + "/board.css"
   let changed = @fs.read_binary(css) +
     b"\n/* incremental-resource-regression */\n"
-  @fs.write_text(css, changed)
+  @fs.write_binary(css, changed)
   embed(native)
   assert_eq(
     @fs.read_binary(native + "/_build/browser-assets-dist/board.css"),

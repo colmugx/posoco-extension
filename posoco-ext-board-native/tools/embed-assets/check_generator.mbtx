@@ -313,7 +313,7 @@ async fn main {
   assert_eq(@fs.mtime(out), before)
   assert_eq(@fs.read_binary(out), first)
   let verify = fixture + "/verify.mbtx"
-  @fs.write_text(
+  @fs.write_binary(
     verify,
     text +
     "\n" +
