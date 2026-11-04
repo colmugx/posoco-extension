@@ -14,6 +14,5 @@ source = "src"
 
 import {
   "colmugx/posoco@0.23.3",
-  "moonbitlang/async@0.22.7",
   "moonbitlang/x@0.5.5",
 }
