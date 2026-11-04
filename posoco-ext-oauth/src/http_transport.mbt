@@ -2,7 +2,7 @@
 /// Provider-independent HTTP request seam used by OAuth flows.
 ///
 /// The trait is defined here (compiled on every target) together with the
-/// `DefaultOAuthHttpTransport` impls that delegate to `moonbitlang/async/http`
+/// `DefaultOAuthHttpTransport` impls that delegate to `moonbitlang/core/async/http`
 /// (native+js only). On wasm/wasm-gc the trait is still available for a host
 /// to implement; there is simply no default transport. Tests and hosts may
 /// also inject a fake transport to assert exact OAuth wire requests without a
@@ -81,7 +81,7 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
   _self : DefaultOAuthHttpTransport,
   request : OAuthHttpRequest,
 ) -> OAuthHttpResponse raise OAuthError {
-  // moonbitlang/async's timeout cancels the in-flight HTTP task.  Keep this
+  // core/async's timeout cancels the in-flight HTTP task.  Keep this
   // bound in the provider-independent transport so every OAuth endpoint gets
   // the same fail-fast deadline, including refresh calls.
   @async.with_timeout(30000, () => {
@@ -92,7 +92,7 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
     for k, v in request.headers {
       http_headers[k] = v
     }
-    let (response, body_data) = @http.post(
+    let (response, body) = @http.post_text(
       request.url,
       request.body,
       headers=http_headers,
@@ -100,12 +100,6 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
       err =>
         raise OAuthError::HttpError(
           "oauth HTTP POST failed: " + err.to_string(),
-        )
-    }
-    let body = body_data.text() catch {
-      err =>
-        raise OAuthError::HttpError(
-          "oauth HTTP response body read failed: " + err.to_string(),
         )
     }
     { status: response.code, body, }
@@ -133,15 +127,9 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn get(
     for k, v in headers {
       http_headers[k] = v
     }
-    let (response, body_data) = @http.get(url, headers=http_headers) catch {
+    let (response, body) = @http.get_text(url, headers=http_headers) catch {
       err =>
         raise OAuthError::HttpError("oauth HTTP GET failed: " + err.to_string())
-    }
-    let body = body_data.text() catch {
-      err =>
-        raise OAuthError::HttpError(
-          "oauth HTTP response body read failed: " + err.to_string(),
-        )
     }
     { status: response.code, body, }
   }) catch {
