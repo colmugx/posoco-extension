@@ -7,7 +7,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "posoco/devkit",
 }
@@ -37,8 +37,8 @@ pub async fn RateLimitGuard::on_turn_end(Self) -> Unit
 pub async fn RateLimitGuard::poll(Self) -> Unit
 pub async fn RateLimitGuard::shutdown(Self) -> Unit
 pub async fn RateLimitGuard::snapshot(Self) -> Array[RateLimitPending]
-pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[Unit]) -> Unit
-pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup[Unit], agent~ : @posoco.Agent) -> Unit
+pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup) -> Unit
+pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup, agent~ : @posoco.Agent) -> Unit
 pub fn RateLimitGuard::stop(Self) -> Unit
 pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard
