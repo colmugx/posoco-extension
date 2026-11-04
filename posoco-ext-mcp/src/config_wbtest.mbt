@@ -316,7 +316,7 @@ test "mcp_json_paths_normalize_trailing_slash" {
 
 ///|
 async fn write_config_file(path : String, content : String) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     path,
     content,
     create_mode=@fs.CreateMode::CreateOrTruncate,
