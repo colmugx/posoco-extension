@@ -15,5 +15,5 @@ description = "Posoco Messages protocol kit - wire codec, reasoning replay, and 
 source = "src"
 
 import {
-  "colmugx/posoco@0.23.3",
+  "colmugx/posoco@0.24.0",
 }
