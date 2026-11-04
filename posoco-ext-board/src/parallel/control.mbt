@@ -13,7 +13,7 @@ priv struct Completion {
 /// orchestrator/owner to the runner while its authorization is active.
 pub struct ParallelWorkflowRunner {
   priv orchestrator : @orchestration.BoardOrchestrator
-  priv group : @async.TaskGroup[Unit]
+  priv group : @async.TaskGroup
   priv now_ms : () -> Int64
   priv wake : @aqueue.Queue[Unit]
   priv completions : @aqueue.Queue[Completion]
@@ -50,7 +50,7 @@ pub struct ParallelWorkflowRunner {
 ///|
 pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   now_ms~ : () -> Int64 = @async.now,
 ) -> ParallelWorkflowRunner {
   {

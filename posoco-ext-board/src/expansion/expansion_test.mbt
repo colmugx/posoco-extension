@@ -362,7 +362,7 @@ async fn create_parent(backend : @backend.BoardBackend) -> Unit {
 }
 
 ///|
-async fn board(group : @async.TaskGroup[Unit]) -> @backend.BoardBackend {
+async fn board(group : @async.TaskGroup) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(now_ms=() => 100L)
   backend.attach(group)
   create_parent(backend)

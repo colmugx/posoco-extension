@@ -99,7 +99,7 @@ fn probe(
 
 ///|
 async fn prepared_board(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
