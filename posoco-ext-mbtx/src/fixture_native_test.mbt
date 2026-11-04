@@ -15,7 +15,7 @@ async fn fixture_mkdir(path : String) -> Unit {
 
 ///|
 async fn fixture_write(path : String, text : String) -> Unit {
-  @fs.write_file(path, text)
+  @fs.write_text(path, text)
 }
 
 ///|
