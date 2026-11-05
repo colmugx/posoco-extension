@@ -729,9 +729,8 @@ async test "web search annotation.added binds by content index across text parts
 }
 
 ///|
-/// A citation URL may never become executable or break out of the Markdown
-/// destination, and a label may never close the link early: the safe handling is
-/// to keep the provider's words and drop the link.
+/// Citation destinations cannot become executable or break out of Markdown:
+/// reject executable schemes, encode URL parentheses, and escape label brackets.
 #cfg(target="native")
 async test "web search citations cannot inject markdown or executable urls" {
   let turns : Array[Array[@posoco.Message]] = [
@@ -759,7 +758,10 @@ async test "web search citations cannot inject markdown or executable urls" {
   guard results[1] is Ok(parenthesis) else {
     fail("the parenthesis citation turn must complete")
   }
-  assert_eq(wsr_text(parenthesis.completion), "see the page")
+  assert_eq(
+    wsr_text(parenthesis.completion),
+    "see [the page](https://example.com/a%29b)",
+  )
   guard results[2] is Ok(bracketed) else {
     fail("the bracketed label turn must complete")
   }
@@ -1005,4 +1007,22 @@ async test "web search overlapping sources are kept beside the first link" {
     wsr_text(result.completion),
     "[cited words](https://example.com/one)[source](https://example.com/two) here",
   )
+}
+
+///|
+#cfg(target="native")
+async test "web search does not persist an unfinished added snapshot" {
+  let sse = wsr_sse([
+    "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"web_search_call\",\"id\":\"ws_unfinished\",\"status\":\"in_progress\"}}",
+    "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_unfinished\",\"status\":\"completed\",\"output\":[]}}",
+  ])
+  let (results, _) = wsr_chat_stream(
+    [sse],
+    [[wsr_user_message("unfinished")]],
+    "wsr-unfinished",
+  )
+  guard results[0] is Err(@posoco.ModelError::ResponseParse(message)) else {
+    fail("an in_progress search snapshot cannot become replayable history")
+  }
+  assert_true(message.contains("web_search_call.status"))
 }

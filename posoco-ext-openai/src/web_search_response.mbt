@@ -558,11 +558,10 @@ fn web_search_has_citation(
 }
 
 ///|
-/// A citation URL is rendered into a Markdown link, so it must not be able to
-/// become anything else: only an absolute `http(s)` URL of printable ASCII —
-/// minus every character that can end a Markdown destination — is linkified.
-/// Anything else keeps its text in place *without* a link, so a provider string
-/// can never turn into an executable `javascript:`/`data:` target.
+/// Only http(s) destinations can become links. URI punctuation safe in a
+/// Markdown destination is kept; parentheses and non-ASCII characters are
+/// percent-encoded so legitimate source URLs survive without breaking out of
+/// the link. Controls and other unsupported characters are not linkified.
 fn web_search_safe_url(url : String) -> String? {
   let scheme_length = if url.has_prefix("https://") {
     8
@@ -574,6 +573,8 @@ fn web_search_safe_url(url : String) -> String? {
   if url.length() <= scheme_length || url.length() > 2048 {
     return None
   }
+  let escaped = StringBuilder()
+  let hex = "0123456789ABCDEF".to_array()
   for c in url {
     let ok = (c >= 'a' && c <= 'z') ||
       (c >= 'A' && c <= 'Z') ||
@@ -599,11 +600,20 @@ fn web_search_safe_url(url : String) -> String? {
       c == ';' ||
       c == '=' ||
       c == '%'
-    if !ok {
+    if ok {
+      escaped.write_char(c)
+    } else if c == '(' || c == ')' || c > '~' {
+      for byte in @utf8.encode(c.to_string()) {
+        let value = byte.to_int()
+        escaped.write_char('%')
+        escaped.write_char(hex[value / 16])
+        escaped.write_char(hex[value % 16])
+      }
+    } else {
       return None
     }
   }
-  Some(url)
+  Some(escaped.to_string())
 }
 
 ///|
@@ -1052,6 +1062,20 @@ fn openai_hosted_completion(
   citations : Array[WebSearchCitation],
   summary : String,
 ) -> @posoco.Completion raise @posoco.ModelError {
+  for item in output {
+    match item {
+      Json::Object(fields) if fields.get("type") ==
+        Some(Json::string("web_search_call")) =>
+        match fields.get("status") {
+          Some(Json::String("completed" | "failed")) => ()
+          _ =>
+            raise web_search_response_failure(
+              "web_search_call.status", "not_terminal",
+            )
+        }
+      _ => ()
+    }
+  }
   let projected = web_search_projected_content(output, citations)
   // A hosted turn may produce no message item at all (a bare tool call). The
   // streamed text then stands as the visible content.
