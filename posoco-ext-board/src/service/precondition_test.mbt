@@ -4,10 +4,10 @@
 /// leaves the private directory exactly as it was.
 async test "disabled, missing-UI and invalid-budget denials perform no IO" {
   let disabled_directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(disabled_directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(disabled_directory))
   @core_async.with_task_group(group => {
     let h = harness(disabled_directory, group, enabled=false)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     assert_eq(h.board.start(title="Disabled workflow"), Err(@service.Disabled))
     assert_eq(h.board.view().checked().snapshot.tasks.length(), 0)
     assert_true(h.state.contexts.is_empty())
@@ -15,7 +15,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
     assert_no_storage_io(disabled_directory)
   })
   let bare_directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(bare_directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(bare_directory))
   @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,
@@ -41,7 +41,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
       ),
       now_ms=() => 100L,
     )
-    defer ignore(board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => board.shutdown()))
     assert_eq(board.start(title="Uncomposed workflow"), Err(@service.MissingUi))
     assert_eq(board.view().checked().snapshot.tasks.length(), 0)
     assert_true(ui.prompts.is_empty())
@@ -49,7 +49,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
     assert_no_storage_io(bare_directory)
   })
   let invalid_directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(invalid_directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(invalid_directory))
   @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,

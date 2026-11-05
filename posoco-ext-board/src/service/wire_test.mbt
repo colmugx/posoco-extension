@@ -1,10 +1,10 @@
 ///|
 async test "wire snapshot and command share the workflow backend" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group, max_executions=1)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     h.board.wire_ready().checked()
 
     let before = match

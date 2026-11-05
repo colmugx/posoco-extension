@@ -1,10 +1,10 @@
 ///|
 async test "one composed extension owns actual Agent planning graph approval scope and durable dependent execution" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group, max_executions=3)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let committed = proposed(h)
     let run = committed.run.checked()
     let expansion = committed.snapshot.expansions[0]
@@ -109,10 +109,10 @@ async test "one composed extension owns actual Agent planning graph approval sco
 ///|
 async test "default workflow denial causes no storage or model effects" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group, enabled=false)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     assert_eq(h.board.start(title="Disabled"), Err(@service.Disabled))
     assert_eq(h.board.view().checked().snapshot.tasks.length(), 0)
     assert_true(h.state.contexts.is_empty())
@@ -123,10 +123,10 @@ async test "default workflow denial causes no storage or model effects" {
 ///|
 async test "operator start denial and reentrant cancellation cannot authorize mutations" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     h.ui.grant = false
     assert_eq(h.board.start(title="Denied"), Err(@service.ApprovalDenied))
     assert_eq(h.board.view().checked().snapshot.tasks.length(), 0)
@@ -143,10 +143,10 @@ async test "operator start denial and reentrant cancellation cannot authorize mu
 ///|
 async test "invalid structured Agent output cannot commit a graph or claim Agent failure" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let initial = h.board.start(title="Invalid output").checked()
     h.state.invalid = true
     let result = h.board.propose(
@@ -167,10 +167,10 @@ async test "invalid structured Agent output cannot commit a graph or claim Agent
 ///|
 async test "graph denial leaves proposal nonauthoritative and scope denial retains committed graph" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let first = h.board.start(title="Denied DAG").checked()
     ignore(
       h.board
@@ -186,10 +186,10 @@ async test "graph denial leaves proposal nonauthoritative and scope denial retai
     assert_true(h.board.view().checked().snapshot.expansions.is_empty())
   })
   let other = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(other)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(other))
   @core_async.with_task_group(group => {
     let h = harness(other, group)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let committed = proposed(h)
     assert_true(
       h.board.scope_decision(
@@ -208,10 +208,10 @@ async test "graph denial leaves proposal nonauthoritative and scope denial retai
 ///|
 async test "extension lock prevents a competing client and cannot be released by that client" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let first = harness(directory, group)
-    defer ignore(first.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => first.board.shutdown()))
     ignore(first.board.start(title="Owner").checked())
     let other = harness(directory, group)
     assert_true(
@@ -229,7 +229,7 @@ async test "extension lock prevents a competing client and cannot be released by
 ///|
 async test "restart exposes durable graph but never restores scope or execution inputs" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
     let graph = proposed(h)
@@ -245,7 +245,7 @@ async test "restart exposes durable graph but never restores scope or execution 
   })
   @core_async.with_task_group(group => {
     let reopened = harness(directory, group)
-    defer ignore(reopened.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => reopened.board.shutdown()))
     let view = reopened.board.view().checked()
     assert_true(view.run is None)
     assert_eq(view.snapshot.expansions.length(), 1)
@@ -258,10 +258,10 @@ async test "restart exposes durable graph but never restores scope or execution 
 ///|
 async test "planning cancellation joins exact actual Agent and permits only explicit resume" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group, continue_on_confirmed_failure=true)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let started = h.board.start(title="Pause planning").checked()
     h.state.delay = 1000
     let work = group.spawn(() => {
@@ -289,10 +289,10 @@ async test "planning cancellation joins exact actual Agent and permits only expl
 ///|
 async test "two actual execution Agents use independent identities and bounded slots" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
-    defer ignore(h.board.shutdown())
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     h.state.chain = false
     let graph = proposed(h)
     let expansion = graph.snapshot.expansions[0]
@@ -329,7 +329,7 @@ async test "two actual execution Agents use independent identities and bounded s
 ///|
 async test "unresolved journal is read-only evidence not fresh execution authority" {
   let directory = @fixtures.temporary_directory()
-  defer @fixtures.cleanup(directory)
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
   let records : Array[@execution.BoardExecutionBinding] = [
     {
       task_id: "old-task",
