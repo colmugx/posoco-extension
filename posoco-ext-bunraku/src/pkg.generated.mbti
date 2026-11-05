@@ -30,7 +30,7 @@ pub impl @runtime.CatalogSource for BunrakuCatalogSource
 pub struct BunrakuExtension {
   // private fields
 }
-pub fn BunrakuExtension::BunrakuExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &ToolInvoker, call_observers? : Array[(NestedCallEvent) -> Unit], bus? : @devkit.EventBus, home? : String, max_output_bytes? : Int32, build_cache? : String, task_session? : () -> String) -> Self
+pub fn BunrakuExtension::BunrakuExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &ToolInvoker, call_observers? : Array[(NestedCallEvent) -> Unit], home? : String, max_output_bytes? : Int32, build_cache? : String, task_session? : () -> String) -> Self
 pub fn BunrakuExtension::allowed_tools(Self) -> Array[String]
 pub async fn BunrakuExtension::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn BunrakuExtension::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -60,7 +60,7 @@ pub impl @port.ToolProvider for BunrakuGuardedProvider
 pub struct BunrakuRuntime {
   // private fields
 }
-pub fn BunrakuRuntime::BunrakuRuntime(fallback~ : &@runtime.Runtime, tools~ : Array[&@port.ToolProvider], hooks? : Array[&@port.PipelineHook], final_guards? : Array[&@port.PipelineHook], home? : String, call_observers? : Array[(NestedCallEvent) -> Unit], bus? : @devkit.EventBus) -> Self raise @error.CompositionError
+pub fn BunrakuRuntime::BunrakuRuntime(fallback~ : &@runtime.Runtime, tools~ : Array[&@port.ToolProvider], hooks? : Array[&@port.PipelineHook], final_guards? : Array[&@port.PipelineHook], home? : String, call_observers? : Array[(NestedCallEvent) -> Unit]) -> Self raise @error.CompositionError
 pub async fn BunrakuRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 pub async fn BunrakuRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
 pub async fn BunrakuRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]

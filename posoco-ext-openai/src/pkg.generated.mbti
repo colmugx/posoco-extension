@@ -4,6 +4,7 @@ package "colmugx/posoco-ext-openai"
 import {
   "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
+  "colmugx/posoco/events",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
@@ -74,14 +75,14 @@ pub impl @ext-oauth.OAuthProvider for CodexOAuth
 
 pub struct CodexQuotaStatus {
   tracker : CodexQuotaTracker
-  bus : @devkit.EventBus?
+  events : @events.Events?
+  mut attached : Bool
   mut last : Array[@devkit.QuotaReading]
   // private fields
 }
-pub fn CodexQuotaStatus::CodexQuotaStatus(bus? : @devkit.EventBus?, tracker? : CodexQuotaTracker?) -> Self
+pub fn CodexQuotaStatus::CodexQuotaStatus(events? : @events.Events?, tracker? : CodexQuotaTracker?) -> Self
 pub fn CodexQuotaStatus::extension_id(Self) -> String
 pub fn CodexQuotaStatus::manifest(Self) -> @port.ExtensionManifest
-pub fn CodexQuotaStatus::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn CodexQuotaStatus::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn CodexQuotaStatus::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn CodexQuotaStatus::on_shutdown(Self) -> Unit
@@ -89,7 +90,6 @@ pub async fn CodexQuotaStatus::on_start(Self) -> Unit
 pub impl @port.Extension for CodexQuotaStatus
 pub impl @port.Lifecycle for CodexQuotaStatus
 pub impl @port.Observer for CodexQuotaStatus
-pub impl @devkit.BusSubscriber for CodexQuotaStatus
 
 pub(all) struct CodexQuotaTracker {
   mut latest : Array[@devkit.QuotaReading]?

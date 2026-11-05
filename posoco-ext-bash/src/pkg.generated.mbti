@@ -3,18 +3,34 @@ package "colmugx/posoco-ext-bash"
 
 import {
   "colmugx/posoco/error",
+  "colmugx/posoco/events",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "moonbitlang/async",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "posoco/devkit",
 }
 
 // Values
+pub const BASH_SESSION_FINISHED : String = "bash.session.finished"
+
+pub const BASH_SESSION_STALL : String = "bash.session.stall"
+
+pub const BASH_SESSION_STARTED : String = "bash.session.started"
+
 pub fn bash_extension() -> ShellTools
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
+pub(all) struct BashSessionNoticePayload {
+  kind : String
+  snapshot : @json.Json
+}
+pub fn BashSessionNoticePayload::to_repr(Self) -> @debug.Repr
+
 type ShellChildHandle
 
 pub struct ShellSession {
@@ -37,12 +53,11 @@ pub struct ShellTools {
   anchor : @devkit.WorkspaceAnchor?
   in_flight : Map[Int32, ShellChildHandle]
   mut host_group : @async.TaskGroup[Unit]?
-  bus : @devkit.EventBus?
   sessions : Map[String, ShellSession]
   mut next_session : Int32
   mut closed : Bool
 }
-pub fn ShellTools::ShellTools(anchor? : @devkit.WorkspaceAnchor?, bus? : @devkit.EventBus?) -> Self
+pub fn ShellTools::ShellTools(anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub fn ShellTools::attach(Self, @async.TaskGroup[Unit]) -> Unit
 pub async fn ShellTools::cancel(Self, run_id~ : @kernel.RunId, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn ShellTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -57,6 +72,11 @@ pub impl @port.Extension for ShellTools
 pub impl @port.Lifecycle for ShellTools
 pub impl @port.ToolCancellable for ShellTools
 pub impl @port.ToolProvider for ShellTools
+
+// Extensible enum extensions
+pub(all) extenum @events.Event += {
+  BashSessionNotice(BashSessionNoticePayload)
+}
 
 // Type aliases
 

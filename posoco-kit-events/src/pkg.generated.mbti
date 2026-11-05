@@ -1,0 +1,93 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "posoco/kit-events"
+
+import {
+  "colmugx/posoco/events",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decision_selection_of(@events.EventEnvelope) -> DecisionSelectionPayload?
+
+pub fn model_selection_of(@events.EventEnvelope) -> ModelSelectionPayload?
+
+pub fn profiles_activated_of(@events.EventEnvelope) -> ProfilesActivatedPayload?
+
+pub fn provider_status_of(@events.EventEnvelope) -> ProviderStatusPayload?
+
+pub fn publisher_id(@events.EventEnvelope) -> String?
+
+pub fn status_changed_of(@events.EventEnvelope) -> StatusOp?
+
+pub fn tool_exemptions_of(@events.EventEnvelope) -> ToolExemptionsPayload?
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct DecisionSelectionPayload {
+  slot_id : String
+  available : Bool
+  reason : String?
+}
+pub fn DecisionSelectionPayload::equal(Self, Self) -> Bool
+pub fn DecisionSelectionPayload::not_equal(Self, Self) -> Bool
+pub fn DecisionSelectionPayload::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ModelSelectionPayload {
+  slot_id : String
+  effort : String?
+}
+pub fn ModelSelectionPayload::equal(Self, Self) -> Bool
+pub fn ModelSelectionPayload::not_equal(Self, Self) -> Bool
+pub fn ModelSelectionPayload::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ProfilesActivatedPayload {
+  id : String
+  members : Array[String]
+}
+pub fn ProfilesActivatedPayload::equal(Self, Self) -> Bool
+pub fn ProfilesActivatedPayload::not_equal(Self, Self) -> Bool
+pub fn ProfilesActivatedPayload::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ProviderStatusPayload {
+  provider_id : String
+}
+pub fn ProviderStatusPayload::equal(Self, Self) -> Bool
+pub fn ProviderStatusPayload::not_equal(Self, Self) -> Bool
+pub fn ProviderStatusPayload::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum StatusOp {
+  Register(segment~ : String, label~ : String?, priority~ : Int32, value~ : String?, color~ : String?)
+  Update(segment~ : String, value~ : String)
+  Unregister(segment~ : String)
+}
+pub fn StatusOp::equal(Self, Self) -> Bool
+pub fn StatusOp::not_equal(Self, Self) -> Bool
+pub fn StatusOp::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ToolExemptionsPayload {
+  tools : Array[String]
+}
+pub fn ToolExemptionsPayload::equal(Self, Self) -> Bool
+pub fn ToolExemptionsPayload::not_equal(Self, Self) -> Bool
+pub fn ToolExemptionsPayload::to_repr(Self) -> @debug.Repr
+
+// Extensible enum extensions
+pub(all) extenum @events.Event += {
+  DecisionSelection(DecisionSelectionPayload)
+  ModelSelection(ModelSelectionPayload)
+  ProfilesActivated(ProfilesActivatedPayload)
+  ProviderStatus(ProviderStatusPayload)
+  StatusChanged(StatusOp)
+  ToolExemptions(ToolExemptionsPayload)
+}
+
+// Type aliases
+
+// Traits

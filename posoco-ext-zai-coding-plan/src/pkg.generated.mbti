@@ -6,6 +6,7 @@ import {
   "colmugx/posoco-ext-zai",
   "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
+  "colmugx/posoco/events",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
@@ -105,7 +106,7 @@ pub impl @devkit.QuotaSource for ZaiCodingPlanQuotaSource
 
 pub(all) struct ZaiCodingPlanTools {
   config : @posoco-ext-zai.ZaiConfig
-  bus : @devkit.EventBus
+  mut events : @events.Events?
   group : @async.TaskGroup[Unit]
   initial_slot_id : String
   open_plane : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise
@@ -117,17 +118,15 @@ pub(all) struct ZaiCodingPlanTools {
   mut generation : Int32
   mut active_model : String
 }
-pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(config~ : @posoco-ext-zai.ZaiConfig, bus~ : @devkit.EventBus, group~ : @async.TaskGroup[Unit], initial_slot_id? : String, open_plane? : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise) -> Self
+pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(config~ : @posoco-ext-zai.ZaiConfig, group~ : @async.TaskGroup[Unit], initial_slot_id? : String, open_plane? : async (String, Array[ZaiToolGroup]) -> Result[&ZaiMcpConnection, String] noraise) -> Self
 pub fn ZaiCodingPlanTools::extension_id(Self) -> String
 pub fn ZaiCodingPlanTools::manifest(Self) -> @port.ExtensionManifest
-pub fn ZaiCodingPlanTools::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn ZaiCodingPlanTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn ZaiCodingPlanTools::on_shutdown(Self) -> Unit
 pub async fn ZaiCodingPlanTools::on_start(Self) -> Unit
 pub fn ZaiCodingPlanTools::owns_slot(Self, String) -> Bool
 pub impl @port.Extension for ZaiCodingPlanTools
 pub impl @port.Lifecycle for ZaiCodingPlanTools
-pub impl @devkit.BusSubscriber for ZaiCodingPlanTools
 
 pub(all) struct ZaiLivePlane {
   connection : &ZaiMcpConnection

@@ -7,9 +7,8 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
-  "posoco/devkit",
 }
 
 // Values
@@ -20,7 +19,7 @@ import {
 pub struct RateLimitGuard {
   // private fields
 }
-pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int32, poll_interval_ms? : Int32, probe_interval_ms? : Int64, max_probe_interval_ms? : Int64, shutdown_timeout_ms? : Int32, now_ms? : () -> Int64, sleep_ms? : async (Int32) -> Unit, trace? : (String) -> Unit, bus? : @devkit.EventBus?) -> Self
+pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int32, poll_interval_ms? : Int32, probe_interval_ms? : Int64, max_probe_interval_ms? : Int64, shutdown_timeout_ms? : Int32, now_ms? : () -> Int64, sleep_ms? : async (Int32) -> Unit, trace? : (String) -> Unit) -> Self
 pub async fn RateLimitGuard::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn RateLimitGuard::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit
@@ -37,8 +36,8 @@ pub async fn RateLimitGuard::on_turn_end(Self) -> Unit
 pub async fn RateLimitGuard::poll(Self) -> Unit
 pub async fn RateLimitGuard::shutdown(Self) -> Unit
 pub async fn RateLimitGuard::snapshot(Self) -> Array[RateLimitPending]
-pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[Unit]) -> Unit
-pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup[Unit], agent~ : @posoco.Agent) -> Unit
+pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup) -> Unit
+pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup, agent~ : @posoco.Agent) -> Unit
 pub fn RateLimitGuard::stop(Self) -> Unit
 pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard

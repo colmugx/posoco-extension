@@ -4,7 +4,7 @@ package "colmugx/posoco-ext-board/coordinator"
 import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -17,7 +17,7 @@ pub struct BoardCoordinator {
   // private fields
 }
 pub fn BoardCoordinator::BoardCoordinator(store? : &@store.BoardStore, now_ms? : () -> Int64, on_commit? : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit, stream_cursor? : () -> Int64) -> Self
-pub fn BoardCoordinator::attach(Self, group~ : @async.TaskGroup[Unit]) -> Unit
+pub fn BoardCoordinator::attach(Self, group~ : @async.TaskGroup) -> Unit
 pub async fn BoardCoordinator::attempt(Self, id~ : @domain.AttemptId) -> Result[@domain.Attempt?, BoardCoordinatorError]
 pub async fn BoardCoordinator::attempts(Self) -> Result[Array[@domain.Attempt], BoardCoordinatorError]
 pub async fn BoardCoordinator::expansions(Self) -> Result[Array[@domain.ExpansionRecord], BoardCoordinatorError]

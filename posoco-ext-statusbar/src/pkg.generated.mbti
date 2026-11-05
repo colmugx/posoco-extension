@@ -2,11 +2,11 @@
 package "colmugx/posoco-ext-statusbar"
 
 import {
+  "colmugx/posoco",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
-  "posoco/devkit",
 }
 
 // Values
@@ -30,13 +30,12 @@ pub fn SegmentInfo::to_repr(Self) -> @debug.Repr
 pub struct StatusBar {
   // private fields
 }
-pub fn StatusBar::StatusBar(bus? : @devkit.EventBus?) -> Self
+pub fn StatusBar::StatusBar(events? : @posoco.EventSystem?) -> Self
 pub fn StatusBar::clear_segment(Self, source~ : String, segment~ : String) -> Unit
 pub fn StatusBar::commands(Self) -> Array[@port.CommandDef]
 pub fn StatusBar::extension_id(Self) -> String
 pub async fn StatusBar::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
-pub fn StatusBar::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn StatusBar::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn StatusBar::on_shutdown(Self) -> Unit
 pub async fn StatusBar::on_start(Self) -> Unit
@@ -45,7 +44,6 @@ pub fn StatusBar::set_segment(Self, source~ : String, segment~ : String, value~ 
 pub impl @port.CommandPort for StatusBar
 pub impl @port.Extension for StatusBar
 pub impl @port.Lifecycle for StatusBar
-pub impl @devkit.BusSubscriber for StatusBar
 
 // Type aliases
 

@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-permission"
 
 import {
   "colmugx/posoco/error",
+  "colmugx/posoco/events",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
@@ -57,7 +58,7 @@ pub(all) struct PermissionPolicy {
   shell_tools : Array[String]
   // private fields
 }
-pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @devkit.EventBus?, workspace? : @devkit.WorkspaceAnchor?) -> Self
+pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, events? : @events.Events?, workspace? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn PermissionPolicy::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn PermissionPolicy::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn PermissionPolicy::commands(Self) -> Array[@port.CommandDef]
@@ -65,7 +66,6 @@ pub fn PermissionPolicy::extension_id(Self) -> String
 pub async fn PermissionPolicy::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode
-pub fn PermissionPolicy::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn PermissionPolicy::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn PermissionPolicy::on_post_event(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
 pub async fn PermissionPolicy::on_shutdown(Self) -> Unit
@@ -78,7 +78,6 @@ pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy
 pub impl @port.Lifecycle for PermissionPolicy
 pub impl @port.PipelineHook for PermissionPolicy
-pub impl @devkit.BusSubscriber for PermissionPolicy
 
 // Type aliases
 

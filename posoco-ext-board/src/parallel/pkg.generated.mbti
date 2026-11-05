@@ -5,7 +5,7 @@ import {
   "colmugx/posoco-ext-board/execution",
   "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco-ext-board/workflow",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -36,7 +36,7 @@ pub fn ParallelFailurePolicy::to_repr(Self) -> @debug.Repr
 pub struct ParallelWorkflowRunner {
   // private fields
 }
-pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup[Unit], now_ms? : () -> Int64) -> Self
+pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup, now_ms? : () -> Int64) -> Self
 pub fn ParallelWorkflowRunner::authorized_scope(Self) -> Array[String]
 pub fn ParallelWorkflowRunner::begin_planning(Self) -> Result[Unit, @workflow.WorkflowError]
 pub fn ParallelWorkflowRunner::cancel(Self) -> Unit

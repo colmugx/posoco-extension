@@ -53,7 +53,7 @@ pub fn Launcher::to_repr(Self) -> @debug.Repr
 pub struct MbtxExtension {
   runtime : Runtime
 }
-pub fn MbtxExtension::MbtxExtension(bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
+pub fn MbtxExtension::MbtxExtension(home? : String, prefer_system? : Bool) -> Self
 pub fn MbtxExtension::commands(Self) -> Array[@port.CommandDef]
 pub fn MbtxExtension::extension_id(Self) -> String
 pub async fn MbtxExtension::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
@@ -77,7 +77,7 @@ pub(all) struct ResolvedToolchain {
 pub struct Runtime {
   // private fields
 }
-pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String, bus? : @devkit.EventBus, home? : String, prefer_system? : Bool, build_cache? : String) -> Self
+pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String, home? : String, prefer_system? : Bool, build_cache? : String) -> Self
 pub fn Runtime::build_cache_directory(Self) -> String?
 pub fn Runtime::cancel(Self, String) -> Bool
 pub fn Runtime::close(Self) -> Unit raise RuntimeError
@@ -95,7 +95,7 @@ pub(all) struct ToolCallTrace {
 pub struct ToolchainManager {
   // private fields
 }
-pub fn ToolchainManager::ToolchainManager(bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
+pub fn ToolchainManager::ToolchainManager(home? : String, prefer_system? : Bool) -> Self
 pub async fn ToolchainManager::ensure_ready(Self) -> ResolvedToolchain
 pub fn ToolchainManager::status(Self) -> String
 

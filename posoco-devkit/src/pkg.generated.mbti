@@ -2,19 +2,20 @@
 package "posoco/devkit"
 
 import {
+  "colmugx/posoco",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 // Values
-pub const STATUS_TOPIC : String = "status"
-
 #alias(render_context_envelope, deprecated)
 pub fn context_envelope(ns~ : String, kind~ : String, trust~ : Bool, source? : String, attrs? : Array[(String, String)], content~ : String) -> String
 
-pub fn decode_status_op(BusEvent) -> StatusOp?
-
 pub fn default_ignore_patterns() -> Array[String]
+
+pub fn events_system_default() -> @posoco.EventSystem?
+
+pub fn events_system_register(@posoco.EventSystem) -> Unit
 
 pub fn glob_match(String, String) -> Bool
 
@@ -40,11 +41,11 @@ pub fn pricing_registry_register(String, &PricingSource) -> Unit
 
 pub fn pricing_registry_unregister(String) -> Unit
 
-pub fn publish_status_register(EventBus, source~ : String, segment~ : String, label? : String, priority? : Int32, value? : String, color? : String) -> Unit
+pub fn publish_status_register(source~ : String, segment~ : String, label? : String, priority? : Int32, value? : String, color? : String) -> Unit
 
-pub fn publish_status_unregister(EventBus, source~ : String, segment~ : String) -> Unit
+pub fn publish_status_unregister(source~ : String, segment~ : String) -> Unit
 
-pub fn publish_status_update(EventBus, source~ : String, segment~ : String, value~ : String) -> Unit
+pub fn publish_status_update(source~ : String, segment~ : String, value~ : String) -> Unit
 
 pub fn quota_registry_lookup(String) -> &QuotaSource?
 
@@ -58,10 +59,6 @@ pub fn sanitize_label(String, limit? : Int32) -> String
 
 pub fn sanitize_path(String, limit? : Int32) -> String
 
-pub fn status_bus_default() -> EventBus?
-
-pub fn status_bus_register(EventBus) -> Unit
-
 pub fn status_color_roles() -> Array[String]
 
 pub fn strip_dot_prefix(String) -> String
@@ -71,24 +68,6 @@ pub fn truncate_chars(String, Int32) -> String
 // Errors
 
 // Types and methods
-#derive(@debug.Debug)
-pub(all) struct BusEvent {
-  source : String
-  topic : String
-  data : @json.Json
-}
-pub fn BusEvent::to_repr(Self) -> @debug.Repr
-
-pub struct EventBus {
-  subscribers : Array[&BusSubscriber]
-  mut pending : Array[BusEvent]
-  mut dispatching : Bool
-}
-pub fn EventBus::EventBus() -> Self
-pub fn EventBus::publish(Self, BusEvent) -> Unit
-pub fn EventBus::subscribe(Self, &BusSubscriber) -> Unit
-pub fn EventBus::subscriber_count(Self) -> Int32
-
 pub(all) struct ExtContext {
   logger : &Logger
 }
@@ -222,10 +201,6 @@ pub fn WorkspaceAnchor::to_repr(Self) -> @debug.Repr
 // Type aliases
 
 // Traits
-pub(open) trait BusSubscriber {
-  fn on_bus_event(Self, BusEvent) -> Unit
-}
-
 pub(open) trait Logger {
   fn log(Self, LogEvent) -> Unit
 }
