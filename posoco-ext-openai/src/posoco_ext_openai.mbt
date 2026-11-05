@@ -15,6 +15,9 @@ pub(all) struct OpenAIConfig {
   /// off rather than guessing.
   context_window : Int32?
   use_responses_lite : Bool
+  /// Provider-owned hosted Web Search mode. `Cached` by default — the official
+  /// client default, which still declares the hosted tool.
+  web_search : OpenAIWebSearchMode
 }
 
 ///|
@@ -32,6 +35,7 @@ pub fn OpenAIConfig::OpenAIConfig(
     reasoning_effort: None,
     context_window: None,
     use_responses_lite: false,
+    web_search: OpenAIWebSearchMode::Cached,
   }
 }
 
@@ -55,6 +59,7 @@ pub fn OpenAIConfig::with_base_url(
     reasoning_effort: None,
     context_window: None,
     use_responses_lite: false,
+    web_search: OpenAIWebSearchMode::Cached,
   }
 }
 
@@ -82,6 +87,17 @@ pub fn OpenAIConfig::with_reasoning_effort(
   effort : String,
 ) -> OpenAIConfig {
   { ..self, reasoning_effort: Some(effort), }
+}
+
+///|
+/// Return a copy configured with one hosted Web Search mode. Provider settings
+/// own validation of the accepted mode names; this method only carries the
+/// selected mode into the request declaration.
+pub fn OpenAIConfig::with_web_search(
+  self : OpenAIConfig,
+  mode : OpenAIWebSearchMode,
+) -> OpenAIConfig {
+  { ..self, web_search: mode, }
 }
 
 ///|
@@ -372,6 +388,7 @@ fn build_request_body(
   reasoning_effort : String?,
   instructions~ : String = "",
   stream~ : Bool = false,
+  web_search~ : OpenAIWebSearchMode = OpenAIWebSearchMode::Disabled,
 ) -> Json {
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
@@ -387,8 +404,15 @@ fn build_request_body(
   if instructions.length() > 0 {
     fields.push(("instructions", Json::string(instructions)))
   }
-  if !tools.is_empty() {
-    let tool_defs = tools.map(fn(t) { @responses.tool_to_responses_wire(t) })
+  // The hosted web_search tool is a peer of the ordinary function tools in the
+  // same `tools` array; `Disabled` contributes nothing, so the plain shape is
+  // byte-identical to the pre-web-search request.
+  let tool_defs = tools.map(fn(t) { @responses.tool_to_responses_wire(t) })
+  match openai_web_search_tool(web_search) {
+    Some(hosted) => tool_defs.push(hosted)
+    None => ()
+  }
+  if !tool_defs.is_empty() {
     fields.push(("tools", Json::array(tool_defs)))
   }
   match reasoning_effort {
@@ -443,6 +467,15 @@ fn openai_prepare_request_body(
   stream~ : Bool = false,
   extra_fields~ : Array[(String, Json)] = [],
 ) -> Json {
+  // Lite parity: the Lite body carries tools as an inline `additional_tools`
+  // developer item, which has no hosted-tool slot, so the official client
+  // never sends hosted search there. Suppressing it here also keeps the
+  // additional-tools id derivation (which hashes the tool array) unchanged.
+  let web_search = if config.use_responses_lite {
+    OpenAIWebSearchMode::Disabled
+  } else {
+    config.web_search
+  }
   let body = build_request_body(
     input_items,
     tools,
@@ -451,6 +484,7 @@ fn openai_prepare_request_body(
     config.reasoning_effort,
     instructions=instructions.join("\n\n"),
     stream~,
+    web_search~,
   )
   guard body is Json::Object(fields) else { abort("request builder object") }
   // The ChatGPT Codex backend keys prompt-cache affinity off the session id;
@@ -671,7 +705,8 @@ async fn OpenAIModelPort::chat_stream(
     }
   }
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let sse_state = @responses.SseStreamState::SseStreamState()
+  let response_state = OpenAIResponseState::OpenAIResponseState(session_id)
+  defer response_state.cleanup()
   let mut done = false
   let mut last_yield = @async.now()
   while !done {
@@ -687,12 +722,11 @@ async fn OpenAIModelPort::chat_stream(
           if pl == "[DONE]" {
             done = true
           } else if pl.length() > 0 {
-            done = @responses.process_responses_sse(
-              provider="OpenAI",
+            done = openai_process_response_event(
               pl.to_owned(),
               acc,
               on_chunk,
-              state=sse_state,
+              response_state,
             )
           }
         }
@@ -726,9 +760,9 @@ async fn OpenAIModelPort::chat_stream(
     Some(err) => raise err
     None => ()
   }
-  let completion = attach_reasoning_items_responses(
+  let completion = openai_finish_response(
     openai_stream_completion(acc),
-    sse_state,
+    response_state,
   )
   @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
@@ -901,10 +935,7 @@ async fn OpenAIModelPort::chat_nonstream(
     Some(session_id),
     quota_tracker=self.quota_tracker,
   )
-  let completion = @responses.parse_responses_response(
-    provider="OpenAI",
-    resp_json,
-  )
+  let completion = openai_parse_response(resp_json, session_id)
   @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
 

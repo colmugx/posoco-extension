@@ -138,8 +138,8 @@ async test "openai_compact_latest_first_manual_and_auto_carry_current_tools_effo
     assert_eq(
       fields.get("tools"),
       Some(
-        Json::array(
-          latest_fixture_tools().map(@responses.tool_to_responses_wire),
+        @json.parse(
+          "[{\"type\":\"function\",\"name\":\"current_tool\",\"description\":\"current schema\",\"parameters\":{\"type\":\"object\"}},{\"type\":\"web_search\",\"external_web_access\":false}]",
         ),
       ),
     )
@@ -275,7 +275,9 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
   assert_eq(
     chat_fields.get("tools"),
     Some(
-      Json::array(latest_fixture_tools().map(@responses.tool_to_responses_wire)),
+      @json.parse(
+        "[{\"type\":\"function\",\"name\":\"current_tool\",\"description\":\"current schema\",\"parameters\":{\"type\":\"object\"}},{\"type\":\"web_search\",\"external_web_access\":false}]",
+      ),
     ),
   )
   // Lifted base instructions do not ride as an input item.
@@ -321,11 +323,10 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
 }
 
 ///|
-/// Empty tool sets are a legitimate agent shape: the ordinary branch omits
-/// the top-level `tools` field in both chat and compact instead of sending
-/// an empty array, while the Lite branch still prefixes the empty
-/// `additional_tools` item — the same shape chat sends for the model.
-test "openai_request_preparation_empty_tools_omit_field_both_formats" {
+/// No local function tools is a legitimate agent shape: ordinary chat and
+/// compact still declare the provider's default cached hosted search. Lite
+/// omits hosted search and prefixes its empty `additional_tools` item.
+test "openai_request_preparation_empty_function_tools_still_declare_hosted_search" {
   let messages : Array[@posoco.Message] = [
     @posoco.Message::SystemMessage(content=[
       @posoco.Content::Text("base instructions"),
@@ -345,7 +346,12 @@ test "openai_request_preparation_empty_tools_omit_field_both_formats" {
     "session-empty",
   )
   guard compact is Json::Object(fields) else { fail("compact body") }
-  assert_false(fields.contains("tools"))
+  assert_eq(
+    fields.get("tools"),
+    Some(
+      @json.parse("[{\"type\":\"web_search\",\"external_web_access\":false}]"),
+    ),
+  )
   assert_eq(fields.get("instructions"), Some(Json::string("base instructions")))
   let chat = openai_prepare_request(
     normal,
@@ -355,7 +361,7 @@ test "openai_request_preparation_empty_tools_omit_field_both_formats" {
     options,
   )
   guard chat is Json::Object(chat_fields) else { fail("chat body") }
-  assert_false(chat_fields.contains("tools"))
+  assert_eq(chat_fields.get("tools"), fields.get("tools"))
   assert_eq(chat_fields.get("instructions"), fields.get("instructions"))
   // Lite: the empty tool set still rides the developer additional_tools
   // prefix item, and the instructions move into the developer message.

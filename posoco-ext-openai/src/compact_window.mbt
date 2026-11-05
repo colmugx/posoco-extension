@@ -158,7 +158,7 @@ fn openai_encode_window_items(
   let items : Array[Json] = []
   if anchor_at < 0 {
     for m in folded {
-      for item in @responses.message_to_responses_items(m) {
+      for item in openai_message_to_responses_items(m) {
         items.push(item)
       }
     }
@@ -186,7 +186,7 @@ fn openai_encode_window_items(
     }
   }
   for i in 0..<anchor_at {
-    for item in @responses.message_to_responses_items(folded[i]) {
+    for item in openai_message_to_responses_items(folded[i]) {
       items.push(item)
     }
   }
@@ -194,7 +194,7 @@ fn openai_encode_window_items(
     items.push(json_deep_copy(item))
   }
   for i in projection_end..<folded.length() {
-    for item in @responses.message_to_responses_items(folded[i]) {
+    for item in openai_message_to_responses_items(folded[i]) {
       items.push(item)
     }
   }

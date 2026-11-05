@@ -90,6 +90,7 @@ fn openai_catalog_slot(
         ..base,
         context_window: config.context_window,
         use_responses_lite: config.use_responses_lite,
+        web_search: config.web_search,
       }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
@@ -115,6 +116,7 @@ fn openai_catalog_slot(
         ..base,
         context_window: config.context_window,
         use_responses_lite: config.use_responses_lite,
+        web_search: config.web_search,
       }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
@@ -211,7 +213,11 @@ pub fn OpenAIModelPort::model_catalog_from_api_models(
       info.id,
       self.config.base_url,
     )
-    let config = { ..config, use_responses_lite: info.use_responses_lite, }
+    let config = {
+      ..config,
+      use_responses_lite: info.use_responses_lite,
+      web_search: self.config.web_search,
+    }
     slots.push(
       openai_catalog_slot(
         config,
@@ -303,6 +309,7 @@ fn codex_catalog_slot_from_info(
     reasoning_effort: selected_effort,
     context_window: info.context_window,
     use_responses_lite: info.use_responses_lite,
+    web_search: base_config.web_search,
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth", "image_in"]
   if info.use_responses_lite {
@@ -352,6 +359,7 @@ fn codex_catalog_slot_from_cached(
     reasoning_effort: selected_effort,
     context_window: info.context_window,
     use_responses_lite: info.use_responses_lite,
+    web_search: base_config.web_search,
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth"]
   if info.use_responses_lite {
@@ -399,6 +407,7 @@ fn api_catalog_slot_from_cached(
       _ => info.default_effort
     },
     use_responses_lite: info.use_responses_lite,
+    web_search: base_config.web_search,
   }
   let capabilities : Array[String] = ["chat", "streaming", "api_key"]
   if info.use_responses_lite {

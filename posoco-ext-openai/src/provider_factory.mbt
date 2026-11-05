@@ -124,6 +124,10 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
     None => openai_default_model()
   }
   let credential = source.effective_credential("openai")
+  // Hosted Web Search is provider-owned: the settings key names a mode and the
+  // extension alone maps it to the request declaration. Validated before any
+  // credential branch so a typo cannot silently degrade to a default mode.
+  let web_search = parse_openai_web_search_mode(source)
   let config = match credential {
     Some(@oauth.ProviderCredential::OAuth(credential)) =>
       OpenAIConfig::from_codex_credential(credential, model)
@@ -144,6 +148,7 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
       }
     }
   }
+  let config = config.with_web_search(web_search)
   let port = OpenAIModelPort(
     config,
     quota_tracker=Some(codex_shared_quota_tracker()),
@@ -192,6 +197,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
     None => openai_default_model()
   }
   let requested_effort = openai_setting_string(source, "reasoning_effort")
+  let web_search = parse_openai_web_search_mode(source)
   let credential = source.effective_credential("openai")
   match credential {
     Some(@oauth.ProviderCredential::OAuth(credential)) => {
@@ -227,6 +233,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
       )
       let config = OpenAIConfig::from_codex_credential(active_credential, model)
       let config = openai_apply_effort(config, requested_effort)
+      let config = config.with_web_search(web_search)
       let account_id = match config.account_id {
         Some(value) if value.length() > 0 => value
         _ =>
@@ -274,6 +281,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         base_url,
       )
       let config = openai_apply_effort(config, requested_effort)
+      let config = config.with_web_search(web_search)
       let transport_impl = match self.models_transport {
         Some(value) => value
         None => {
@@ -313,6 +321,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
       }
       let config = OpenAIConfig::with_base_url(api_key, model, base_url)
       let config = openai_apply_effort(config, requested_effort)
+      let config = config.with_web_search(web_search)
       let transport_impl = match self.models_transport {
         Some(value) => value
         None => {

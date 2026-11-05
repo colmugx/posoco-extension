@@ -144,11 +144,13 @@ pub(all) struct OpenAIConfig {
   reasoning_effort : String?
   context_window : Int32?
   use_responses_lite : Bool
+  web_search : OpenAIWebSearchMode
 }
 pub fn OpenAIConfig::OpenAIConfig(String, String) -> Self
 pub fn OpenAIConfig::from_codex_credential(@ext-oauth.Credential, String) -> Self
 pub fn OpenAIConfig::with_base_url(String, String, String) -> Self
 pub fn OpenAIConfig::with_reasoning_effort(Self, String) -> Self
+pub fn OpenAIConfig::with_web_search(Self, OpenAIWebSearchMode) -> Self
 
 pub(all) struct OpenAIModelInfo {
   id : String
@@ -191,6 +193,12 @@ pub impl @posoco-kit-provider.ApiKeyFactory for OpenAIProvider
 pub impl @posoco-kit-provider.OAuthFactory for OpenAIProvider
 pub impl @posoco-kit-provider.ProviderFactory for OpenAIProvider
 pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenAIProvider
+
+pub(all) enum OpenAIWebSearchMode {
+  Cached
+  Live
+  Disabled
+}
 
 // Type aliases
 

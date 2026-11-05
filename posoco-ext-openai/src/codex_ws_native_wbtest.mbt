@@ -342,3 +342,147 @@ async test "codex ws unreachable endpoint falls back and marks the session" {
   }
   assert_true(codex_ws_session_is_fallback("ws-dead"))
 }
+
+///|
+async test "codex ws hosted search renders citations and preserves exact continuation" {
+  let search = "{\"type\":\"web_search_call\",\"id\":\"ws_search\",\"status\":\"completed\",\"action\":{\"type\":\"search\",\"query\":\"a fact\"}}"
+  let answer = "{\"type\":\"message\",\"id\":\"msg_search\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Answer\",\"annotations\":[{\"type\":\"url_citation\",\"start_index\":0,\"end_index\":6,\"title\":\"Source\",\"url\":\"https://example.com/fact\"}]}]}"
+  let mock = WsMock::bind([
+    [
+      "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"web_search_call\",\"id\":\"ws_search\",\"status\":\"in_progress\"}}",
+      "{\"type\":\"response.web_search_call.searching\",\"item_id\":\"ws_search\",\"output_index\":0,\"sequence_number\":1}",
+      "{\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":" +
+      search +
+      "}",
+      "{\"type\":\"response.output_text.delta\",\"output_index\":1,\"content_index\":0,\"delta\":\"Answer\"}",
+      "{\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":" +
+      answer +
+      "}",
+      ws_mock_completed("resp_search"),
+    ],
+    [
+      "{\"type\":\"response.output_text.delta\",\"delta\":\"Again\"}",
+      ws_mock_completed("resp_followup"),
+    ],
+  ])
+  @async.with_timeout(20000, () => {
+    @async.with_task_group() <| group => {
+      let _ = group.spawn(() => mock.serve(), allow_failure=true)
+      defer {
+        codex_ws_drop_session("ws-hosted-search")
+        mock.stopping = true
+        mock.server.close()
+      }
+      let port_impl = OpenAIModelPort(ws_mock_config(mock.server.addr.port()))
+      let options : @posoco.ChatOptions = {
+        temperature: None,
+        max_output_tokens: None,
+      }
+      let sink = fn(_ : @posoco.StreamChunk) { () }
+      let first = match
+        port_impl.codex_ws_chat("ws-hosted-search", [], [], options, sink) {
+        Done(result) => result.completion.message
+        FallBack => fail("search turn must not fall back")
+      }
+      let text = first.content
+        .map(fn(c) {
+          match c {
+            Text(s) => s
+            _ => ""
+          }
+        })
+        .join("")
+      assert_true(text.contains("https://example.com/fact"))
+      let assistant = @posoco.Message::AssistantMessage(
+        content=first.content,
+        tool_calls=first.tool_calls,
+        reasoning=first.reasoning,
+        finish_reason=first.finish_reason,
+      )
+      let followup = @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text("again"),
+      ])
+      match
+        port_impl.codex_ws_chat(
+          "ws-hosted-search",
+          [assistant, followup],
+          [],
+          options,
+          sink,
+        ) {
+        Done(_) => ()
+        FallBack => fail("followup must not fall back")
+      }
+      assert_eq(mock.frames.length(), 2)
+      guard @json.parse(mock.frames[1]) is Json::Object(fields) else {
+        fail("frame object")
+      }
+      assert_eq(
+        fields.get("previous_response_id"),
+        Some(Json::string("resp_search")),
+      )
+      assert_eq(
+        fields.get("input"),
+        Some(
+          Json::array([
+            Json::object({
+              "role": Json::string("user"),
+              "content": Json::array([
+                Json::object({
+                  "type": Json::string("input_text"),
+                  "text": Json::string("again"),
+                }),
+              ]),
+            }),
+          ]),
+        ),
+      )
+    }
+  })
+}
+
+///|
+async test "codex ws does not fall back after hosted search starts before text" {
+  let mock = WsMock::bind([])
+  @async.with_timeout(20000, () => {
+    @async.with_task_group() <| group => {
+      defer {
+        codex_ws_drop_session("ws-search-interrupted")
+        mock.stopping = true
+        mock.server.close()
+      }
+      let _ = group.spawn(() => {
+        let (conn, _) = mock.server.accept()
+        defer conn.close()
+        let request = conn.read_request()
+        let ws = @websocket.from_http_server(request, conn)
+        defer ws.close()
+        let frame = ws.recv()
+        mock.frames.push(frame.read_all().text())
+        ws.send_text(
+          "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"web_search_call\",\"id\":\"ws_started\",\"status\":\"in_progress\"}}",
+        )
+      })
+      let port_impl = OpenAIModelPort(ws_mock_config(mock.server.addr.port()))
+      let outcome = attempt_async(() => {
+        port_impl.codex_ws_chat(
+          "ws-search-interrupted",
+          [],
+          [],
+          { temperature: None, max_output_tokens: None, },
+          fn(_ : @posoco.StreamChunk) { () },
+        )
+      })
+      match outcome {
+        Err(@posoco.ModelError::Transport(message)) =>
+          assert_true(message.contains("stage=read_stream"))
+        Err(other) => fail("expected transport error, got " + other.to_string())
+        Ok(_) =>
+          fail(
+            "must not fall back and repeat a search already started on the server",
+          )
+      }
+      assert_eq(mock.frames.length(), 1)
+    }
+  })
+}

@@ -7,7 +7,6 @@ import {
 import {
   "colmugx/posoco",
   "posoco/devkit",
-  "posoco/kit-events" @kit_events,
   "moonbitlang/async",
 } for "wbtest"
 

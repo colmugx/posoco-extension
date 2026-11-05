@@ -221,6 +221,25 @@ fn codex_ws_capture_output_item(payload : String, sink : Array[Json]) -> Unit {
     _ => return
   }
   match fields.get("item") {
+    Some(Json::Object(item_fields) as item) => {
+      // Retransmitted done snapshots are one output item, not another turn
+      // item. Keep its original position so WS continuation matches replay.
+      match item_fields.get("id") {
+        Some(Json::String(id)) =>
+          for i, existing in sink {
+            match existing {
+              Json::Object(existing_fields) if existing_fields.get("id") ==
+                Some(Json::string(id)) => {
+                sink[i] = item
+                return
+              }
+              _ => ()
+            }
+          }
+        _ => ()
+      }
+      sink.push(item)
+    }
     Some(item) => sink.push(item)
     None => ()
   }
@@ -426,7 +445,8 @@ async fn codex_ws_pump(
     on_chunk(chunk)
   }
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let sse_state = @responses.SseStreamState::SseStreamState()
+  let response_state = OpenAIResponseState::OpenAIResponseState(session_id)
+  defer response_state.cleanup()
   let items : Array[Json] = []
   let response_id = Ref::{ val: "", }
   let mut done = false
@@ -434,13 +454,13 @@ async fn codex_ws_pump(
   while !done {
     match session.transport.next_text() {
       Err(message) => {
-        if emitted.val {
+        if emitted.val || response_state.has_activity {
           raise ws_stream_transport_error(message)
         }
         return FallBack
       }
       Ok(None) => {
-        if emitted.val {
+        if emitted.val || response_state.has_activity {
           raise ws_stream_transport_error("websocket closed before completion")
         }
         return FallBack
@@ -466,12 +486,8 @@ async fn codex_ws_pump(
           }
           codex_ws_capture_output_item(trimmed, items)
           codex_ws_capture_response_id(trimmed, response_id)
-          done = @responses.process_responses_sse(
-            provider="OpenAI",
-            trimmed,
-            acc,
-            wrapped,
-            state=sse_state,
+          done = openai_process_response_event(
+            trimmed, acc, wrapped, response_state,
           )
         }
       }
@@ -487,9 +503,9 @@ async fn codex_ws_pump(
   }
   session.last_response_id = response_id.val
   session.last_response_items = items
-  let completion = attach_reasoning_items_responses(
+  let completion = openai_finish_response(
     openai_stream_completion(acc),
-    sse_state,
+    response_state,
   )
   Done(@posoco.ModelCallResult::{ completion, processed_messages: messages, })
 }

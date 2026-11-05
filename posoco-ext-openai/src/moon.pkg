@@ -56,6 +56,8 @@ options(
     "codex_usage_wbtest.mbt": [ "native" ],
     "codex_status_live_wbtest.mbt": [ "native" ],
     "quota_status_wbtest.mbt": [ "native" ],
+    "web_search_config_wbtest.mbt": [ "native" ],
+    "web_search_response_wbtest.mbt": [ "native" ],
     "intelligence_metrics_wbtest.mbt": [ "native" ],
   },
 )
