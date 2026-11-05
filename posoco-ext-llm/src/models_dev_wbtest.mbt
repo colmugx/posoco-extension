@@ -427,6 +427,9 @@ async fn exercise_window_policy(
       max_tool_rounds=Some(10),
       compact_threshold=Some(0.8),
     ),
+    // posoco 0.24.1 makes the event system a required composition input; this
+    // scenario exercises window policy, so a private idle system is enough.
+    events=@posoco.EventSystem(),
   )
   ignore(
     agent.run_turn(

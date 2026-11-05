@@ -358,4 +358,3 @@ fn ticket_dismiss_updates(emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
     emit,
   )
 }
-

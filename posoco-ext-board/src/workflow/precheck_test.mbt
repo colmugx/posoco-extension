@@ -6,7 +6,7 @@
 
 ///|
 async test "the safe disabled policy stops the loop as OrchestrationBlocked" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"], policy_enabled=false)
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     let status = h.runner.wait()
@@ -28,7 +28,7 @@ async test "the safe disabled policy stops the loop as OrchestrationBlocked" {
 
 ///|
 async test "a denied input stops the run without falling back to another task" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let resolver = scripted_resolver(available=["alpha/attempt-alpha-1"])
     resolver.denied.push("beta/attempt-beta-1")
     let h = workflow_harness(
@@ -101,7 +101,7 @@ fn recovered_journal() -> RecoveredJournal {
 
 ///|
 async test "a recovered unresolved journal stays unresolved even on an empty board" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=[], store=recovered_journal())
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     let status = h.runner.wait()

@@ -84,7 +84,7 @@ fn orch_slots_owner(
 
 ///|
 async test "parallel owner capacity admits independent tasks until slots are exhausted" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-b")
     let adapter = orch_adapter(block=true)
@@ -121,7 +121,7 @@ async test "parallel owner capacity admits independent tasks until slots are exh
 
 ///|
 async test "free capacity keeps independent tasks eligible while the active task is suppressed" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-b")
     let adapter = orch_adapter(block=true)
@@ -162,7 +162,7 @@ async test "free capacity keeps independent tasks eligible while the active task
 
 ///|
 async test "an active Task blocks duplicate dispatch but history still allows a fresh attempt" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-b")
     let adapter = orch_adapter(block=true, delay_gate=true)
@@ -244,7 +244,7 @@ async test "an active Task blocks duplicate dispatch but history still allows a 
 
 ///|
 async test "pinned wave candidate admits its exact attempt and rejects a consumed one" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-b")
     let adapter = orch_adapter(block=true)
@@ -303,7 +303,7 @@ async test "pinned wave candidate admits its exact attempt and rejects a consume
 
 ///|
 async test "the model gate ignores active bindings while revalidating candidate and scope" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-b")
     let adapter = orch_adapter(block=true)
@@ -338,7 +338,7 @@ async test "the model gate ignores active bindings while revalidating candidate 
 
 ///|
 async test "default slot owner preserves the single execution S4B behavior" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true)
     let owner = match

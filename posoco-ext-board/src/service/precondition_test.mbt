@@ -5,7 +5,7 @@
 async test "disabled, missing-UI and invalid-budget denials perform no IO" {
   let disabled_directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(disabled_directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(disabled_directory, group, enabled=false)
     defer ignore(h.board.shutdown())
     assert_eq(h.board.start(title="Disabled workflow"), Err(@service.Disabled))
@@ -16,7 +16,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
   })
   let bare_directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(bare_directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,
       fail: false,
@@ -50,7 +50,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
   })
   let invalid_directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(invalid_directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,
       fail: false,
@@ -92,6 +92,7 @@ async test "disabled, missing-UI and invalid-budget denials perform no IO" {
         @posoco.Agent(
           exts=[parent_model, ui, board],
           config=@posoco.agent_config(),
+          events=@posoco.EventSystem(),
         ),
       )
       ""

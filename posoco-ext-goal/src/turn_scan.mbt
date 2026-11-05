@@ -24,11 +24,12 @@ fn text_of_message(message : @posoco.Message) -> String {
 
 ///|
 /// What the final assistant message of a turn signals.
+#derive(Eq, Debug)
 pub(all) enum TurnVerdict {
   NoSignal
   CompletionClaimed
   BlockedClaimed(reason~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TurnVerdict with Eq::{not_equal, equal}

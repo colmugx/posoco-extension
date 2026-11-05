@@ -157,7 +157,7 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     "create-dialog",
     heading,
     _ => emit(EditorCancelled),
-    ["width:min(calc(100% - 2rem),54rem)","max-height:calc(100vh - 3rem)"],
+    ["width:min(calc(100% - 2rem),54rem)", "max-height:calc(100vh - 3rem)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -272,4 +272,3 @@ fn confirm_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ],
   )
 }
-

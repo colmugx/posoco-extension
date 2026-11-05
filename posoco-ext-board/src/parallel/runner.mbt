@@ -66,7 +66,7 @@ fn ParallelWorkflowRunner::watch(
   self : ParallelWorkflowRunner,
   handle : @execution.BoardExecutionHandle,
   spec : ParallelWorkflowSpec,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   group.spawn_bg(() => {
     let binding = try handle.wait() catch {
@@ -129,7 +129,7 @@ async fn ParallelWorkflowRunner::drive(
     .max(1L)
     .to_int()
   let result = @async.handle_cancellation(() => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
         @async.sleep(remaining)
         self.deadline_expired = true
@@ -173,7 +173,7 @@ async fn ParallelWorkflowRunner::drive(
 async fn ParallelWorkflowRunner::run_loop(
   self : ParallelWorkflowRunner,
   spec : ParallelWorkflowSpec,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   let mut stale = 0
   while true {

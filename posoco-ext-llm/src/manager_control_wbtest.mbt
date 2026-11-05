@@ -102,31 +102,43 @@ fn control_effort_slot_with_hook(
 }
 
 ///|
-/// Bus capture for control-contract tests: records every published event.
+/// Event channel capture for control-contract tests: one posoco
+/// `EventSystem` plus every envelope it delivered.
 struct ControlCapture {
-  events : Array[@devkit.BusEvent]
+  system : @posoco.EventSystem
+  events : Array[@posoco.EventEnvelope]
 }
 
 ///|
 fn ControlCapture::ControlCapture() -> ControlCapture {
-  { events: [], }
+  let system = @posoco.EventSystem()
+  let events : Array[@posoco.EventEnvelope] = []
+  match system.subscribe(fn(envelope) { events.push(envelope) }) {
+    Ok(_) => ()
+    Err(_) => abort("test recorder subscription failed")
+  }
+  { system, events, }
 }
 
 ///|
-impl @devkit.BusSubscriber for ControlCapture with fn on_bus_event(
+/// The owner-bound capability a host mints for the router under test.
+fn ControlCapture::publisher(
   self : ControlCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+  owner~ : String,
+) -> @posoco.Events {
+  match self.system.publisher(owner~) {
+    Ok(events) => events
+    Err(_) => abort("test publisher capability unavailable: " + owner)
+  }
 }
 
 ///|
 fn control_router(
   slots~ : Array[ModelSlot],
   default_slot_id~ : String = "",
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
 ) -> &@modelmgmt.ModelManagerControl raise @posoco.CompositionError {
-  RouterModelPort::RouterModelPort(slots~, default_slot_id~, bus~)
+  RouterModelPort::RouterModelPort(slots~, default_slot_id~, events~)
   as &@modelmgmt.ModelManagerControl
 }
 
@@ -177,12 +189,13 @@ test "manager control projects the ordered catalog" {
 
 ///|
 test "select_model through the control trait switches, resets effort, and preserves events" {
-  let bus = @devkit.EventBus()
   let capture = ControlCapture::ControlCapture()
-  bus.subscribe(capture)
   let first = control_effort_slot("one/a", "one", "model-a")
   let second = control_test_slot("two/b", "two", "model-b", [])
-  let router = control_router(slots=[first, second], bus=Some(bus))
+  let router = control_router(
+    slots=[first, second],
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
+  )
   router.select_effort("high")
   assert_eq(router.active_selection().effort, Some("high"))
   capture.events.clear()
@@ -191,14 +204,14 @@ test "select_model through the control trait switches, resets effort, and preser
   // Switching models resets the applied effort.
   assert_eq(router.active_selection().effort, None)
   assert_false(router.active_selection().pending)
-  // Model status republication, then the structured model_selection event,
-  // then the provider event for the new provider — the same wire shape
+  // Model status republication, then the structured `ModelSelection` event,
+  // then the `ProviderStatus` for the new provider — the same sequence
   // `/model` produces.
   assert_eq(capture.events.length(), 3)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @kit_events.status_changed_of(capture.events[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="model",
         label=None,
         priority=20,
@@ -207,23 +220,25 @@ test "select_model through the control trait switches, resets effort, and preser
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "model_selection")
-  assert_eq(capture.events[2].topic, "provider")
-  match capture.events[2].data {
-    Json::Object(fields) =>
-      assert_eq(fields.get("provider_id"), Some(Json::string("two")))
-    _ => fail("expected a provider event payload object")
-  }
+  assert_eq(
+    @kit_events.model_selection_of(capture.events[1]),
+    Some({ slot_id: "two/b", effort: None, }),
+  )
+  assert_eq(
+    @kit_events.provider_status_of(capture.events[2]),
+    Some({ provider_id: "two", }),
+  )
 }
 
 ///|
 test "select_model rejects unknown ids without mutating state" {
-  let bus = @devkit.EventBus()
   let capture = ControlCapture::ControlCapture()
-  bus.subscribe(capture)
   let first = control_test_slot("one/a", "one", "model-a", [])
   let second = control_test_slot("two/b", "two", "model-b", [])
-  let router = control_router(slots=[first, second], bus=Some(bus))
+  let router = control_router(
+    slots=[first, second],
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
+  )
   // Ignore the composition-time model_selection seed; the rejected
   // selection must produce zero events.
   capture.events.clear()

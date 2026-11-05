@@ -125,20 +125,22 @@ pub(all) struct PermissionPolicy {
   /// without a prompt. None keeps every write behind the gate (hosts that
   /// do not wire a workspace keep the historical behavior).
   workspace : @devkit.WorkspaceAnchor?
-  /// The bus the policy subscribed to at construction, kept so it can
-  /// publish its own status-bar segment. None ⇒ status publication is a
-  /// silent no-op.
-  priv bus : @devkit.EventBus?
+  /// The event capability the policy subscribed to at construction, kept
+  /// so it can publish its own status-bar segment. The host mints it with
+  /// `EventSystem::publisher(owner="posoco_ext_permission")`. None ⇒ no
+  /// exemption reports are received and status publication is a silent
+  /// no-op.
+  priv events : @posoco.Events?
   /// Approvals remembered this agent lifetime, keyed by approval scope: the
   /// bare tool name for write/unknown tools, `"<tool>:<segment-scope>"` per
   /// shell command segment (e.g. `bash:ls`, `bash:moon` — a leading `rtk`
   /// is stripped; see `shell_scopes`). Approving `ls` must not approve
   /// `rm`.
   mut session_approved : Set[String]
-  /// Tools reported exempt by composed extensions (bus topic
-  /// `tool_exemptions`), keyed by tool name and remembering the reporting
-  /// source id — exemptions self-identify as `source:name` so status and
-  /// code review can see who vouched for what. They skip this gate
+  /// Tools reported exempt by composed extensions (the `ToolExemptions`
+  /// protocol event), keyed by tool name and remembering the reporting
+  /// extension's id — exemptions self-identify as `source:name` so status
+  /// and code review can see who vouched for what. They skip this gate
   /// entirely — trust channel, guaranteed by code review, not runtime
   /// checks.
   mut exempted : Map[String, String]
@@ -159,23 +161,24 @@ pub(all) struct PermissionPolicy {
 /// non-read tool (Auto needs a DecisionPort instead and errors at
 /// composition without one). `workspace` opts into the `WorkspaceWrite`
 /// contract: write-class calls anchored inside the root are pre-approved.
-/// `bus`, when given, subscribes the policy to the
-/// cross-extension event bus so peer extensions can report tools that
-/// bypass this gate (topic `tool_exemptions`) and publishes the active
-/// mode as the `permission` status-bar segment; construct subscribing
-/// gates before the extensions that report to them — the bus is
-/// fire-and-forget.
+/// `events`, when given, subscribes the policy to the session event channel
+/// so peer extensions can report tools that bypass this gate (the
+/// `ToolExemptions` protocol event) and publishes the active mode as the
+/// `permission` status-bar segment. The host mints the capability with
+/// `EventSystem::publisher(owner="posoco_ext_permission")`; wire it before
+/// the extensions that report to this gate — delivery is fire-and-forget,
+/// a report with no subscriber is dropped.
 pub fn PermissionPolicy::PermissionPolicy(
   mode : PermissionMode,
   approval~ : &ApprovalSource? = None,
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
   workspace~ : @devkit.WorkspaceAnchor? = None,
 ) -> PermissionPolicy {
   let policy : PermissionPolicy = {
     mode,
     approval,
     workspace,
-    bus,
+    events,
     session_approved: Set([]),
     exempted: Map::from_array([]),
     // ask_question rides the read class: it talks to the user and touches
@@ -192,35 +195,22 @@ pub fn PermissionPolicy::PermissionPolicy(
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
     decision: None,
   }
-  match bus {
-    Some(bus) => bus.subscribe(policy as &@devkit.BusSubscriber)
+  // Subscribe at construction: peers publish their exemption reports before
+  // composition (the channel keeps no history), so a listener added later
+  // would miss them.
+  match events {
+    Some(events) =>
+      match
+        events.subscribe(fn(envelope) { policy.record_exemptions(envelope) }) {
+        Ok(_) => ()
+        // Closed channel: the session is shutting down, so there is nobody
+        // left to exempt anything for.
+        Err(_) => ()
+      }
     None => ()
   }
   policy
 }
-
-///|
-/// Receive bus events. Only the `tool_exemptions` convention is
-/// understood: a report records each tool name → the reporting extension's
-/// id, and entries accumulate — there is no revocation. Everything else,
-/// including malformed payloads, is ignored per the bus contract.
-pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
-  self,
-  event : @devkit.BusEvent,
-) -> Unit {
-  if event.topic == tool_exemptions_topic {
-    match parse_tool_exemptions(event.data) {
-      Some(names) =>
-        for name in names {
-          self.exempted[name] = event.source
-        }
-      None => ()
-    }
-  }
-}
-
-///|
-pub extend PermissionPolicy with @posoco/devkit.BusSubscriber::{on_bus_event}
 
 ///|
 pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
@@ -999,40 +989,30 @@ fn parse_mode_name(raw : String) -> PermissionMode? {
 /// (priority 10, leftmost of the llm-owned segments). `yolo` carries the
 /// `warning` role and `readonly` the `info` role; other modes publish
 /// uncolored. Re-publishing the register is idempotent — the owner-overwrite
-/// keeps the segment's bar position. Silent no-op without a bus.
+/// keeps the segment's bar position. Silent no-op without a capability.
 fn PermissionPolicy::publish_status(self : PermissionPolicy) -> Unit {
-  let bus = match self.bus {
-    Some(bus) => bus
+  let events = match self.events {
+    Some(events) => events
     None => return
   }
-  match self.mode {
-    Yolo =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_permission",
-        segment="permission",
-        priority=10,
-        value=self.mode_name(),
-        color="warning",
-      )
-    ReadOnly =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_permission",
-        segment="permission",
-        priority=10,
-        value=self.mode_name(),
-        color="info",
-      )
-    _ =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_permission",
-        segment="permission",
-        priority=10,
-        value=self.mode_name(),
-      )
+  let color = match self.mode {
+    Yolo => Some("warning")
+    ReadOnly => Some("info")
+    _ => None
   }
+  ignore(
+    events.publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment="permission",
+          label=None,
+          priority=10,
+          value=Some(self.mode_name()),
+          color~,
+        ),
+      ),
+    ),
+  )
 }
 
 ///|

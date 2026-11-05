@@ -285,6 +285,7 @@ fn nmem_agent(
       ),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
 }
 

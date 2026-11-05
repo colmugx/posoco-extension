@@ -99,7 +99,7 @@ fn probe(
 
 ///|
 async fn prepared_board(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
@@ -143,7 +143,7 @@ fn request(timeout~ : Int32? = None) -> @execution.BoardExecutionRequest {
 
 ///|
 async test "real Posoco run owns scope gates effect and durably settles without task movement" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let store = @execution.MemoryBoardExecutionStore()
     let model = probe(
@@ -207,7 +207,7 @@ async test "real Posoco run owns scope gates effect and durably settles without 
 ///|
 async test "real Posoco failure and timeout await shutdown before durable attempt termination" {
   for timed_out in [false, true] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = prepared_board(group)
       let model = probe(fail=!timed_out, block=timed_out)
       let driver = @execution.PosocoBoardExecutionAdapter(extensions=() => {
@@ -251,7 +251,7 @@ async test "real Posoco failure and timeout await shutdown before durable attemp
 
 ///|
 async test "real scoped cancellation targets owner identity and waits for Agent cleanup" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let model = probe(block=true)
     let driver = @execution.PosocoBoardExecutionAdapter(extensions=() => [model])

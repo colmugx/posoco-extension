@@ -260,7 +260,7 @@ async test "overflow cancels and joins a blocked bootstrap writer" {
   let mut exited = false
   let mut sends = 0
   @async.with_timeout(1000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let sender = group.spawn(() => {
         client.pump(_frame => {
           sends += 1
@@ -289,7 +289,7 @@ async test "cancelling sender joins blocked writer and unsubscribes" {
   let blocked : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
   let mut exited = false
   @async.with_timeout(1000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let sender = group.spawn(() => {
         let client = backend.subscribe(0L, true)
         defer backend.unsubscribe(client)

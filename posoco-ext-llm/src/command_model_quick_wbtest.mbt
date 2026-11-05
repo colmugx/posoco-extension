@@ -336,18 +336,16 @@ async test "quick-pick refreshes the active provider's bar segments" {
     calls: 0,
   }
   @devkit.quota_registry_register("quick-pick-active", source)
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
   let router = RouterModelPort(
     slots=[quick_pick_slot("s1", "quick-pick-active")],
-    bus=Some(bus),
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
   )
   let outcome = router.invoke("model", quick_pick_args())
   @devkit.quota_registry_unregister("quick-pick-active")
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
   let expected = Some(
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="5h",
       label=None,
       priority=45,
@@ -357,7 +355,7 @@ async test "quick-pick refreshes the active provider's bar segments" {
   )
   let mut found = false
   for event in capture.events {
-    if @devkit.decode_status_op(event) == expected {
+    if @kit_events.status_changed_of(event) == expected {
       found = true
     }
   }

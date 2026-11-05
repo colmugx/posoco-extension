@@ -90,6 +90,7 @@ fn kernel_agent(
     presentation~,
   )
   @posoco.Agent::with_runtime(
+    events=@posoco.EventSystem(),
     exts=[
       @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
       // Manifest ids become ToolDef owners after aggregation, so the read

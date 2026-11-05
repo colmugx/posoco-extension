@@ -75,7 +75,7 @@ fn board_native_items(value : Json) -> Array[Json] raise {
 /// server and one backend through the adapter constructor. Readiness is
 /// gated by the authoritative bootstrap instead of coordinator internals.
 async fn board_native_runtime_store(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   store~ : &@store.BoardStore,
   now_ms~ : () -> Int64,
 ) -> BoardRuntime {
@@ -92,7 +92,7 @@ async fn board_native_runtime_store(
 ///|
 /// Memory-backed variant of `board_native_runtime_store`.
 async fn board_native_runtime(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   now_ms~ : () -> Int64,
 ) -> BoardRuntime {
   let store : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore()
@@ -112,7 +112,7 @@ fn board_native_url(runtime : BoardRuntime) -> String raise {
 ///|
 async test "native create stamps deterministic server time and answers event then result" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let url = board_native_url(runtime)
       let ws = @websocket.connect(url)
@@ -216,7 +216,7 @@ async test "native create stamps deterministic server time and answers event the
 ///|
 async test "native command chain covers all eight names with ordered events" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
@@ -315,7 +315,7 @@ async test "native command chain covers all eight names with ordered events" {
 ///|
 async test "native two clients conflict then fresh revision retry succeeds" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let url = board_native_url(runtime)
       let ws_a = @websocket.connect(url)
@@ -383,7 +383,7 @@ async test "native two clients conflict then fresh revision retry succeeds" {
 ///|
 async test "native invalid commands answer and keep the socket alive" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
@@ -463,7 +463,7 @@ async test "native invalid commands answer and keep the socket alive" {
 ///|
 async test "native command_id correlates twice without deduplication" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
@@ -581,7 +581,7 @@ impl @store.BoardStore for CommandScriptStore with fn persist(
 ///|
 async test "native pre-visibility persistence failure mints no event and moves nothing" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store = CommandScriptStore::CommandScriptStore()
       store.fail_persists = 1
       let runtime = board_native_runtime_store(group, store~, now_ms=() => 1234L)
@@ -633,7 +633,7 @@ async test "native pre-visibility persistence failure mints no event and moves n
 ///|
 async test "native uncertain durability reloads the candidate then answers false with the new revision" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store = CommandScriptStore::CommandScriptStore()
       store.uncertain_persists = 1
       let runtime = board_native_runtime_store(group, store~, now_ms=() => 1234L)

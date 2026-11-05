@@ -48,7 +48,7 @@ fn[T] assert_rejected(
 ///|
 /// Attach, then await the startup restore. Tests below work against a Ready
 /// coordinator over the default private memory store.
-async fn ready_coordinator(group : @async.TaskGroup[Unit]) -> BoardCoordinator {
+async fn ready_coordinator(group : @core_async.TaskGroup) -> BoardCoordinator {
   let coordinator = BoardCoordinator::BoardCoordinator()
   coordinator.attach(group~)
   assert_true(coordinator.wait_ready() is Ok(_))
@@ -71,7 +71,7 @@ async test "coordinator requests fail clearly before attach" {
 
 ///|
 async test "the loop settles queued mutations in fifo order through their completion queues" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let actor = coordinator.actor.unwrap()
     // Raw mailbox tells, no ask barrier anywhere: only on_cmd plus its
@@ -99,7 +99,7 @@ async test "the loop settles queued mutations in fifo order through their comple
 
 ///|
 async test "mutations commit in fifo order and typed rejections keep state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let events = coordinator.submit(command=c_create("t1", 0L)).unwrap()
     assert_eq(events, [@domain.TaskCreated(id=cid("t1"), at_ms=1000L)])
@@ -131,7 +131,7 @@ async test "mutations commit in fifo order and typed rejections keep state" {
 
 ///|
 async test "two concurrent callers of one revision produce exactly one success" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let results = @async.all([
       () => coordinator.submit(command=c_create("t1", 0L)),
@@ -154,7 +154,7 @@ async test "two concurrent callers of one revision produce exactly one success" 
 
 ///|
 async test "attach is idempotent and keeps one committed state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let _ = coordinator.submit(command=c_create("t1", 0L))
     coordinator.attach(group~)
@@ -169,7 +169,7 @@ async test "attach is idempotent and keeps one committed state" {
 
 ///|
 async test "queries return detached copies" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let _ = coordinator.submit(command=c_create("t1", 0L))
     let first = coordinator.snapshot().unwrap()
@@ -199,7 +199,7 @@ async test "queries return detached copies" {
 
 ///|
 async test "shutdown closes admission and reattach restores the durable board" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = BoardCoordinator::BoardCoordinator()
     coordinator.attach(group~)
     assert_true(coordinator.wait_ready() is Ok(_))
@@ -251,7 +251,7 @@ fn c_create_dod(
 
 ///|
 async test "caller mutation while queued cannot alter the admitted command" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let dod : Array[String] = ["draft"]
     // The submit task deep-copies the command before its first suspension,
@@ -285,7 +285,7 @@ async test "caller mutation while queued cannot alter the admitted command" {
 
 ///|
 async test "shutdown cleanup completes even when the caller is cancelled" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
     let _ = coordinator.submit(command=c_create("t1", 0L))
     let task = group.spawn(() => coordinator.shutdown())
@@ -302,7 +302,7 @@ async test "shutdown cleanup completes even when the caller is cancelled" {
 
 ///|
 async test "stream_snapshot answers the live configured cursor per query" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let cursor : Ref[Int64] = Ref(0L)
     let coordinator = BoardCoordinator::BoardCoordinator(stream_cursor=() => {
       cursor.val
@@ -333,7 +333,7 @@ async test "stream_snapshot answers the live configured cursor per query" {
 
 ///|
 async test "on_commit observes every commit synchronously with detached inputs" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let observed : Array[Array[@domain.BoardEvent]] = []
     let revisions : Array[Int64] = []
     let coordinator = BoardCoordinator::BoardCoordinator(on_commit=(
@@ -368,7 +368,7 @@ async test "on_commit observes every commit synchronously with detached inputs" 
 
 ///|
 async test "startup recovery streams its recovery events exactly once" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let initial = snapshot_of(9L, [task_record("task", @domain.Running, 10L)], [])
     store.loads.push_back(LoadOk(load_of(initial)))

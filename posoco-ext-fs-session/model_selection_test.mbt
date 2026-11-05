@@ -1,6 +1,6 @@
 ///|
 /// model_selection_test.mbt — native tests for the session model-selection
-/// record: bus observation, save decoration, append fast-path line rewrite,
+/// record: event observation, save decoration, append fast-path line rewrite,
 /// and the summary projection.
 
 ///|
@@ -39,30 +39,56 @@ test "v2 selection preserves ownership and fails closed on mismatches" {
 }
 
 ///|
-/// Publish one `model_selection` bus event the way ext-llm's router does.
-fn publish_selection(
-  bus : @devkit.EventBus,
-  source~ : String = "posoco_ext_llm",
-  topic~ : String = "model_selection",
+/// The observation channel of one test: a fresh event system plus the
+/// capabilities the store and ext-llm's router publish/observe through. The
+/// host-injected capability keeps each test on its own system, exactly the way
+/// assembly mints `system.publisher(owner~)` per extension.
+struct SelectionChannel {
+  system : @posoco.EventSystem
+  publisher : @posoco.Events
+  store : @posoco.Events
+}
+
+///|
+fn selection_channel() -> SelectionChannel {
+  let system = @posoco.EventSystem()
+  let publisher = match system.publisher(owner="posoco_ext_llm") {
+    Ok(publisher) => publisher
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  let store = match system.publisher(owner="posoco_ext_fs_session") {
+    Ok(store) => store
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  { system, publisher, store, }
+}
+
+///|
+/// Publish one `ModelSelection` event the way ext-llm's router does, under an
+/// arbitrary owner so the publisher filter can be exercised.
+fn publish_selection_from(
+  system : @posoco.EventSystem,
+  owner~ : String,
   slot~ : String,
   effort~ : String? = None,
 ) -> Unit {
-  bus.publish({
-    source,
-    topic,
-    data: Json::object(
-      Map::from_array([
-        ("slot_id", Json::string(slot)),
-        (
-          "effort",
-          match effort {
-            Some(value) => Json::string(value)
-            None => Json::null()
-          },
-        ),
-      ]),
-    ),
-  })
+  let publisher = match system.publisher(owner~) {
+    Ok(publisher) => publisher
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  let payload : @kit_events.ModelSelectionPayload = { slot_id: slot, effort, }
+  ignore(publisher.publish(@kit_events.ModelSelection(payload)))
+}
+
+///|
+/// Publish one `ModelSelection` event under the ext-llm publisher id.
+fn publish_selection(
+  channel : SelectionChannel,
+  slot~ : String,
+  effort~ : String? = None,
+) -> Unit {
+  let payload : @kit_events.ModelSelectionPayload = { slot_id: slot, effort, }
+  ignore(channel.publisher.publish(@kit_events.ModelSelection(payload)))
 }
 
 ///|
@@ -165,12 +191,12 @@ test "metadata line rewrite touches line 1 only and keeps torn tails" {
 ///|
 async test "io[native]: observed selection decorates the next save" {
   let root = fresh_root("selection-save")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  publish_selection(bus, slot="qwen/glm-4.6", effort=Some("high"))
+  publish_selection(channel, slot="qwen/glm-4.6", effort=Some("high"))
   store.save("sess_sel", {
     messages: [selection_test_message("hi")],
     metadata: Map::from_array([("name", Json::string("keep"))]),
@@ -208,15 +234,24 @@ async test "io[native]: no observation leaves metadata untouched" {
 }
 
 ///|
-async test "io[native]: foreign bus traffic is ignored" {
+async test "io[native]: foreign event traffic is ignored" {
   let root = fresh_root("selection-foreign")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  publish_selection(bus, source="other_ext", slot="a/b")
-  publish_selection(bus, topic="model", slot="a/b")
+  // A different publisher: the identity rides the envelope, so the store's
+  // publisher filter (the typed replacement for `BusEvent.source`) rejects it.
+  publish_selection_from(channel.system, owner="other_ext", slot="a/b")
+  // A different event from the expected publisher is not a selection.
+  match
+    channel.publisher.publish(
+      @kit_events.StatusChanged(@kit_events.Unregister(segment="session")),
+    ) {
+    Ok(_) => ()
+    Err(_) => abort("publish on a fresh EventSystem failed")
+  }
   store.save("sess_foreign", { messages: [], metadata: Map::from_array([]), }) catch {
     e => fail("save failed: \{e}")
   }
@@ -232,12 +267,12 @@ async test "io[native]: foreign bus traffic is ignored" {
 ///|
 async test "io[native]: first append creates a decorated journal" {
   let root = fresh_root("selection-first-append")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  publish_selection(bus, slot="z/d")
+  publish_selection(channel, slot="z/d")
   let messages = [selection_test_message("first")]
   store.append_messages("sess_fresh", 0, messages[:]) catch {
     e => fail("append failed: \{e}")
@@ -255,10 +290,10 @@ async test "io[native]: first append creates a decorated journal" {
 ///|
 async test "io[native]: append rewrites line 1 after a selection change" {
   let root = fresh_root("selection-append")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
   store.save("sess_app", {
     messages: [selection_test_message("one")],
@@ -268,7 +303,7 @@ async test "io[native]: append rewrites line 1 after a selection change" {
   }
   let before = stored_metadata_line(root, "sess_app")
   assert_true(!before.contains("slot_id"))
-  publish_selection(bus, slot="qwen/glm-4.6", effort=Some("high"))
+  publish_selection(channel, slot="qwen/glm-4.6", effort=Some("high"))
   store.append_messages("sess_app", 1, [selection_test_message("two")][:]) catch {
     e => fail("append failed: \{e}")
   }
@@ -289,12 +324,12 @@ async test "io[native]: append rewrites line 1 after a selection change" {
 ///|
 async test "io[native]: append without a change keeps the metadata line" {
   let root = fresh_root("selection-fastpath")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  publish_selection(bus, slot="a/b")
+  publish_selection(channel, slot="a/b")
   store.save("sess_fast", {
     messages: [selection_test_message("one")],
     metadata: Map::from_array([]),
@@ -319,10 +354,10 @@ async test "io[native]: append without a change keeps the metadata line" {
 ///|
 async test "io[native]: corrupt metadata line is skipped, not crashed on" {
   let root = fresh_root("selection-corrupt")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
   store.save("sess_bad", {
     messages: [selection_test_message("one")],
@@ -335,7 +370,7 @@ async test "io[native]: corrupt metadata line is skipped, not crashed on" {
   @xfs.write_string_to_file(path, "not-json\n{corrupt") catch {
     _ => fail("seed corrupt failed")
   }
-  publish_selection(bus, slot="a/b")
+  publish_selection(channel, slot="a/b")
   store.append_messages("sess_bad", 1, [selection_test_message("two")][:]) catch {
     e => fail("append should not raise on corrupt line 1: \{e}")
   }
@@ -347,12 +382,12 @@ async test "io[native]: corrupt metadata line is skipped, not crashed on" {
 ///|
 async test "io[native]: checkpoint with metadata keeps the selection record" {
   let root = fresh_root("selection-checkpoint")
-  let bus = @devkit.EventBus()
+  let channel = selection_channel()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  publish_selection(bus, slot="a/b", effort=Some("low"))
+  publish_selection(channel, slot="a/b", effort=Some("low"))
   store.save("sess_ckpt", {
     messages: [selection_test_message("one")],
     metadata: Map::from_array([]),

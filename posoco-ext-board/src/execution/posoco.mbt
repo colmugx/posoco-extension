@@ -128,7 +128,11 @@ pub impl BoardExecutionAdapter for PosocoBoardExecutionAdapter with fn run(
     completed: false,
   }
   let exts : Array[&@posoco.Extension] = [gate, ..(self.extensions)()]
-  let agent = @posoco.Agent::Agent(exts~, config=self.config)
+  let agent = @posoco.Agent::Agent(
+    exts~,
+    config=self.config,
+    events=@posoco.EventSystem(),
+  )
   let result = agent.run_scoped(agent => {
     agent.run_turn(
       @kernel.UserMessage(content=[@kernel.Text(request.input)]),

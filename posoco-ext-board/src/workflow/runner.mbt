@@ -6,13 +6,13 @@ priv suberror WorkflowDeadline
 /// execution journal or background discovery loop is owned here.
 pub struct SequentialWorkflowRunner {
   priv orchestrator : @orchestration.BoardOrchestrator
-  priv group : @async.TaskGroup[Unit]
+  priv group : @core_async.TaskGroup
   priv now_ms : () -> Int64
   priv wake : @aqueue.Queue[Unit]
   priv history : Array[String]
   priv mut spec : WorkflowRunSpec?
   priv mut scope : Array[String]
-  priv mut worker : @async.Task[Unit]?
+  priv mut worker : @core_async.Task[Unit]?
   priv mut active : @execution.BoardExecutionHandle?
   priv mut phase : WorkflowPhase
   priv mut closed : Bool
@@ -38,7 +38,7 @@ pub struct SequentialWorkflowRunner {
 /// backend shutdown, and a false shutdown result must never be ignored.
 pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @core_async.TaskGroup,
   now_ms~ : () -> Int64 = @async.now,
 ) -> SequentialWorkflowRunner {
   {
@@ -357,7 +357,7 @@ async fn SequentialWorkflowRunner::drive(
     .max(1L)
     .to_int()
   let completed = @async.handle_cancellation(() => {
-    @async.with_task_group(deadline_scope => {
+    @core_async.with_task_group(deadline_scope => {
       deadline_scope.spawn_bg(no_wait=true, () => {
         @async.sleep(remaining)
         // Withdraw admission before cancellation is delivered through protected

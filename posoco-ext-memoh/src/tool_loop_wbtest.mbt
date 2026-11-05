@@ -47,6 +47,7 @@ async test "ephemeral Memoh store preserves one-turn tool loop" {
       @tk.tk_ext(id="tools", tools=[tools]),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
 
   let result = agent.run_turn(@tk.tk_user_msg("use echo"), "memoh-tool-loop")

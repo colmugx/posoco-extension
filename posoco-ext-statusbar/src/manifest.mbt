@@ -45,10 +45,18 @@ pub impl @posoco.Lifecycle for StatusBar with fn on_compose(
 pub extend StatusBar with @posoco.Lifecycle::{on_shutdown, on_start}
 
 ///|
-/// Nothing to release: the registry is in-process state with no retained
-/// resources beyond the composed UI reference.
+/// Release the bar's listener registration: the registry is in-process state
+/// with no other retained resources, so cancelling the subscription (which
+/// also drops the handler's reference to the bar) is the whole teardown.
+/// Cancelling is idempotent, and an already-closed system is a no-op.
 pub impl @posoco.Lifecycle for StatusBar with fn on_shutdown(self : StatusBar) -> Unit {
-  ignore(self)
+  match self.subscription {
+    Some(subscription) => {
+      subscription.cancel()
+      self.subscription = None
+    }
+    None => ()
+  }
 }
 
 ///|

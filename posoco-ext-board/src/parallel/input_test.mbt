@@ -5,7 +5,7 @@
 
 ///|
 async test "a denied input stops the wave without falling back to another task" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let resolver = parallel_resolver(available=["alpha/attempt-alpha-1"])
     resolver.denied.push("beta/attempt-beta-1")
     let h = parallel_harness(
@@ -35,7 +35,7 @@ async test "a denied input stops the wave without falling back to another task" 
 
 ///|
 async test "a missing input stops the wave before any dispatch" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta"],
@@ -60,7 +60,7 @@ async test "a missing input stops the wave before any dispatch" {
 
 ///|
 async test "status stays detached identity-only metadata that never dispatches" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     // The trusted host also knows delta's input metadata, so delta's Review
     // stage is its only reason to stay blocked instead of failing the wave.
     let h = parallel_harness(

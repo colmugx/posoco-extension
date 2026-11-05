@@ -551,6 +551,11 @@ pub(all) struct MCPToolBridge {
   /// connect, reconnect, or probe — must hold one (stdio spawns its child
   /// process on it). `None` until `attach`.
   mut group : @async.TaskGroup[Unit]?
+  /// Host-provided lifetime task group on posoco's `moonbitlang/core/async`
+  /// stack. Each connection's fuwaroid actor loop is spawned here (fuwaroid
+  /// 0.4 spawns on core async), while the transport above keeps running on
+  /// `group`. `None` until `attach` supplies it.
+  mut lifetime : @core_async.TaskGroup?
   /// Flips on the first `activate`; guards the Lazy on_start hook.
   mut activated : Bool
   /// Change signal for the runtime-seam catalog source. Bumped once per
@@ -589,6 +594,7 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
     mode: LoadMode::Eager,
     pending: [],
     group: None,
+    lifetime: None,
     activated: false,
     catalog_revision: 0,
     closing: false,
@@ -629,6 +635,7 @@ pub async fn MCPToolBridge::discover(
         mode,
         pending,
         group: None,
+        lifetime: None,
         contributions: None,
         reserved_names: [],
         published_names: [],
@@ -646,14 +653,31 @@ pub async fn MCPToolBridge::discover(
 }
 
 ///|
-/// Hand the bridge the host's long-lived task group. stdio servers spawn
-/// their child process on it, so the group must outlive every connection —
-/// a temporary group would SIGTERM the children when it closes.
+/// Hand the bridge the host's long-lived task groups. stdio servers spawn
+/// their child process on `group`, so it must outlive every connection —
+/// a temporary group would SIGTERM the children when it closes. `lifetime`
+/// is the host's `moonbitlang/core/async` group: every connection's fuwaroid
+/// actor loop is spawned there (fuwaroid 0.4 runs on posoco's core stack),
+/// and it must outlive the bridge just the same. Hosts that only probe
+/// unreachable servers may omit it; a connection that needs an actor fails
+/// honestly instead.
 pub fn MCPToolBridge::attach(
   self : MCPToolBridge,
   group : @async.TaskGroup[Unit],
+  lifetime? : @core_async.TaskGroup,
 ) -> Unit {
   self.group = Some(group)
+  match lifetime {
+    Some(lifetime) => self.lifetime = Some(lifetime)
+    None => ()
+  }
+}
+
+///|
+/// Honest message for a connect path without a lifetime group: the actor
+/// loop cannot be spawned, so no connection is created.
+fn missing_lifetime_message(name : String) -> String {
+  "MCP connect needs a core-async lifetime task group (fuwaroid 0.4) for '\{@devkit.sanitize_label(name)}'"
 }
 
 ///|
@@ -977,6 +1001,17 @@ async fn MCPToolBridge::connect_with_group(
       )
     }
   }
+  // The candidate is connected and its catalog validated; the actor loop is
+  // the last piece and it needs a core-async lifetime group. Refuse here —
+  // closing the fresh client — instead of committing a connection that could
+  // never serve a call.
+  let lifetime = match self.lifetime {
+    Some(lifetime) => lifetime
+    None => {
+      client.close()
+      return Err(missing_lifetime_message(config.name))
+    }
+  }
   let idx = if refill_slot >= 0 {
     refill_slot
   } else {
@@ -988,7 +1023,7 @@ async fn MCPToolBridge::connect_with_group(
       client,
       tools,
       idx,
-      group~,
+      lifetime~,
       expect_epoch=refill_epoch,
     ) {
     Ok(_) => Ok(())
@@ -1004,7 +1039,7 @@ async fn MCPToolBridge::connect_with_group(
 /// connect, probe, and the retire-then-refill of `reconnect_server`).
 /// Validates the candidate catalog for slot `idx` against the other slots
 /// (retired slots contribute their empty tool lists); only after validation
-/// stores the client, spawns the connection actor on `group`, writes the
+/// stores the client, spawns the connection actor on `lifetime`, writes the
 /// connection in place (appending when `idx` is one past the end), swaps the
 /// routing map, and registers the config. An in-place refill must land on
 /// the slot incarnation the caller observed (`expect_epoch`): a concurrent
@@ -1017,7 +1052,7 @@ fn MCPToolBridge::commit_connection(
   client : @client.MCPClient,
   tools : Array[@posoco.ToolDef],
   idx : Int32,
-  group~ : @async.TaskGroup[Unit],
+  lifetime~ : @core_async.TaskGroup,
   expect_epoch~ : Int32,
 ) -> Result[Unit, String] {
   // The slot may have vanished while the caller was suspended (e.g. close()
@@ -1052,7 +1087,7 @@ fn MCPToolBridge::commit_connection(
   let conn : MCPServerConn = {
     name: config.name,
     client: Some(client),
-    actor: Some(ConnActor::start(group~, client~)),
+    actor: Some(ConnActor::start(group=lifetime, client~)),
     cached_tools: tools,
     config,
     epoch: expect_epoch,

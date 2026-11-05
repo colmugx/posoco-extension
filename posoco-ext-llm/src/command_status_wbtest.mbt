@@ -64,9 +64,9 @@ fn status_test_slot() -> ModelSlot {
 
 ///|
 fn status_test_router(
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
 ) -> RouterModelPort raise @posoco.CompositionError {
-  RouterModelPort(slots=[status_test_slot()], bus~)
+  RouterModelPort(slots=[status_test_slot()], events~)
 }
 
 ///|
@@ -105,21 +105,37 @@ async test "status command reports active model facts" {
 
 ///|
 async test "status command surfaces cached quota windows" {
-  let bus = @devkit.EventBus()
-  let router = status_test_router(bus=Some(bus))
-  @devkit.publish_status_register(
-    bus,
-    source="posoco_ext_openai",
-    segment="5h",
-    priority=45,
-    value="62%",
+  let capture = StatusCapture::StatusCapture()
+  let router = status_test_router(
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
   )
-  @devkit.publish_status_register(
-    bus,
-    source="posoco_ext_openai",
-    segment="weekly",
-    priority=46,
-    value="13%",
+  // A peer provider announces its windows on the same channel.
+  let peer = capture.publisher(owner="posoco_ext_openai")
+  ignore(
+    peer.publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment="5h",
+          label=None,
+          priority=45,
+          value=Some("62%"),
+          color=None,
+        ),
+      ),
+    ),
+  )
+  ignore(
+    peer.publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment="weekly",
+          label=None,
+          priority=46,
+          value=Some("13%"),
+          color=None,
+        ),
+      ),
+    ),
   )
   let outcome = router.invoke("status", Json::null())
   match outcome {
@@ -129,10 +145,10 @@ async test "status command surfaces cached quota windows" {
     }
     _ => fail("expected successful status report")
   }
-  @devkit.publish_status_unregister(
-    bus,
-    source="posoco_ext_openai",
-    segment="5h",
+  ignore(
+    peer.publish(
+      @kit_events.StatusChanged(@kit_events.Unregister(segment="5h")),
+    ),
   )
   let after = router.invoke("status", Json::null())
   match after {
@@ -251,15 +267,25 @@ async test "status command renders registry readings as percent left" {
 }
 
 ///|
-async test "status command keeps bus windows over registry duplicates" {
-  let bus = @devkit.EventBus()
-  let router = status_test_router(bus=Some(bus))
-  @devkit.publish_status_register(
-    bus,
-    source="posoco_ext_openai",
-    segment="5h",
-    priority=45,
-    value="62%",
+async test "status command keeps announced windows over registry duplicates" {
+  let capture = StatusCapture::StatusCapture()
+  let router = status_test_router(
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
+  )
+  ignore(
+    capture
+    .publisher(owner="posoco_ext_openai")
+    .publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment="5h",
+          label=None,
+          priority=45,
+          value=Some("62%"),
+          color=None,
+        ),
+      ),
+    ),
   )
   let readings : Array[@devkit.QuotaReading] = [
     {
@@ -280,8 +306,8 @@ async test "status command keeps bus windows over registry duplicates" {
     },
   ]
   let (feedback, structured) = router.status_report(readings~)
-  // The bus-published value wins; the registry reading only fills the
-  // window the bus has not published.
+  // The announced value wins; the registry reading only fills the window
+  // nothing has announced.
   assert_true(feedback.contains("5h: 62%"))
   assert_false(feedback.contains("66%"))
   assert_true(feedback.contains("weekly: 87% left"))
@@ -291,7 +317,7 @@ async test "status command keeps bus windows over registry duplicates" {
         Some(Json::Object(quota)) =>
           match quota.get("5h") {
             Some(Json::String("62%")) => ()
-            _ => fail("expected the bus value in structured quota")
+            _ => fail("expected the announced value in structured quota")
           }
         _ => fail("expected structured quota object")
       }
@@ -374,20 +400,6 @@ pub impl @devkit.QuotaSource for StatusQuotaSource with fn read(
 pub extend StatusQuotaSource with @posoco/devkit.QuotaSource::{read}
 
 ///|
-/// Bus capture for the status invoke test.
-struct StatusBusCapture {
-  events : Array[@devkit.BusEvent]
-}
-
-///|
-impl @devkit.BusSubscriber for StatusBusCapture with fn on_bus_event(
-  self : StatusBusCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
-}
-
-///|
 async test "status invoke warms the statusbar segments" {
   let source : &@devkit.QuotaSource = StatusQuotaSource::{
     result: Ok([
@@ -403,20 +415,20 @@ async test "status invoke warms the statusbar segments" {
     calls: 0,
   }
   @devkit.quota_registry_register("provider-a", source)
-  let bus = @devkit.EventBus()
-  let capture = StatusBusCapture::{ events: [], }
-  bus.subscribe(capture)
-  let router = status_test_router(bus=Some(bus))
+  let capture = StatusCapture::StatusCapture()
+  let router = status_test_router(
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
+  )
   let outcome = router.invoke("status", Json::null())
   @devkit.quota_registry_unregister("provider-a")
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  // The composition-time model_selection seed shares the bus; the balance
-  // register may land at any index.
+  // The composition-time model_selection seed shares the channel; the
+  // balance register may land at any index.
   let mut balance_registered = false
   for event in capture.events {
-    if @devkit.decode_status_op(event)
+    if @kit_events.status_changed_of(event)
       is Some(
-        @devkit.StatusOp::Register(
+        @kit_events.StatusOp::Register(
           segment="balance",
           label=None,
           priority=45,

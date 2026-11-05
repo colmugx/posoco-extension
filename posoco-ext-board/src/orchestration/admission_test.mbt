@@ -1,6 +1,6 @@
 ///|
 async test "planning inspects metadata without input reservation or effects; default admission disabled" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -37,7 +37,7 @@ async test "planning inspects metadata without input reservation or effects; def
 
 ///|
 async test "explicit dispatch occupies single slot and status reports real identity without prompting data" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true)
     let owner = @execution.BoardExecutionOwner(
@@ -73,7 +73,7 @@ async test "explicit dispatch occupies single slot and status reports real ident
 
 ///|
 async test "concurrent dispatch resolver and multiple facades cannot admit two runs" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true)
     let journal = orch_journal(hold_at=1)
@@ -116,7 +116,7 @@ async test "concurrent dispatch resolver and multiple facades cannot admit two r
 
 ///|
 async test "stale planning revision returns updated plan without resolving input" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -145,7 +145,7 @@ async test "stale planning revision returns updated plan without resolving input
 
 ///|
 async test "revision changes during async authorization discard resolved input without automatic retry" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -180,7 +180,7 @@ async test "revision changes during async authorization discard resolved input w
 
 ///|
 async test "input metadata and actual authorization both fail closed; invalid identities never reserve" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -240,7 +240,7 @@ async test "input metadata and actual authorization both fail closed; invalid id
 
 ///|
 async test "owner inspection distinguishes unattached unavailable and closed headless state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let owner = @execution.BoardExecutionOwner(
       backend~,
@@ -269,7 +269,7 @@ async test "owner inspection distinguishes unattached unavailable and closed hea
 
 ///|
 async test "metadata authorization withdrawal during resolver returns stale plan without reservation" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()

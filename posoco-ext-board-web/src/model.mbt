@@ -1,11 +1,12 @@
 ///|
+#derive(Eq)
 pub(all) enum ConnectionState {
   Connecting
   Online
   Reconnecting
   Offline
   ProtocolError(String)
-} derive(Eq)
+}
 
 ///|
 pub extend ConnectionState with Eq::{equal, not_equal}
@@ -14,23 +15,26 @@ pub extend ConnectionState with Eq::{equal, not_equal}
 /// Which authoritative baseline the replica holds, so operational status can
 /// distinguish a first snapshot, a reconnect on a retained baseline and an
 /// invalidated baseline that needs a fresh snapshot.
+#derive(Eq)
 priv enum BaselineState {
   AwaitingFirst
   Confirmed
   Retained
   Invalidated
-} derive(Eq)
+}
 
 ///|
 /// Pure local view filter. It never sends anything and never touches the
 /// replica, the selection or any draft.
+#derive(Eq)
 priv struct TaskFilter {
   query : String
   priority : @client.ClientBoardPriority?
   stage : @client.ClientBoardStage?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct Model {
   replica : @client.BoardReplica
   connection : ConnectionState
@@ -75,7 +79,7 @@ priv struct Model {
   team_profile_draft : WorkProfile
   team_tab : String
   sm_draft : String
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {

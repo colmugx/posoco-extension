@@ -127,7 +127,7 @@ pub async fn serve(
       (input, tools, max_pending, max_frame_bytes)
     _ => raise Failure::Failure("expected invocation after hello")
   }
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     // Request registration, id allocation, reply settlement and the closed
     // state all fold through one private single-writer loop, so no request
     // map is shared between the reader and the callers. The loop never

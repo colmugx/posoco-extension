@@ -82,7 +82,7 @@ impl @posoco.ToolProvider for ToolCaptureAgent with fn execute(self, _ctx) {
 
 ///|
 async test "explicit successful-tool capture is one-shot exact-binding and default stays tool-free" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let model : ToolCaptureAgent = { calls: 0, executions: 0, }
     let channel = @execution.BoardExecutionResultChannel(

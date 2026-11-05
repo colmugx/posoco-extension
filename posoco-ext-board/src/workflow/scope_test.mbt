@@ -6,7 +6,7 @@
 
 ///|
 async test "the runner copies the selected scope and never mutates caller state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha", "beta"])
     let selection = ["alpha"]
     assert_true(
@@ -32,7 +32,7 @@ async test "the runner copies the selected scope and never mutates caller state"
 
 ///|
 async test "manual mutation while paused removes eligibility without cancelling" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     assert_true(h.runner.pause())
@@ -55,7 +55,7 @@ async test "manual mutation while paused removes eligibility without cancelling"
 
 ///|
 async test "tasks created after start stay outside the frozen scope" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -83,7 +83,7 @@ async test "tasks created after start stay outside the frozen scope" {
 
 ///|
 async test "new attempts on a scoped task are fresh admissions and spent attempts never replay" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],

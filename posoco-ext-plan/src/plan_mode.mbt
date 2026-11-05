@@ -122,9 +122,11 @@ pub(all) struct PlanMode {
   config : PlanModeConfig
   /// Optional host-injected review for the exit tool (see `review.mbt`).
   review : &PlanReviewSource?
-  /// Optional cross-extension bus: carries the tool-exemption report at
-  /// construction and plan-status facts on every transition.
-  bus : @devkit.EventBus?
+  /// Optional event capability: carries the tool-exemption report at
+  /// construction and plan-status facts on every transition. The host mints
+  /// it with `EventSystem::publisher(owner="posoco_ext_plan")`, so every
+  /// publication is stamped `Extension("posoco_ext_plan")`.
+  events : @posoco.Events?
   /// Optional workspace filesystem for plan-file persistence (see
   /// `plan_file.mbt`); without it planning stays in-memory.
   fs : &@workspace.WorkspaceFs?
@@ -180,30 +182,30 @@ pub(all) struct PlanMode {
 pub fn PlanMode::PlanMode(
   config~ : PlanModeConfig = PlanModeConfig::default(),
   review~ : &PlanReviewSource? = None,
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
   fs~ : &@workspace.WorkspaceFs? = None,
   anchor~ : @devkit.WorkspaceAnchor? = None,
   session_name~ : String = "",
 ) -> PlanMode {
-  // Report the enter/exit tools on the `tool_exemptions` bus topic so a
-  // subscribed permission gate lets them bypass its approval asks — their
-  // governance lives here (the plan-review seam), not there. Fire-and-
-  // forget: the receiving gate must already be subscribed, i.e. hosts
-  // construct the policy before this constructor runs.
-  match bus {
-    Some(bus) => {
+  // Report the enter/exit tools as `ToolExemptions` so a subscribed
+  // permission gate lets them bypass its approval asks — their governance
+  // lives here (the plan-review seam), not there. Fire-and-forget: the
+  // receiving gate must already be subscribed, i.e. hosts subscribe the
+  // policy before this constructor runs.
+  match events {
+    Some(events) => {
       let tools : Array[String] = [config.exit_tool_name]
       if config.allow_model_entry {
         tools.push(config.enter_tool_name)
       }
-      publish_tool_exemptions(bus, tools~)
+      publish_tool_exemptions(events, tools~)
     }
     None => ()
   }
   {
     config,
     review,
-    bus,
+    events,
     fs,
     anchor,
     session_name,
@@ -223,41 +225,52 @@ pub fn PlanMode::set_session_name(self : PlanMode, name : String) -> Unit {
 }
 
 ///|
-/// Publish the plan status on the bus so peers (status bar, host UI) can
-/// render it without polling. Convention: the devkit status protocol —
-/// segment `"plan"` at priority 10, value `"Plan"` while planning or
-/// awaiting approval, unregistered once off. Register is idempotent on the
-/// consumer side (the owner's re-register keeps `first_seen`), so calling
-/// it on every active transition is safe.
+/// Publish the plan status so peers (status bar, host UI) can render it
+/// without polling. Convention: the devkit status protocol — segment
+/// `"plan"` at priority 10, value `"Plan"` while planning or awaiting
+/// approval, unregistered once off — now carried as typed
+/// `@kit_events.StatusChanged` ops. Register is idempotent on the consumer
+/// side (the owner's re-register keeps `first_seen`), so calling it on
+/// every active transition is safe.
 fn PlanMode::publish_status(self : PlanMode) -> Unit {
-  match self.bus {
-    Some(bus) =>
+  match self.events {
+    Some(events) =>
       match self.status {
         Off =>
-          @devkit.publish_status_unregister(
-            bus,
-            source="posoco_ext_plan",
-            segment="plan",
+          ignore(
+            events.publish(
+              @kit_events.StatusChanged(@kit_events.Unregister(segment="plan")),
+            ),
           )
         Planning =>
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_plan",
-            segment="plan",
-            priority=10,
-            value="Plan",
-            color="accent",
+          ignore(
+            events.publish(
+              @kit_events.StatusChanged(
+                @kit_events.Register(
+                  segment="plan",
+                  label=None,
+                  priority=10,
+                  value=Some("Plan"),
+                  color=Some("accent"),
+                ),
+              ),
+            ),
           )
         // While a plan waits, the status bar names it — the wait can span
         // turns, and a bare "Plan" stops telling the user what is pending.
         ReadyForApproval(name~, ..) =>
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_plan",
-            segment="plan",
-            priority=10,
-            value="Plan: \{name}",
-            color="accent",
+          ignore(
+            events.publish(
+              @kit_events.StatusChanged(
+                @kit_events.Register(
+                  segment="plan",
+                  label=None,
+                  priority=10,
+                  value=Some("Plan: \{name}"),
+                  color=Some("accent"),
+                ),
+              ),
+            ),
           )
       }
     None => ()

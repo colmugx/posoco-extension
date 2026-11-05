@@ -105,6 +105,33 @@ fn msg_stop() -> Array[String] {
 }
 
 ///|
+/// A streaming Messages turn carrying `text` as one text block. Host-level
+/// tests drive real `run_turn`s, and the kernel always requests the stream
+/// form, so their scripted POST must answer with SSE lines.
+fn messages_text_stream_of(text~ : String) -> Array[String] {
+  sse_script([
+    msg_start(id="msg_text", model="claude-served"),
+    block_start(
+      index=0,
+      block=Json::object({
+        "type": Json::string("text"),
+        "text": Json::string(""),
+      }),
+    ),
+    block_delta(
+      index=0,
+      delta=Json::object({
+        "type": Json::string("text_delta"),
+        "text": Json::string(text),
+      }),
+    ),
+    block_stop(index=0),
+    msg_delta(stop_reason="end_turn", output_tokens=5),
+    msg_stop(),
+  ])
+}
+
+///|
 /// A streaming Messages turn: thinking (with signature), then text.
 fn messages_thinking_stream() -> Array[String] {
   sse_script([

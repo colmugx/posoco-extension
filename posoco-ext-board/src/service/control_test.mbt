@@ -2,7 +2,7 @@
 async test "control joins a dependency chain with exact evidence and legal stages without Review approval" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group, max_executions=6)
     defer ignore(h.board.shutdown())
     let committed = proposed(h)
@@ -126,7 +126,7 @@ async test "control joins a dependency chain with exact evidence and legal stage
 async test "control is default denied duplicate scopes rejected and a revoked lease does not replenish budgets" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group, max_executions=6)
     defer ignore(h.board.shutdown())
     let committed = proposed(h)

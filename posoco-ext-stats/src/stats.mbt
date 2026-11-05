@@ -12,9 +12,9 @@
 /// ratio, prefixed `≈`), replaced by the exact rate when the round settles;
 /// a mid-stream `Usage` chunk makes the live rate exact early. Everything
 /// publishes through the devkit status protocol (segments `ttft`/`tps`/
-/// `avg`/`cache`, priorities 50/60/70/80, source `posoco_ext_stats`); with
-/// `bus = None` the observer still maintains its state and publishes
-/// nowhere.
+/// `avg`/`cache`, priorities 50/60/70/80, source `posoco_ext_stats`) on the
+/// process default event system; without a registered channel publication is
+/// a silent no-op and the observer still maintains its state.
 ///
 /// Rates above `max_plausible_tps` are treated as unmeasurable: proxy
 /// buffering, bulk tool-argument delivery, and post-stall network flushes
@@ -36,7 +36,6 @@
 /// is an explicit zero-hit report. The clock is injectable for deterministic
 /// tests; `live_interval_ms` throttles live publishes (default 250ms).
 pub struct Stats {
-  bus : @devkit.EventBus?
   clock : () -> Int64
   live_interval_ms : Int64
   max_plausible_tps : Double
@@ -80,13 +79,11 @@ pub struct CacheBucket {
 
 ///|
 pub fn Stats::Stats(
-  bus~ : @devkit.EventBus? = None,
   clock~ : () -> Int64 = fn() { @async.now() },
   live_interval_ms~ : Int64 = 250,
   max_plausible_tps~ : Double = 2500.0,
 ) -> Stats {
   {
-    bus,
     clock,
     live_interval_ms,
     max_plausible_tps,
@@ -253,24 +250,19 @@ fn Stats::reset_round(self : Stats) -> Unit {
 }
 
 ///|
-/// Publish one status segment. No-op without a bus.
+/// Publish one status segment. No-op without a registered event channel.
 fn Stats::publish_segment(
-  self : Stats,
+  _self : Stats,
   segment~ : String,
   priority~ : Int32,
   value~ : String,
 ) -> Unit {
-  match self.bus {
-    Some(bus) =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_stats",
-        segment~,
-        priority~,
-        value~,
-      )
-    None => ()
-  }
+  @devkit.publish_status_register(
+    source="posoco_ext_stats",
+    segment~,
+    priority~,
+    value~,
+  )
 }
 
 ///|
@@ -325,9 +317,6 @@ fn Stats::note_delta(self : Stats, chars : Int32) -> Unit {
 /// marked `≈`. Rates above `max_plausible_tps` are not published and do
 /// not consume the throttle slot.
 fn Stats::publish_live(self : Stats, now : Int64) -> Unit {
-  if self.bus is None {
-    return
-  }
   let first = match self.first_token_ms {
     Some(first) => first
     None => return

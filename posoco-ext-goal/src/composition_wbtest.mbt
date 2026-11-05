@@ -22,6 +22,7 @@ fn cw_compose_agent(
       goal,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   ) catch {
     e => abort("Agent failed: \{e}")
   }

@@ -13,13 +13,13 @@ priv struct OwnedExecution {
 priv struct ExecutionSlot {
   adapter : &BoardExecutionAdapter
   mut execution : OwnedExecution?
-  mut worker : @async.Task[BoardExecutionBinding]?
+  mut worker : @core_async.Task[BoardExecutionBinding]?
 }
 
 ///|
 pub struct BoardExecutionHandle {
   priv execution_id_ : String
-  priv task : @async.Task[BoardExecutionBinding]
+  priv task : @core_async.Task[BoardExecutionBinding]
 }
 
 ///|
@@ -49,7 +49,7 @@ pub struct BoardExecutionOwner {
   priv backend : @backend.BoardBackend
   priv store : &BoardExecutionStore
   priv mutex : @async.Mutex
-  priv mut group : @async.TaskGroup[Unit]?
+  priv mut group : @core_async.TaskGroup?
   priv mut records_ : Array[BoardExecutionBinding]
   priv mut loaded : Bool
   priv mut closed : Bool
@@ -150,7 +150,7 @@ pub fn BoardExecutionOwner::with_slots(
 /// external termination.
 pub async fn BoardExecutionOwner::attach(
   self : BoardExecutionOwner,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Result[Unit, BoardExecutionError] {
   if self.closed {
     return Err(Closed)
@@ -607,7 +607,7 @@ pub async fn BoardExecutionOwner::shutdown(
 ) -> Bool {
   self.closed = true
   @async.protect_from_cancel(() => {
-    let workers : Array[@async.Task[BoardExecutionBinding]] = []
+    let workers : Array[@core_async.Task[BoardExecutionBinding]] = []
     for slot in self.slots {
       match slot.worker {
         Some(task) => {

@@ -1,8 +1,9 @@
 ///|
 /// `/status` command: a read-only report of the active provider's facts —
 /// model, context window, reasoning efforts, and any quota readings the
-/// provider has published on the shared bus or registered in the devkit
-/// quota registry (bus windows win over registry duplicates).
+/// provider has announced as `StatusChanged` ops on the event channel or
+/// registered in the devkit quota registry (announced windows win over
+/// registry duplicates).
 
 ///|
 /// `/status` accepts no arguments. Tolerate the "nothing after the slash"
@@ -54,10 +55,10 @@ fn format_status_percent(value : Double) -> String {
 
 ///|
 /// Build the `/status` feedback text and structured payload from the active
-/// slot plus the bus-cached quota segments ("5h", "weekly") and optional
-/// pull-style registry readings. Bus windows win: registry readings only
-/// fill windows the bus has not published, and a reading that states
-/// nothing is skipped rather than estimated. Package-visible: the
+/// slot plus the event-cached quota segments ("5h", "weekly") and optional
+/// pull-style registry readings. Announced windows win: registry readings only
+/// fill windows nothing has announced, and a reading that states nothing is
+/// skipped rather than estimated. Package-visible: the
 /// CommandPort impl in command_model.mbt wraps it into a CommandOutcome.
 fn RouterModelPort::status_report(
   self : RouterModelPort,

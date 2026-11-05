@@ -81,26 +81,20 @@ fn Profiles::activation_message(
 }
 
 ///|
-/// Fire-and-forget product notification: topic `profiles.activated`,
-/// payload `{id, members}`. Publishing with no bus or no subscribers is a
-/// no-op by the bus contract.
+/// Fire-and-forget product notification: `@kit_events.ProfilesActivated`,
+/// payload `{id, members}`. Publishing with no capability or no subscribers
+/// is a no-op by the event contract, and a closed system is not an error
+/// path (`publish` returns `Err(Closed)` at shutdown and the notice is
+/// dropped).
 fn Profiles::publish_activated(self : Profiles, id : String) -> Unit {
-  match self.bus {
-    Some(bus) => {
+  match self.events {
+    Some(events) => {
       let members = match self.find_entry(id) {
         Some(entry) => entry.members
         None => []
       }
-      bus.publish({
-        source: "posoco_ext_profiles",
-        topic: "profiles.activated",
-        data: Json::object(
-          Map::from_array([
-            ("id", Json::string(id)),
-            ("members", Json::array(members.map(fn(m) { Json::string(m) }))),
-          ]),
-        ),
-      })
+      let payload : @kit_events.ProfilesActivatedPayload = { id, members, }
+      ignore(events.publish(@kit_events.ProfilesActivated(payload)))
     }
     None => ()
   }

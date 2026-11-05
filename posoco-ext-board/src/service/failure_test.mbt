@@ -2,7 +2,7 @@
 async test "provider failure is durably settled without exposing raw provider details" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group)
     defer ignore(h.board.shutdown())
     let initial = h.board.start(title="Provider failure").checked()

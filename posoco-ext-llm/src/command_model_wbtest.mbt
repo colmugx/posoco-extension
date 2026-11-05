@@ -320,9 +320,7 @@ async test "model command emits the provider-declared display group" {
 
 ///|
 async test "model switch republishes the model segment with the new slot" {
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],
   }
@@ -343,7 +341,7 @@ async test "model switch republishes the model segment with the new slot" {
         port~,
       ),
     ],
-    bus=Some(bus),
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
   )
   let outcome = router.invoke(
     "model",
@@ -352,9 +350,9 @@ async test "model switch republishes the model segment with the new slot" {
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
   assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(router_visible_events(capture)[0]),
+    @kit_events.status_changed_of(router_visible_events(capture)[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="model",
         label=None,
         priority=20,
@@ -363,25 +361,17 @@ async test "model switch republishes the model segment with the new slot" {
       ),
     ),
   )
-  assert_eq(router_visible_events(capture)[1].topic, "provider")
-  match router_visible_events(capture)[1].data {
-    Json::Object(fields) =>
-      match fields.get("provider_id") {
-        Some(Json::String("provider-b")) => ()
-        _ => fail("expected provider_id of the newly active slot")
-      }
-    _ => fail("expected a provider event payload object")
-  }
+  assert_eq(router_provider_events(router_visible_events(capture)), [
+    "provider-b",
+  ])
 }
 
 ///|
 async test "effort switch republishes the model segment" {
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
   let router = RouterModelPort(
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
-    bus=Some(bus),
+    events=Some(capture.publisher(owner="posoco_ext_llm")),
   )
   let outcome = router.invoke(
     "effort",
@@ -390,9 +380,9 @@ async test "effort switch republishes the model segment" {
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
   assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(router_visible_events(capture)[0]),
+    @kit_events.status_changed_of(router_visible_events(capture)[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="model",
         label=None,
         priority=20,
@@ -401,19 +391,11 @@ async test "effort switch republishes the model segment" {
       ),
     ),
   )
-  assert_eq(router_visible_events(capture)[1].topic, "provider")
-  match router_visible_events(capture)[1].data {
-    Json::Object(fields) =>
-      match fields.get("provider_id") {
-        Some(Json::String("one")) => ()
-        _ => fail("expected the active slot's provider id")
-      }
-    _ => fail("expected a provider event payload object")
-  }
+  assert_eq(router_provider_events(router_visible_events(capture)), ["one"])
 }
 
 ///|
-async test "commands with no bus stay silent and succeed" {
+async test "commands with no capability stay silent and succeed" {
   let router = command_test_router()
   let outcome = router.invoke(
     "model",

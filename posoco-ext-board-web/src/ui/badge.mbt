@@ -35,12 +35,14 @@ fn chip_variant(tone : ChipTone) -> @rui.BadgeVariant {
 /// is the documented RUI override path.
 fn chip_style(tone : ChipTone) -> Array[String] {
   match tone {
-    Success => [
-      "background: var(--ok-soft)", "color: var(--ok)", "border-color: transparent",
-    ]
-    Warn => [
-      "background: var(--warn-soft)", "color: var(--warn)", "border-color: transparent",
-    ]
+    Success =>
+      [
+        "background: var(--ok-soft)", "color: var(--ok)", "border-color: transparent",
+      ]
+    Warn =>
+      [
+        "background: var(--warn-soft)", "color: var(--warn)", "border-color: transparent",
+      ]
     Muted => ["opacity: 0.72"]
     _ => []
   }

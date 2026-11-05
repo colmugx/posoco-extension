@@ -5,12 +5,17 @@
 /// Persistent JSONL-backed session store.
 pub(all) struct JsonlSessionStore {
   root_dir : String
-  bus : @devkit.EventBus?
+  /// The cross-extension event capability this store publishes status on and
+  /// observes the ext-llm selection through. Injected by the host
+  /// (`system.publisher(owner~)`) or resolved from the process default system
+  /// at construction; `None` means "no channel", which keeps every
+  /// publication and observation a silent no-op.
+  events : @posoco.Events?
   /// Id of the session this store last persisted successfully; the /name
   /// command targets it, so slash consumers need no explicit session id.
   mut current_id : String?
-  /// Latest ext-llm selection observed on the bus; `None` = no observation,
-  /// in which case persisted metadata is never decorated.
+  /// Latest ext-llm selection observed on the event channel; `None` = no
+  /// observation, in which case persisted metadata is never decorated.
   mut observed_selection : (String, String?)?
   /// Selection already reflected in the persisted metadata line, so the
   /// append fast path only rewrites line 1 after an observed change.
@@ -31,13 +36,17 @@ pub(all) struct JsonlSessionStore {
 ///|
 pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
-  bus~ : @devkit.EventBus? = None,
+  /// Host-minted owner-bound capability (`system.publisher(owner~)`). Absent,
+  /// the store falls back to the process default system registered before
+  /// construction.
+  events? : @posoco.Events,
   selection_control~ : &@modelmgmt.ModelManagerControl? = None,
   cwd~ : String? = None,
 ) -> JsonlSessionStore {
+  let events = resolve_session_events(events)
   let store : JsonlSessionStore = {
     root_dir,
-    bus,
+    events,
     current_id: None,
     observed_selection: None,
     written_selection: None,
@@ -48,7 +57,7 @@ pub fn JsonlSessionStore::JsonlSessionStore(
     selection_revision: 0L,
     cwd,
   }
-  store.subscribe_model_selection(bus)
+  store.subscribe_model_selection()
   store
 }
 
@@ -205,7 +214,7 @@ pub impl @posoco.SessionPort for JsonlSessionStore with fn save(
         "jsonl: failed to write " + path + ": " + xfs_error_detail(e),
       )
   }
-  publish_session_status(self.bus, id)
+  self.publish_session_status(id)
   self.current_id = Some(id)
   self.mark_selection_written(self.observed_selection)
   self.written_session_id = Some(id)
@@ -244,7 +253,7 @@ pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
           "jsonl: failed to write " + path + ": " + xfs_error_detail(e),
         )
     }
-    publish_session_status(self.bus, id)
+    self.publish_session_status(id)
     self.current_id = Some(id)
     self.mark_selection_written(self.observed_selection)
     self.written_session_id = Some(id)
@@ -282,7 +291,7 @@ pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
     }
   }
   file.close()
-  publish_session_status(self.bus, id)
+  self.publish_session_status(id)
   self.current_id = Some(id)
   if metadata_written {
     self.mark_selection_written(self.observed_selection)

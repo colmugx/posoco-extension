@@ -12,13 +12,18 @@ pub struct RateLimitGuard {
   priv now_ms : () -> Int64
   priv sleep_ms : async (Int32) -> Unit
   priv trace : (String) -> Unit
-  priv status_sink : DevkitStatusSink
+  priv status_sink : RecoveryStatusSink
   priv shutdown_timeout_ms : Int32
 }
 
 ///|
 /// Compatibility-friendly constructor. poll_interval_ms is accepted so 0.3
 /// callers still compile, but event-driven scheduling no longer polls.
+///
+/// The status channel is not a constructor argument: the guard declares
+/// `Capability::Events` and takes the owner-bound `@posoco.Events` capability
+/// from `CompositionView::events()` in `on_compose`. A guard that is never
+/// composed publishes no segment.
 pub fn RateLimitGuard::RateLimitGuard(
   resume_note~ : String = "continue",
   margin_ms~ : Int64 = 0,
@@ -27,10 +32,11 @@ pub fn RateLimitGuard::RateLimitGuard(
   probe_interval_ms~ : Int64 = 900000,
   max_probe_interval_ms~ : Int64 = 3600000,
   shutdown_timeout_ms~ : Int32 = 5000,
-  now_ms~ : () -> Int64 = fn() { @async.now() },
-  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) { @async.sleep(ms) },
+  now_ms~ : () -> Int64 = fn() { @core_async.now() },
+  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) {
+    @core_async.sleep(ms)
+  },
   trace~ : (String) -> Unit = fn(_ : String) { () },
-  bus~ : @devkit.EventBus? = None,
 ) -> RateLimitGuard {
   ignore(poll_interval_ms)
   {
@@ -46,7 +52,7 @@ pub fn RateLimitGuard::RateLimitGuard(
     now_ms,
     sleep_ms,
     trace,
-    status_sink: DevkitStatusSink(bus),
+    status_sink: RecoveryStatusSink::RecoveryStatusSink(),
     shutdown_timeout_ms,
   }
 }
@@ -63,9 +69,13 @@ pub fn RateLimitGuard::bind(
 
 ///|
 /// Start the serialized runtime and its Supervisor on the host task group.
+///
+/// The group is the host's `moonbitlang/core/async` `TaskGroup` — the one
+/// Posoco 0.24 and Fuwaroid 0.4 spawn on, so recovery effects and the actor
+/// loop share the host's structured-concurrency lifetime.
 pub fn RateLimitGuard::start(
   self : RateLimitGuard,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @core_async.TaskGroup,
   agent~ : @posoco.Agent,
 ) -> Unit {
   self.agent = Some(agent)
@@ -98,7 +108,7 @@ pub fn RateLimitGuard::start(
         }
         match outcome {
           Ok(_) => resumed = true
-          Err(@posoco.AgentError::Busy(..)) => @async.sleep(1)
+          Err(@posoco.AgentError::Busy(..)) => @core_async.sleep(1)
           Err(error) => raise error
         }
       }
@@ -114,7 +124,7 @@ pub fn RateLimitGuard::start(
 /// it starts the event-driven runtime on the supplied host group.
 pub fn RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   match self.agent {
     Some(agent) => self.start(group~, agent~)
@@ -293,10 +303,21 @@ pub impl @posoco.Observer for RateLimitGuard with fn on_event(
 pub extend RateLimitGuard with @posoco.Observer::{on_event}
 
 ///|
+/// Bind the status channel before the first publish: the host mints the
+/// owner-bound `Events` capability and hands it to every extension that
+/// declares `Capability::Events`.
+pub impl @posoco.Lifecycle for RateLimitGuard with fn on_compose(
+  self : RateLimitGuard,
+  view : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.status_sink.bind(view.events())
+}
+
+///|
 pub impl @posoco.Lifecycle for RateLimitGuard with fn on_shutdown(
   self : RateLimitGuard,
 ) -> Unit {
-  let _ = @async.protect_from_cancel(() => self.shutdown())
+  let _ = @core_async.protect_from_cancel(() => self.shutdown())
 }
 
 ///|
@@ -322,6 +343,7 @@ pub impl @posoco.Extension for RateLimitGuard with fn manifest(
     observers=[self],
     hooks=[self],
     lifecycle=[self],
+    requires=[@posoco.Capability::Events],
   )
 }
 

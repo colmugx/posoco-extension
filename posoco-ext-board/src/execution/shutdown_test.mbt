@@ -36,7 +36,7 @@ impl @execution.BoardExecutionAdapter for SlowCleanupAdapter with fn run(
 
 ///|
 async test "bounded shutdown retains ownership and cannot claim Cancelled before driver cleanup confirms termination" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let driver : SlowCleanupAdapter = {
       entered: @aqueue.Queue(kind=Unbounded),
@@ -122,7 +122,7 @@ impl @runtime.BrowserOpener for NoBrowser with fn open(_self, _url) {
 
 ///|
 async test "closing standalone presentation does not cancel headless owned execution" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let server : PresentationServer = {
       installed: false,

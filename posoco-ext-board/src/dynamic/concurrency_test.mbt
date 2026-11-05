@@ -9,7 +9,7 @@ async fn dynamic_until(check : () -> Bool) -> Unit {
 
 ///|
 async test "two active executions keep exact identities while proposals wait and planning admission is denied" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     let ids = dynamic_commit(h, id="initial")
     ignore(dynamic_authorize(h, ids, id="initial").unwrap())
@@ -94,7 +94,7 @@ async test "two active executions keep exact identities while proposals wait and
 
 ///|
 async test "parent edits during an actual planning turn invalidate the emitted revision without graph effects" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     dynamic_queue(h, "parent", "planning")
     let revision = h.board.state().unwrap().revision
@@ -146,7 +146,7 @@ async test "parent edits during an actual planning turn invalidate the emitted r
 
 ///|
 async test "cancellation joins the exact owned planning run and preserves its charged budget" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     dynamic_queue(h, "parent", "planning")
     h.model.payload = dynamic_payload(h.board.state().unwrap().revision + 2L)
@@ -211,7 +211,7 @@ impl @execution.BoardExecutionStore for FailingExecutionJournal with fn persist(
 
 ///|
 async test "unresolved owned execution blocks shutdown and cannot cross-settle another Attempt" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let journal = { inner: @execution.MemoryBoardExecutionStore(), }
     let h = dynamic_harness(group, execution_store=Some(journal))
     let ids = dynamic_commit(h)
@@ -242,7 +242,7 @@ async test "unresolved owned execution blocks shutdown and cannot cross-settle a
 
 ///|
 async test "boundary wait does not mistake a paused runner for a joined planning operation" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     dynamic_queue(h, "parent", "planning")
     h.model.payload = dynamic_payload(h.board.state().unwrap().revision + 2L)

@@ -14,7 +14,7 @@ async fn controlled_wait_paused(h : ParallelHarness) -> Unit {
 
 ///|
 async test "controlled scope is append-only detached and inaccessible to ordinary static workflows" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["a", "b"])
     let selected = ["a"]
     ignore(
@@ -70,7 +70,7 @@ async test "controlled scope is append-only detached and inaccessible to ordinar
 
 ///|
 async test "controlled waves fan in fully before extending scope and never re-admit historical Attempts" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["a", "b", "c"], capacity=2, hold=[
       "attempt-a-1", "attempt-b-1",
     ])
@@ -132,7 +132,7 @@ async test "controlled waves fan in fully before extending scope and never re-ad
 
 ///|
 async test "planning reservations consume original execution and elapsed budgets without becoming fake settlements" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["a"])
     ignore(
       h.runner

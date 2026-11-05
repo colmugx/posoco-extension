@@ -55,7 +55,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
                 }
               _ => ()
             }
-            out[role] = { enabled, all, servers, tools }
+            out[role] = { enabled, all, servers, tools, }
           }
           _ => ()
         }
@@ -92,7 +92,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
                 }
               _ => ()
             }
-            out[role] = { enabled, all, skills: names }
+            out[role] = { enabled, all, skills: names, }
           }
           _ => ()
         }
@@ -116,10 +116,26 @@ fn ticket_state_from_json(value : Json) -> TicketState {
         } else {
           defaults.po
         },
-        sm: if name("sm") == "" { defaults.sm } else { name("sm") },
-        rd: if name("rd") == "" { defaults.rd } else { name("rd") },
-        set: if name("set") == "" { defaults.set } else { name("set") },
-        te: if name("te") == "" { defaults.te } else { name("te") },
+        sm: if name("sm") == "" {
+          defaults.sm
+        } else {
+          name("sm")
+        },
+        rd: if name("rd") == "" {
+          defaults.rd
+        } else {
+          name("rd")
+        },
+        set: if name("set") == "" {
+          defaults.set
+        } else {
+          name("set")
+        },
+        te: if name("te") == "" {
+          defaults.te
+        } else {
+          name("te")
+        },
         mcp: team_mcp,
         skills: team_skills,
       })
@@ -156,7 +172,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
                     }
                   _ => ()
                 }
-                Some({ name, connected, tools })
+                Some({ name, connected, tools, })
               }
               _ => None
             }
@@ -181,7 +197,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
               Some(String(value)) => value
               _ => ""
             }
-            Some({ name, description })
+            Some({ name, description, })
           }
           _ => None
         }
@@ -191,8 +207,8 @@ fn ticket_state_from_json(value : Json) -> TicketState {
   let profile = match fields.get("work_profile") {
     Some(Object(profile)) =>
       match profile.get("id") {
-        Some(String("document")) => { id: "document", label: "Document" }
-        Some(String("analysis")) => { id: "analysis", label: "Analysis" }
+        Some(String("document")) => { id: "document", label: "Document", }
+        Some(String("analysis")) => { id: "analysis", label: "Analysis", }
         _ => WorkProfile::software()
       }
     _ => WorkProfile::software()
@@ -590,4 +606,3 @@ fn ticket_frame(text : String) -> TicketFrame? {
     _ => None
   }
 }
-

@@ -12,7 +12,7 @@ impl WorkflowAgentFactory for UnusedFactory with fn prepare(_, _) {
 async test "uncertain writer prevents journal release after Agent quiescence" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let board = BoardWorkflows(directory~, agents=UnusedFactory::{ }, group~)
     assert_true(board.journal.load() is Ok([]))
     board.uncertain = true

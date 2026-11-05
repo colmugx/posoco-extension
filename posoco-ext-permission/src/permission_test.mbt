@@ -144,19 +144,19 @@ async test "shell approvals are remembered per segment scope" {
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
-  // Approving `npm run build` remembers the `npm` scope for the session...
+  // Approving `bun run build` remembers the `npm` scope for the session...
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    policy.before_tool(test_call_cmd("bash", "bun run build"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
-  // ...so a later `npm run test` is pre-approved...
+  // ...so a later `bun run test` is pre-approved...
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm run test"))
+    policy.before_tool(test_call_cmd("bash", "bun run test"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
-  // ...but `rm -rf` is a different scope and asks again — approving `npm`
+  // ...but `rm -rf` is a different scope and asks again — approving `bun`
   // must never approve `rm`.
   assert_true(
     policy.before_tool(test_call_cmd("bash", "rm -rf x"))
@@ -186,7 +186,7 @@ async test "a tool-level grant covers every later command of the tool" {
   )
   // The user grants the whole tool once...
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    policy.before_tool(test_call_cmd("bash", "bun run build"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
@@ -213,7 +213,7 @@ async test "a tool-level grant does not leak to other tools" {
     approval=Some(source as &ApprovalSource),
   )
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    policy.before_tool(test_call_cmd("bash", "bun run build"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
@@ -234,7 +234,7 @@ async test "a tool-level grant short-circuits the auto judge" {
     approval=Some(source as &ApprovalSource),
   )
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    policy.before_tool(test_call_cmd("bash", "bun run build"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   // Switch to Auto afterwards: explicit user consent recorded earlier
@@ -324,13 +324,13 @@ async test "compound commands require every segment scope" {
   // Approve `cargo build && npm test`: both segment scopes (`cargo`,
   // `npm`) are remembered.
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "cargo build && npm test"))
+    policy.before_tool(test_call_cmd("bash", "cargo build && bun test"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
   // Same scopes, different shape: pre-approved.
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "npm test && cargo build"))
+    policy.before_tool(test_call_cmd("bash", "bun test && cargo build"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
@@ -728,7 +728,7 @@ async test "/permission reports status, switches mode, resets approvals" {
     _ => fail("expected /permission status to succeed")
   }
   // Populate one session approval, see it in status, then reset it.
-  ignore(policy.before_tool(test_call_cmd("bash", "npm install")))
+  ignore(policy.before_tool(test_call_cmd("bash", "bun install")))
   match
     @posoco.CommandPort::invoke(
       policy,
@@ -736,7 +736,7 @@ async test "/permission reports status, switches mode, resets approvals" {
       Json::object(Map::from_array([("action", Json::string("status"))])),
     ) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
-      assert_true(feedback.contains("bash:npm"))
+      assert_true(feedback.contains("bash:bun"))
     _ => fail("expected /permission status to succeed")
   }
   match
@@ -748,8 +748,8 @@ async test "/permission reports status, switches mode, resets approvals" {
     @posoco.CommandOutcome::Success(..) => ()
     _ => fail("expected /permission reset to succeed")
   }
-  // After reset the `npm` scope is forgotten: the same call asks again.
-  ignore(policy.before_tool(test_call_cmd("bash", "npm install")))
+  // After reset the `bun` scope is forgotten: the same call asks again.
+  ignore(policy.before_tool(test_call_cmd("bash", "bun install")))
   assert_eq(source.asked, 2)
   // Mode switch via the declared param, a bare string, and `_positional`.
   match
@@ -813,32 +813,51 @@ async test "/permission reports status, switches mode, resets approvals" {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Exemption reports (bus topic `tool_exemptions`)
+// Exemption reports (`ToolExemptions` protocol event)
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-async test "bus-reported tools bypass the gate in every mode" {
-  let bus = @devkit.EventBus::EventBus()
-  // Subscribe the gate BEFORE the reporting extension publishes — the bus
-  // is fire-and-forget, a report with no subscriber is dropped.
+/// Mint the owner-bound capability the policy subscribes through, as the
+/// host assembly does.
+fn permission_capability(system : @posoco.EventSystem) -> @posoco.Events {
+  match system.publisher(owner="posoco_ext_permission") {
+    Ok(events) => events
+    Err(_) => abort("minting the posoco_ext_permission capability failed")
+  }
+}
+
+///|
+/// Publish one exemption report on behalf of `owner`, the way a reporting
+/// extension does — through a capability minted for that extension id.
+fn report_exemptions(
+  system : @posoco.EventSystem,
+  owner : String,
+  tools : Array[String],
+) -> Unit {
+  let reporter = match system.publisher(owner~) {
+    Ok(events) => events
+    Err(_) => abort("minting the \{owner} capability failed")
+  }
+  ignore(reporter.publish(@kit_events.ToolExemptions({ tools, })))
+}
+
+///|
+async test "reported tools bypass the gate in every mode" {
+  let system = @posoco.EventSystem()
+  // Wire the gate BEFORE the reporting extension publishes — delivery is
+  // fire-and-forget, a report with no subscriber is dropped.
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
-    bus=Some(bus),
+    events=Some(permission_capability(system)),
   )
   // Unknown tool, not yet reported: rejected in ReadOnly.
   assert_true(
     policy.before_tool(test_call("enter_plan_mode"))
     is @posoco.ToolDecision::Reject(_),
   )
-  bus.publish({
-    source: "posoco_ext_plan",
-    topic: "tool_exemptions",
-    data: Json::object({
-      "tools": Json::array(
-        ["enter_plan_mode", "exit_plan_mode"].map(Json::string),
-      ),
-    }),
-  })
+  report_exemptions(system, "posoco_ext_plan", [
+    "enter_plan_mode", "exit_plan_mode",
+  ])
   // Reported: bypasses the gate even in ReadOnly...
   assert_true(
     policy.before_tool(test_call("enter_plan_mode"))
@@ -857,19 +876,13 @@ async test "bus-reported tools bypass the gate in every mode" {
 ///|
 async test "exempted tools never consult the approval source" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
-  let bus = @devkit.EventBus::EventBus()
+  let system = @posoco.EventSystem()
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
-    bus=Some(bus),
+    events=Some(permission_capability(system)),
   )
-  bus.publish({
-    source: "posoco_ext_plan",
-    topic: "tool_exemptions",
-    data: Json::object({
-      "tools": Json::array(["exit_plan_mode"].map(Json::string)),
-    }),
-  })
+  report_exemptions(system, "posoco_ext_plan", ["exit_plan_mode"])
   assert_true(
     policy.before_tool(test_call("exit_plan_mode"))
     is @posoco.ToolDecision::Approve(_),
@@ -896,15 +909,24 @@ async test "exempted tools never consult the approval source" {
 }
 
 ///|
-async test "malformed exemption payloads are ignored" {
+async test "unrelated protocol events are ignored" {
+  let system = @posoco.EventSystem()
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
+    events=Some(permission_capability(system)),
   )
-  @devkit.BusSubscriber::on_bus_event(policy, {
-    source: "rogue_ext",
-    topic: "tool_exemptions",
-    data: Json::object({ "tools": Json::string("not-an-array") }),
-  })
+  // Another extension's status fact is not an exemption report.
+  let other = match system.publisher(owner="posoco_ext_llm") {
+    Ok(events) => events
+    Err(_) => abort("minting the posoco_ext_llm capability failed")
+  }
+  ignore(
+    other.publish(
+      @kit_events.StatusChanged(
+        @kit_events.Update(segment="cache", value="91%"),
+      ),
+    ),
+  )
   assert_true(
     policy.before_tool(test_call("anything")) is @posoco.ToolDecision::Reject(_),
   )
@@ -1194,18 +1216,14 @@ async test "mbtx without the escalated flag rides the normal classify path" {
 ///|
 async test "escalated mbtx is intercepted before its exemption" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
-  let bus = @devkit.EventBus::EventBus()
+  let system = @posoco.EventSystem()
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
-    bus=Some(bus),
+    events=Some(permission_capability(system)),
   )
   // mbtx self-reports its sandboxed face as exempt at construction time.
-  bus.publish({
-    source: "posoco_ext_mbtx",
-    topic: "tool_exemptions",
-    data: Json::object({ "tools": Json::array(["mbtx"].map(Json::string)) }),
-  })
+  report_exemptions(system, "posoco_ext_mbtx", ["mbtx"])
   // Sandboxed face: the exemption approves without asking.
   assert_true(
     policy.before_tool(test_call_mbtx(escalated=false))

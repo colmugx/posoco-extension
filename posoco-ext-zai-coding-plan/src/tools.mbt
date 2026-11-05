@@ -3,7 +3,7 @@
 /// extension's own dynamic tool group while one of its models is active.
 ///
 /// Policy (this extension's own decision, not Posoco's):
-/// - Activate when the router publishes a `model_selection` naming a slot this
+/// - Activate when the router publishes a `ModelSelection` naming a slot this
 ///   provider serves; withdraw (soft) when the selection leaves.
 /// - A switch is a *declaration*, not an instant face change: the new group is
 ///   adopted at the next operation boundary, and the segment reports the truth
@@ -41,17 +41,16 @@ fn zai_slot_model(slot_id : String) -> String {
 }
 
 ///|
-/// Extract the selected slot from a bus event, ignoring every other topic.
-fn zai_selection_slot(event : @devkit.BusEvent) -> String? {
-  if event.topic != "model_selection" || event.source != "posoco_ext_llm" {
+/// Extract the selected slot from one protocol envelope, ignoring every other
+/// event. The publisher filter that used to read `BusEvent.source` is the
+/// envelope namespace: only the router (`owner="posoco_ext_llm"`) may steer
+/// this companion's tool plane.
+fn zai_selection_slot(envelope : @posoco.EventEnvelope) -> String? {
+  if @kit_events.publisher_id(envelope) != Some("posoco_ext_llm") {
     return None
   }
-  match event.data {
-    Json::Object(fields) =>
-      match fields.get("slot_id") {
-        Some(Json::String(slot_id)) if slot_id != "" => Some(slot_id)
-        _ => None
-      }
+  match @kit_events.model_selection_of(envelope) {
+    Some(selection) if selection.slot_id != "" => Some(selection.slot_id)
     _ => None
   }
 }
@@ -60,7 +59,10 @@ fn zai_selection_slot(event : @devkit.BusEvent) -> String? {
 pub(all) struct ZaiCodingPlanTools {
   /// Resolved provider config for this session (key, host, profile).
   config : @zai.ZaiConfig
-  bus : @devkit.EventBus
+  /// Owner-bound session event capability, bound in `on_compose`: this
+  /// extension subscribes to the router's selection feed and publishes its own
+  /// `mcp` status segment through it. `None` before composition.
+  mut events : @posoco.Events?
   /// Host task group for background activation work; the extension never
   /// blocks a selection event handler.
   group : @async.TaskGroup[Unit]
@@ -91,7 +93,6 @@ pub(all) struct ZaiCodingPlanTools {
 ///|
 pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(
   config~ : @zai.ZaiConfig,
-  bus~ : @devkit.EventBus,
   group~ : @async.TaskGroup[Unit],
   initial_slot_id~ : String = "",
   open_plane? : async (String, Array[ZaiToolGroup]) -> Result[
@@ -101,7 +102,7 @@ pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(
 ) -> ZaiCodingPlanTools {
   {
     config,
-    bus,
+    events: None,
     group,
     initial_slot_id,
     open_plane: match open_plane {
@@ -137,36 +138,28 @@ pub fn ZaiCodingPlanTools::owns_slot(
 
 ///|
 /// Publish the current state on the status bar. A hidden state unregisters the
-/// segment; the owner string always matches the manifest id, so a rebuilt
-/// extension keeps ownership of its own segment.
+/// segment; the op travels as `@kit_events.StatusChanged` on the owner-bound
+/// capability from `CompositionView::events()`, so the publisher identity is
+/// the manifest id and a rebuilt extension keeps ownership of its segment.
 fn ZaiCodingPlanTools::publish_status(self : ZaiCodingPlanTools) -> Unit {
-  let owner = zai_coding_plan_tools_owner()
-  match self.state.segment_value() {
-    Some(value) =>
-      match self.state.segment_color() {
-        Some(color) =>
-          @devkit.publish_status_register(
-            self.bus,
-            source=owner,
-            segment="mcp",
-            label="Official MCP",
-            priority=21,
-            value=zai_mcp_segment_text(value),
-            color~,
-          )
-        None =>
-          @devkit.publish_status_register(
-            self.bus,
-            source=owner,
-            segment="mcp",
-            label="Official MCP",
-            priority=21,
-            value=zai_mcp_segment_text(value),
-          )
-      }
-    None =>
-      @devkit.publish_status_unregister(self.bus, source=owner, segment="mcp")
+  let events = match self.events {
+    Some(events) => events
+    None => return
   }
+  let op : @kit_events.StatusOp = match self.state.segment_value() {
+    Some(value) =>
+      @kit_events.Register(
+        segment="mcp",
+        label=Some("Official MCP"),
+        priority=21,
+        value=Some(zai_mcp_segment_text(value)),
+        color=self.state.segment_color(),
+      )
+    None => @kit_events.Unregister(segment="mcp")
+  }
+  // Publication is never an error path: a closed system (host shutting down)
+  // simply has nowhere to render the segment.
+  ignore(events.publish(@kit_events.StatusChanged(op)))
 }
 
 ///|
@@ -315,6 +308,7 @@ pub impl @posoco.Lifecycle for ZaiCodingPlanTools with fn on_compose(
   self.contributions = view.tool_contributions()
   self.log = view.log()
   self.ui = view.ui()
+  self.events = view.events()
 }
 
 ///|
@@ -324,7 +318,13 @@ pub impl @posoco.Lifecycle for ZaiCodingPlanTools with fn on_compose(
 pub impl @posoco.Lifecycle for ZaiCodingPlanTools with fn on_start(
   self : ZaiCodingPlanTools,
 ) -> Unit {
-  self.bus.subscribe(self as &@devkit.BusSubscriber)
+  match self.events {
+    Some(events) =>
+      // A host that composed this extension without an event system has no
+      // selection feed; the persisted slot below still boots the group.
+      ignore(events.subscribe(fn(envelope) { self.on_selection(envelope) }))
+    None => ()
+  }
   if self.owns_slot(self.initial_slot_id) {
     self.activate(zai_slot_model(self.initial_slot_id))
   }
@@ -347,11 +347,11 @@ pub impl @posoco.Lifecycle for ZaiCodingPlanTools with fn on_shutdown(
 ///|
 /// Selection feed: a switch is handled in the background so the command that
 /// caused it never waits on a network handshake.
-pub impl @devkit.BusSubscriber for ZaiCodingPlanTools with fn on_bus_event(
+fn ZaiCodingPlanTools::on_selection(
   self : ZaiCodingPlanTools,
-  event : @devkit.BusEvent,
+  envelope : @posoco.EventEnvelope,
 ) -> Unit {
-  let slot_id = match zai_selection_slot(event) {
+  let slot_id = match zai_selection_slot(envelope) {
     Some(slot_id) => slot_id
     None => return
   }
@@ -388,6 +388,7 @@ pub impl @posoco.Extension for ZaiCodingPlanTools with fn manifest(
       @posoco.Capability::ToolContribution,
       @posoco.Capability::Log,
       @posoco.Capability::Ui,
+      @posoco.Capability::Events,
     ],
   )
 }
@@ -401,6 +402,3 @@ pub extend ZaiCodingPlanTools with @posoco.Lifecycle::{
   on_shutdown,
   on_start,
 }
-
-///|
-pub extend ZaiCodingPlanTools with @devkit.BusSubscriber::{on_bus_event}

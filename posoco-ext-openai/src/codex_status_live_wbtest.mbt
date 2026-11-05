@@ -69,7 +69,7 @@ fn LiveUsageTransport::usage_calls(self : LiveUsageTransport) -> Int32 {
 fn live_status_router(
   transport : &OpenAIModelsHttpTransport,
   credential : @oauth.Credential,
-  bus : @devkit.EventBus,
+  events : @posoco.Events,
 ) -> @llm.RouterModelPort raise {
   let provider = OpenAIProvider(transport=Some(transport))
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
@@ -78,7 +78,7 @@ fn live_status_router(
   )
   match provider.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) =>
-      @llm.RouterModelPort::from_catalogs([catalog], bus=Some(bus))
+      @llm.RouterModelPort::from_catalogs([catalog], events=Some(events))
     @llm.ProviderBuildResult::Unconfigured =>
       fail("OAuth source was configured")
   }
@@ -100,13 +100,13 @@ fn live_status_compose(
 
 ///|
 fn has_live_register(
-  ops : Array[@devkit.StatusOp],
+  ops : Array[@kit_events.StatusOp],
   segment~ : String,
   value~ : String,
 ) -> Bool {
   for op in ops {
     match op {
-      @devkit.StatusOp::Register(segment=shown, value=stated, ..) =>
+      @kit_events.StatusOp::Register(segment=shown, value=stated, ..) =>
         if shown == segment && stated == Some(value) {
           return true
         }
@@ -118,12 +118,12 @@ fn has_live_register(
 
 ///|
 fn has_live_unregister(
-  ops : Array[@devkit.StatusOp],
+  ops : Array[@kit_events.StatusOp],
   segment~ : String,
 ) -> Bool {
   for op in ops {
     match op {
-      @devkit.StatusOp::Unregister(segment=shown) =>
+      @kit_events.StatusOp::Unregister(segment=shown) =>
         if shown == segment {
           return true
         }
@@ -144,9 +144,7 @@ fn live_status_registry_reset() -> Unit {
 ///|
 async test "codex /status pulls live usage and the statusbar shows the same values" {
   live_status_registry_reset()
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let transport = LiveUsageTransport::{
     urls: [],
     headers: [],
@@ -157,9 +155,11 @@ async test "codex /status pulls live usage and the statusbar shows the same valu
   let router = live_status_router(
     borrowed,
     live_status_credential(codex_test_access_token()),
-    bus,
+    recorder.publisher(owner="posoco_ext_llm"),
   )
-  let status = CodexQuotaStatus(bus=Some(bus))
+  let status = CodexQuotaStatus(
+    events=Some(recorder.publisher(owner="posoco_ext_openai")),
+  )
   live_status_compose(router, status)
   // The build is offline: no usage probe ran yet.
   assert_eq(transport.usage_calls(), 0)
@@ -202,9 +202,7 @@ async test "codex /status pulls live usage and the statusbar shows the same valu
 ///|
 async test "repeated codex /status pulls live usage again" {
   live_status_registry_reset()
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let transport = LiveUsageTransport::{
     urls: [],
     headers: [],
@@ -215,9 +213,11 @@ async test "repeated codex /status pulls live usage again" {
   let router = live_status_router(
     borrowed,
     live_status_credential(codex_test_access_token()),
-    bus,
+    recorder.publisher(owner="posoco_ext_llm"),
   )
-  let status = CodexQuotaStatus(bus=Some(bus))
+  let status = CodexQuotaStatus(
+    events=Some(recorder.publisher(owner="posoco_ext_openai")),
+  )
   live_status_compose(router, status)
   ignore(router.invoke("status", Json::null()))
   assert_eq(transport.usage_calls(), 1)
@@ -236,9 +236,7 @@ async test "repeated codex /status pulls live usage again" {
 ///|
 async test "failed codex usage pull preserves the published statusbar values" {
   live_status_registry_reset()
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let transport = LiveUsageTransport::{
     urls: [],
     headers: [],
@@ -249,9 +247,11 @@ async test "failed codex usage pull preserves the published statusbar values" {
   let router = live_status_router(
     borrowed,
     live_status_credential(codex_test_access_token()),
-    bus,
+    recorder.publisher(owner="posoco_ext_llm"),
   )
-  let status = CodexQuotaStatus(bus=Some(bus))
+  let status = CodexQuotaStatus(
+    events=Some(recorder.publisher(owner="posoco_ext_openai")),
+  )
   live_status_compose(router, status)
   ignore(router.invoke("status", Json::null()))
   let before = codex_shared_quota_tracker().snapshots()
@@ -302,7 +302,7 @@ async test "api key build registers no live usage source" {
 ///|
 async test "rebuild with a renewed credential moves the live bearer token" {
   live_status_registry_reset()
-  let bus = @devkit.EventBus::EventBus()
+  let recorder = QuotaRecorder::QuotaRecorder()
   let transport = LiveUsageTransport::{
     urls: [],
     headers: [],
@@ -313,7 +313,7 @@ async test "rebuild with a renewed credential moves the live bearer token" {
   let router = live_status_router(
     borrowed,
     live_status_credential(codex_test_access_token()),
-    bus,
+    recorder.publisher(owner="posoco_ext_llm"),
   )
   ignore(router.invoke("status", Json::null()))
   assert_eq(transport.usage_calls(), 1)
@@ -326,7 +326,7 @@ async test "rebuild with a renewed credential moves the live bearer token" {
   let renewed = live_status_router(
     borrowed,
     live_status_credential(codex_renewed_access_token()),
-    bus,
+    recorder.publisher(owner="posoco_ext_llm"),
   )
   let outcome = renewed.invoke("status", Json::null())
   match outcome {
@@ -345,7 +345,7 @@ async test "rebuild with a renewed credential moves the live bearer token" {
 ///|
 async test "provider switch reads only the active provider's live source" {
   live_status_registry_reset()
-  let bus = @devkit.EventBus::EventBus()
+  let recorder = QuotaRecorder::QuotaRecorder()
   let transport = LiveUsageTransport::{
     urls: [],
     headers: [],
@@ -382,7 +382,7 @@ async test "provider switch reads only the active provider's live source" {
   )
   let router = @llm.RouterModelPort(
     slots=[other_slot, codex_slot],
-    bus=Some(bus),
+    events=Some(recorder.publisher(owner="posoco_ext_llm")),
   )
   assert_eq(router.current_provider_id(), "other")
   let outcome = router.invoke("status", Json::null())

@@ -27,7 +27,7 @@ async test "dynamic expansion defaults denied and workflow specs cannot relax ab
       execution_timeout_ms=1000,
     ).validate(),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group, enabled=false)
     let before = h.board.state().unwrap()
     assert_eq(h.controller.status().phase, @workflow.Paused)
@@ -64,7 +64,7 @@ async test "dynamic expansion defaults denied and workflow specs cannot relax ab
 
 ///|
 async test "committed graph needs exact separate scope approval and detached union preserves initial scope" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     let ids = dynamic_commit(h, chain=true)
     let before = h.board.state().unwrap()
@@ -121,7 +121,7 @@ async test "committed graph needs exact separate scope approval and detached uni
 
 ///|
 async test "default scope policy denies even a granting approver and graph approval denial writes nothing" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group, scope_policy=Denied)
     let ids = dynamic_commit(h)
     assert_eq(dynamic_authorize(h, ids), Err(@dynamic.ScopeApprovalDenied))
@@ -149,7 +149,7 @@ async test "default scope policy denies even a granting approver and graph appro
 
 ///|
 async test "scope extension validates durable workflow and previously authorized parent lineage" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     let rev = h.board.state().unwrap().revision
     ignore(
@@ -239,7 +239,7 @@ impl @dynamic.ScopeExtensionApprover for CancelScopeApprover with fn approve(
 
 ///|
 async test "reentrant pause and cancel cannot turn a stale host decision into scope or graph authority" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     let before = h.board.state().unwrap()
     ignore(
@@ -282,7 +282,7 @@ async test "reentrant pause and cancel cannot turn a stale host decision into sc
 
 ///|
 async test "deadline pause cancellation and expansion reservations never replenish budgets" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group, max_expansions=1)
     let ids = dynamic_commit(h)
     ignore(dynamic_authorize(h, ids).unwrap())
@@ -310,7 +310,7 @@ async test "deadline pause cancellation and expansion reservations never repleni
 
 ///|
 async test "fresh resolver denial blocks generated work without implicit task or review completion" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     let ids = dynamic_commit(h)
     ignore(dynamic_authorize(h, ids).unwrap())
@@ -347,7 +347,7 @@ async test "fresh resolver denial blocks generated work without implicit task or
 
 ///|
 async test "shutdown revokes read-only recovery operation admission as well as execution" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     dynamic_close(h)
     assert_eq(h.controller.reconcile(), Err(@dynamic.Closed))

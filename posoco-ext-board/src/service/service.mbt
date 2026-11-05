@@ -4,7 +4,7 @@
 /// internals. This instance is the sole durable writer for its namespace.
 pub struct BoardWorkflows {
   priv directory : String
-  priv group : @async.TaskGroup[Unit]
+  priv group : @core_async.TaskGroup
   priv agents : &WorkflowAgentFactory
   priv policy : BoardWorkflowPolicy
   priv clock : () -> Int64
@@ -23,7 +23,7 @@ pub struct BoardWorkflows {
   priv mut initialized : Bool
   priv mut closed : Bool
   priv mut busy : Bool
-  priv mut operation : @async.Task[Unit]?
+  priv mut operation : @core_async.Task[Unit]?
   priv mut stopped : Bool
   priv mut paused : Bool
   priv mut unresolved : Bool
@@ -37,7 +37,7 @@ pub struct BoardWorkflows {
 pub fn BoardWorkflows::BoardWorkflows(
   directory~ : String,
   agents~ : &WorkflowAgentFactory,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @core_async.TaskGroup,
   policy~ : BoardWorkflowPolicy = BoardWorkflowPolicy(),
   now_ms~ : () -> Int64 = () => @async.now(),
   authorize~ : () -> Bool = () => true,
@@ -225,7 +225,10 @@ async fn[T] BoardWorkflows::perform(
 }
 
 ///|
-async fn settle_operation(task : @async.Task[Unit], timeout : Int32) -> Bool {
+async fn settle_operation(
+  task : @core_async.Task[Unit],
+  timeout : Int32,
+) -> Bool {
   @async.with_timeout(timeout, () => {
     task.wait() catch {
       _ => ()

@@ -1,10 +1,11 @@
 ///|
 /// Lifecycle of one plan item.
+#derive(Eq, Debug)
 pub(all) enum GoalPlanStatus {
   Pending
   InProgress
   Done
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalPlanStatus with Eq::{not_equal, equal}
@@ -25,10 +26,11 @@ pub impl Show for GoalPlanStatus with fn to_string(self : GoalPlanStatus) -> Str
 pub extend GoalPlanStatus with Show::{to_string, output}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GoalPlanItem {
   title : String
   status : GoalPlanStatus
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalPlanItem with Eq::{not_equal, equal}
@@ -37,9 +39,10 @@ pub extend GoalPlanItem with Eq::{not_equal, equal}
 pub extend GoalPlanItem with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GoalPlan {
   items : Array[GoalPlanItem]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalPlan with Eq::{not_equal, equal}

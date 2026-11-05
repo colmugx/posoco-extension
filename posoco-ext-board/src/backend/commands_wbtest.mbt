@@ -76,7 +76,7 @@ async test "backend command rejection reports unavailable revision when detached
 ///|
 async test "wire rejection reports committed revision without minting a stream sequence" {
   let backend = BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     let rejected = backend.handle_command({
@@ -101,7 +101,7 @@ async test "backend streams committed domain events into the owned hub" {
     backend.coordinator.submit(command=backend_create("t1", 0L))
     is Err(NotAttached),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     // Loading is asynchronous; readiness gates every domain API use.
     assert_true(backend.coordinator.wait_ready() is Ok(_))
@@ -143,7 +143,7 @@ async test "backend streams committed domain events into the owned hub" {
   // ...and a fresh attach restores the backend's durable board instead of
   // starting over: two committed tasks, an intact hub sequence and the
   // stream cursor reading the live hub head.
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     assert_eq(backend.coordinator.revision().unwrap(), 2L)
@@ -164,7 +164,7 @@ async test "backend streams committed domain events into the owned hub" {
 ///|
 async test "command chain commits the durable truth across all eight names" {
   let backend = BoardBackend::BoardBackend(now_ms=() => 1234L)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     let create_args : Json = {

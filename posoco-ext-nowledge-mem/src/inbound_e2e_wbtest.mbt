@@ -39,6 +39,7 @@ fn mem_agent_store(
       ]),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
 }
 
@@ -140,6 +141,7 @@ async test "e2e: same-turn second model call does not re-read and keeps the inje
       ),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   @async.with_task_group(group => {
     ext.attach(group)
@@ -190,6 +192,7 @@ async test "e2e: composition carries core's builtin memory tools without collisi
       ),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
   let names : Array[String] = []

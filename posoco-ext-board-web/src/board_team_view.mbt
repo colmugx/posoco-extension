@@ -166,7 +166,13 @@ fn team_mcp_panel(
   let config = team_mcp_for(draft, role)
   let servers = model.tickets.mcp_servers
   @html.div(class="team-page", [
-    team_name_field("team-name", "Name", team_role_name(draft, role), role, emit),
+    team_name_field(
+      "team-name",
+      "Name",
+      team_role_name(draft, role),
+      role,
+      emit,
+    ),
     @html.section(class="team-section", [
       @html.h3(class="section-title", "MCP"),
       @html.label(class="team-check", [
@@ -230,8 +236,7 @@ fn team_mcp_panel(
                     value=server.name,
                     checked~,
                     attrs=@html.Attrs::build().disabled(config.all),
-                    on_change=_ =>
-                      emit(TeamMcpServerToggled(role, server.name)),
+                    on_change=_ => emit(TeamMcpServerToggled(role, server.name)),
                   ),
                   @html.span(class="team-server-name", server.name),
                   @html.span(
@@ -255,8 +260,9 @@ fn team_mcp_panel(
               input_type=Checkbox,
               name="team_mcp_restrict_tools",
               checked=config.tools.length() > 0,
-              on_change=_ =>
-                emit(TeamMcpToolsRestricted(role, config.tools.is_empty())),
+              on_change=_ => {
+                emit(TeamMcpToolsRestricted(role, config.tools.is_empty()))
+              },
             ),
             @html.span("Only selected tools"),
           ]),
@@ -266,37 +272,41 @@ fn team_mcp_panel(
               "Every tool from the allowed servers is available.",
             )
           } else {
-            @html.div(class="team-tools", {
-              let groups : Array[@html.Html] = []
-              for server in servers {
-                let selected = config.all ||
-                  config.servers.contains(server.name)
-                if selected && !server.tools.is_empty() {
-                  groups.push(
-                    @html.div(class="team-tool-group", [
-                      @html.span(class="team-tool-server", server.name),
-                      @html.div(
-                        class="team-tool-list",
-                        server.tools.map(tool =>
-                          @html.label(class="team-check team-tool", [
-                            @html.input(
-                              input_type=Checkbox,
-                              name="team_mcp_tool",
-                              value=tool,
-                              checked=config.tools.contains(tool),
-                              on_change=_ =>
-                                emit(TeamMcpToolToggled(role, tool)),
-                            ),
-                            @html.span(tool),
-                          ])
+            @html.div(
+              class="team-tools",
+              {
+                let groups : Array[@html.Html] = []
+                for server in servers {
+                  let selected = config.all ||
+                    config.servers.contains(server.name)
+                  if selected && !server.tools.is_empty() {
+                    groups.push(
+                      @html.div(class="team-tool-group", [
+                        @html.span(class="team-tool-server", server.name),
+                        @html.div(
+                          class="team-tool-list",
+                          server.tools.map(tool => {
+                            @html.label(class="team-check team-tool", [
+                              @html.input(
+                                input_type=Checkbox,
+                                name="team_mcp_tool",
+                                value=tool,
+                                checked=config.tools.contains(tool),
+                                on_change=_ => {
+                                  emit(TeamMcpToolToggled(role, tool))
+                                },
+                              ),
+                              @html.span(tool),
+                            ])
+                          }),
                         ),
-                      ),
-                    ]),
-                  )
+                      ]),
+                    )
+                  }
                 }
-              }
-              groups
-            })
+                groups
+              },
+            )
           },
         ])
       },
@@ -343,9 +353,7 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ),
           @html.div(
             class="team-tabs",
-            roles.map(role => {
-              team_tab(draft, role, model.team_tab, emit)
-            }),
+            roles.map(role => team_tab(draft, role, model.team_tab, emit)),
           ),
           team_mcp_panel(model, draft, model.team_tab, emit),
         ]),
@@ -376,4 +384,3 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ],
   )
 }
-

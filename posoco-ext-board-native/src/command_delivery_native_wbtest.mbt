@@ -36,7 +36,7 @@ impl @store.BoardStore for DeliveryGateStore with fn persist(
 ///|
 async test "native command result follows every event published before it" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store = DeliveryGateStore::DeliveryGateStore()
       let backend = @backend.BoardBackend::BoardBackend(store~, now_ms=() => {
         1234L
@@ -103,7 +103,7 @@ async test "native command result follows every event published before it" {
 ///|
 async test "native command result overflow resyncs without rolling back the durable mutation" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store = DeliveryGateStore::DeliveryGateStore()
       let backend = @backend.BoardBackend::BoardBackend(
         store~,

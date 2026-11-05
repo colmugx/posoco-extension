@@ -207,7 +207,11 @@ fn task_card(
             emit(TaskSelected(task.id))
           }),
         if created {
-          if task.description == "" { task.title } else { task.description }
+          if task.description == "" {
+            task.title
+          } else {
+            task.description
+          }
         } else {
           task.title
         },
@@ -538,4 +542,3 @@ fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ]),
   ])
 }
-

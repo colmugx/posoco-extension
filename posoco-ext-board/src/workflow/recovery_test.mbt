@@ -32,7 +32,7 @@ impl @execution.BoardExecutionStore for WorkflowFaultJournal with fn persist(
 ///|
 async test "reservation ambiguity stops without executing or replaying" {
   for visible in [false, true] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let journal : WorkflowFaultJournal = {
         writes: 0,
         records: [],
@@ -60,7 +60,7 @@ async test "reservation ambiguity stops without executing or replaying" {
 ///|
 async test "finished or settled journal write ambiguity never admits a second run" {
   for fail_at in [4, 5] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let journal : WorkflowFaultJournal = {
         writes: 0,
         records: [],
@@ -116,7 +116,7 @@ impl @store.BoardStore for WorkflowFinishStore with fn persist(
 ///|
 async test "Board persistence failure and uncertainty stop even after real completion" {
   for uncertain in [false, true] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend(
         store=WorkflowFinishStore::{
           inner: @store.MemoryBoardStore(),
@@ -176,7 +176,7 @@ async test "Board persistence failure and uncertainty stop even after real compl
 
 ///|
 async test "manual finish race remains authoritative and blocks further execution" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -204,7 +204,7 @@ async test "manual finish race remains authoritative and blocks further executio
 
 ///|
 async test "dependency completion affects fresh planning without implicit task changes" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -245,7 +245,7 @@ async test "dependency completion affects fresh planning without implicit task c
 
 ///|
 async test "a new runner does not automatically resume and historical attempts remain spent" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec()) is Ok(_))
     assert_eq(h.runner.wait().succeeded, 1)

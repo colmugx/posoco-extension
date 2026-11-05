@@ -14,7 +14,7 @@ fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     "archive-dialog",
     "Archive",
     _ => emit(ArchiveClosed),
-    ["width:min(calc(100% - 2rem),74rem)","height:min(82vh,900px)"],
+    ["width:min(calc(100% - 2rem),74rem)", "height:min(82vh,900px)"],
     [
       @html.div(class="dialog-shell", [
         @html.header(class="dialog-head", [
@@ -187,4 +187,3 @@ fn live_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ],
   )
 }
-

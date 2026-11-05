@@ -117,4 +117,3 @@ fn apply_ticket_outcome(
     }
   }
 }
-

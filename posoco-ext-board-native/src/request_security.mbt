@@ -111,4 +111,3 @@ fn board_security(
     }
   })
 }
-

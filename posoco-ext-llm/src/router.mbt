@@ -16,9 +16,16 @@ pub(all) struct RouterModelPort {
   /// decision default instead of silently switching backends.
   mut active_decision_id : String
   mut active_effort : String?
-  /// Devkit status bus for the model/ctx/cache status segments; `None`
-  /// disables publication entirely.
-  bus : @devkit.EventBus?
+  /// Owner-bound posoco event capability (`Extension("posoco_ext_llm")`): the
+  /// router publishes its model/ctx/cache/quota `StatusChanged` ops, its
+  /// `ModelSelection` / `DecisionSelection` facts and its `ProviderStatus`
+  /// announcements through it, and listens on it for every peer
+  /// `StatusChanged` (the `/status` quota cache). `None` disables publication
+  /// and peer capture, and the router is silent.
+  events : @posoco.Events?
+  /// Whether the peer-status listener was already registered on the channel,
+  /// so a repeated `on_compose` never double-subscribes.
+  mut attached : Bool
   model_metadata : ModelMetadata?
   /// Latest core-projected context state per session id; the `ctx` status
   /// segment renders the entry of the session an event is scoped to.
@@ -39,7 +46,7 @@ pub(all) struct RouterModelPort {
   /// provider path double-publish "5h"/"weekly" segments against the codex
   /// status publisher.
   extra_quota_sources : Map[String, &@devkit.QuotaSource]
-  /// Latest value per status segment observed on the shared bus; `/status`
+  /// Latest value per status segment observed on the event channel; `/status`
   /// surfaces the provider-published quota windows ("5h", "weekly") from it.
   priv status_segments : Map[String, String]
   /// Latest registry quota readings for the active provider, rendered onto
@@ -76,7 +83,7 @@ pub fn RouterModelPort::RouterModelPort(
   allow_missing_default~ : Bool = false,
   default_decision_slot_id~ : String = "",
   allow_missing_decision_default~ : Bool = false,
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
   model_metadata~ : ModelMetadata? = None,
   provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
   cred_store~ : &@oauth.CredentialStore? = None,
@@ -170,7 +177,8 @@ pub fn RouterModelPort::RouterModelPort(
     active_id,
     active_decision_id,
     active_effort: None,
-    bus,
+    events,
+    attached: false,
     model_metadata,
     context_states: Map::from_array([]),
     provider_credential_store,
@@ -188,10 +196,7 @@ pub fn RouterModelPort::RouterModelPort(
     quota_shown: [],
     background_group: None,
   }
-  match bus {
-    Some(bus) => bus.subscribe(router as &@devkit.BusSubscriber)
-    None => ()
-  }
+  router.attach_events()
   router.publish_model_selection()
   router.publish_decision_selection()
   router
@@ -207,7 +212,7 @@ pub fn RouterModelPort::from_catalogs(
   allow_missing_default~ : Bool = false,
   default_decision_slot_id~ : String = "",
   allow_missing_decision_default~ : Bool = false,
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
   model_metadata~ : ModelMetadata? = None,
   provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
   cred_store~ : &@oauth.CredentialStore? = None,
@@ -240,7 +245,7 @@ pub fn RouterModelPort::from_catalogs(
     allow_missing_default~,
     default_decision_slot_id~,
     allow_missing_decision_default~,
-    bus~,
+    events~,
     model_metadata~,
     provider_credential_store~,
     cred_store~,
@@ -782,26 +787,59 @@ pub impl @posoco.ModelPort for RouterModelPort with fn provider_config(
 }
 
 ///|
-/// Consume one bus event: keep the latest value of every status segment so
-/// `/status` can surface provider-published quota windows. A register
-/// without a value (or an unregister) clears the segment. The router only
-/// reads the bus here — model/ctx/cache segments are published elsewhere —
-/// so this subscriber never feeds back into the bus.
-pub impl @devkit.BusSubscriber for RouterModelPort with fn on_bus_event(
-  self : RouterModelPort,
-  event : @devkit.BusEvent,
-) -> Unit {
-  match @devkit.decode_status_op(event) {
-    Some(Register(segment~, value~, ..)) =>
-      match value {
-        Some(v) => self.status_segments[segment] = v
-        None => ignore(self.status_segments.remove(segment))
+/// The capability this router publishes and listens on: the host-injected one.
+/// `None` means there is no channel at all and every publication is a silent
+/// no-op.
+fn RouterModelPort::channel(self : RouterModelPort) -> @posoco.Events? {
+  self.events
+}
+
+///|
+/// Start listening on the channel: every peer `StatusChanged` is folded into
+/// the `status_segments` cache `/status` reads. A router without a channel has
+/// nothing to listen on and stays silent; the registration happens once, at
+/// construction when the host passed a capability and otherwise on the first
+/// `on_compose` (idempotent either way).
+fn RouterModelPort::attach_events(self : RouterModelPort) -> Unit {
+  if self.attached {
+    return
+  }
+  match self.channel() {
+    Some(events) =>
+      match
+        events.subscribe(fn(envelope) {
+          match @kit_events.status_changed_of(envelope) {
+            Some(op) => self.capture_status(op)
+            None => ()
+          }
+        }) {
+        Ok(_) => self.attached = true
+        Err(_) => ()
       }
-    Some(Update(segment~, value~)) => self.status_segments[segment] = value
-    Some(Unregister(segment~)) => ignore(self.status_segments.remove(segment))
     None => ()
   }
 }
 
 ///|
-pub extend RouterModelPort with @posoco/devkit.BusSubscriber::{on_bus_event}
+/// Consume one status op: keep the latest value of every segment so `/status`
+/// can surface provider-published quota windows (`5h`, `weekly`, `balance`).
+/// A register without a value (or an unregister) clears the segment. Every
+/// publisher's ops count; the router only reads peer ops here — its own
+/// model/ctx/cache segments are published elsewhere — so this listener never
+/// feeds back into the channel.
+fn RouterModelPort::capture_status(
+  self : RouterModelPort,
+  op : @kit_events.StatusOp,
+) -> Unit {
+  match op {
+    @kit_events.Register(segment~, value~, ..) =>
+      match value {
+        Some(v) => self.status_segments[segment] = v
+        None => ignore(self.status_segments.remove(segment))
+      }
+    @kit_events.Update(segment~, value~) =>
+      self.status_segments[segment] = value
+    @kit_events.Unregister(segment~) =>
+      ignore(self.status_segments.remove(segment))
+  }
+}

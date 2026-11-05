@@ -145,6 +145,7 @@ test "servers_by_auth lists only configs declaring the auth" {
     mode: LoadMode::Lazy,
     pending: [http_config("plain")],
     group: None,
+    lifetime: None,
     activated: false,
     catalog_revision: 0,
     closing: false,

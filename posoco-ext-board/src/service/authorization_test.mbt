@@ -19,7 +19,7 @@ async fn assert_no_storage_io(directory : String) -> Unit {
 async test "denied live authorization blocks start and resume without any IO" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group, authorize=() => false)
     defer ignore(h.board.shutdown())
     assert_eq(
@@ -42,7 +42,7 @@ async test "denied live authorization blocks start and resume without any IO" {
 async test "revoking live authorization during an answered approval still refuses the mutation" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let gate = Ref(true)
     let h = harness(directory, group, authorize=() => gate.val)
     defer ignore(h.board.shutdown())
@@ -99,7 +99,7 @@ async test "revoking live authorization during an answered approval still refuse
 async test "one explicit approval never coalesces into the other gate or replays" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group)
     defer ignore(h.board.shutdown())
     let started = h.board.start(title="Separate approvals").checked()

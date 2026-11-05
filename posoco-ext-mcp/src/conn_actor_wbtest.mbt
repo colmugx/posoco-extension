@@ -74,7 +74,7 @@ fn conn_ask_refused_closed(
 /// Reconnecting -> ReconnectInProgress. Fold table rows Acquire and
 /// EndCall (Fresh column, both outcomes).
 async test "conn_actor acquire answers per health and pairs in_flight with EndCall" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     assert_true(
       conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(100, 0)),
@@ -117,7 +117,7 @@ async test "conn_actor acquire answers per health and pairs in_flight with EndCa
 /// or duplicate EndReconnect must not re-fold. Fold table rows EndCall
 /// (stale columns) and EndReconnect (guard clauses).
 async test "conn_actor stale generation reports never touch the current state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     assert_true(
       conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(100, 0)),
@@ -157,7 +157,7 @@ async test "conn_actor stale generation reports never touch the current state" {
 /// from both Fresh and NeedsReconnect; the loser sees Busy. Fold table row
 /// BeginReconnect.
 async test "conn_actor begin_reconnect has one winner and mints the next generation" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     assert_true(
       conn_reply_is(
@@ -195,7 +195,7 @@ async test "conn_actor begin_reconnect has one winner and mints the next generat
 /// closed wire until a later reconnect succeeds), and a client payload on
 /// a failure report is never installed. Fold table rows EndReconnect.
 async test "conn_actor end_reconnect swaps client on success keeps old on failure" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     assert_true(
       conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(100, 0)),
@@ -246,7 +246,7 @@ async test "conn_actor end_reconnect swaps client on success keeps old on failur
 /// the health out of Reconnecting; in_flight survives BeginReconnect and
 /// is zeroed only by EndReconnect.
 async test "conn_actor timed_out during reconnecting returns admission without health regress" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     assert_true(
       conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(100, 0)),
@@ -276,7 +276,7 @@ async test "conn_actor timed_out during reconnecting returns admission without h
 /// surfaces the refusal as AskFailure::NotDelivered(MailboxClosed) — the
 /// wrapper never converts an admission refusal into success.
 async test "conn_actor close refuses late tells joins gracefully and fails late asks" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     actor.close()
     assert_eq(
@@ -296,7 +296,7 @@ async test "conn_actor close refuses late tells joins gracefully and fails late 
 /// deterministic: tells and snapshot run in one uninterrupted scheduling
 /// turn, so the loop cannot have served anything yet.
 async test "conn_actor snapshot conserves accepted processed abandoned outstanding" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
     let _ = actor.end_call(generation=0, outcome=CallOk)
     let _ = actor.end_call(generation=0, outcome=TimedOut)

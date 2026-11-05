@@ -72,7 +72,7 @@ impl @store.BoardStore for FailingLoadStore with fn persist(
 async test "gated persist failure publishes nothing and the retry streams once" {
   let store = GatedPersistStore::GatedPersistStore()
   let backend = BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     assert_eq(backend.current_seq(), 0L)
@@ -119,7 +119,7 @@ async test "gated persist failure publishes nothing and the retry streams once" 
 async test "uncertain persist resolving to the candidate streams its events exactly once" {
   let store = GatedPersistStore::GatedPersistStore()
   let backend = BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     store.persist_error = Some(
@@ -156,7 +156,7 @@ async test "uncertain persist resolving to the candidate streams its events exac
 async test "uncertain persist resolving to the old board streams nothing" {
   let store = GatedPersistStore::GatedPersistStore()
   let backend = BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     store.persist_error = Some(@store.DurabilityUncertain("journal lost"))
@@ -188,7 +188,7 @@ async test "uncertain persist resolving to the old board streams nothing" {
 ///|
 async test "stale stream boundary is never served and a fresh boundary composites" {
   let backend = BoardBackend::BoardBackend(event_buffer=2)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     assert_true(
@@ -228,7 +228,7 @@ async test "stale stream boundary is never served and a fresh boundary composite
 ///|
 async test "answered boundaries are exact hub positions and survive later commits" {
   let backend = BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     // Five committed revisions interleaved with telemetry: the boundary of
@@ -284,7 +284,7 @@ async test "answered boundaries are exact hub positions and survive later commit
 ///|
 async test "board-only bootstrap streams the retained telemetry suffix" {
   let backend = BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     let tick = backend.publish_telemetry(
@@ -310,7 +310,7 @@ async test "board-only bootstrap streams the retained telemetry suffix" {
 ///|
 async test "telemetry-only overflow still composites from the retained boundary" {
   let backend = BoardBackend::BoardBackend(event_buffer=2)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Ok(_))
     for _ in 0..<4 {
@@ -339,7 +339,7 @@ async test "restore failure refuses the bootstrap with a wire-safe reason" {
     error: @store.Io("board snapshot corrupt"),
   }
   let backend = BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(backend.coordinator.wait_ready() is Err(RestoreFailed(_)))
     // No fabricated empty board, no store detail on the wire.

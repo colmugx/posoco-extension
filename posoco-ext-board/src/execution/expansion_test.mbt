@@ -1,6 +1,6 @@
 ///|
 async test "atomic expansion preserves active slot identities and subsequent settlements" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let store = journal()
     let adapters : Array[ControlledAdapter] = []

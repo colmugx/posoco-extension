@@ -175,7 +175,10 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ui_show("team-dialog")
           emit(TeamOpened)
         }),
-        [@html.span(class="btn-icon", "◎"), @html.span(class="btn-label", "Team")],
+        [
+          @html.span(class="btn-icon", "◎"),
+          @html.span(class="btn-label", "Team"),
+        ],
       ),
       if archived == 0 {
         @html.nothing
@@ -249,7 +252,10 @@ fn connection_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       }
     Offline =>
       if model.can_connect {
-        @ui.banner_retry("Offline. The connection stopped.", emit(ManualReconnect))
+        @ui.banner_retry(
+          "Offline. The connection stopped.",
+          emit(ManualReconnect),
+        )
       } else {
         @ui.banner("Offline. Open this page from the Board host to connect.")
       }
@@ -260,7 +266,9 @@ fn connection_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           emit(ManualReconnect),
         )
       } else {
-        @ui.banner("Connection stopped. Reload after checking the host version.")
+        @ui.banner(
+          "Connection stopped. Reload after checking the host version.",
+        )
       }
   }
 }
@@ -342,4 +350,3 @@ fn toolbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     count,
   ])
 }
-

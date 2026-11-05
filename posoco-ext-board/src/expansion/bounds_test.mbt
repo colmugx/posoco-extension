@@ -30,7 +30,7 @@ fn chain_payload(count : Int32, external~ : Bool = false) -> String {
 
 ///|
 async test "graph depth budget includes existing dependencies and rejects before allocation" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let before = backend.state().unwrap()
     for
@@ -65,7 +65,7 @@ async test "graph depth budget includes existing dependencies and rejects before
 
 ///|
 async test "authorization never widens zero negative or excessive numeric budgets" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let before = backend.state().unwrap()
     for (tasks, edges) in [(0, 0), (-1, 1), (21, 1), (1, -1), (1, 61)] {

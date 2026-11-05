@@ -52,21 +52,32 @@ fn scope_for(session_id : String) -> @posoco.EventScope {
 }
 
 ///|
-priv struct RecordingBus {
-  events : Array[@devkit.BusEvent]
+/// Captures every protocol event delivered on the system it listens to.
+priv struct RecordingEvents {
+  envelopes : Array[@posoco.EventEnvelope]
 }
 
 ///|
-fn RecordingBus::RecordingBus() -> RecordingBus {
-  { events: [], }
+fn RecordingEvents::RecordingEvents() -> RecordingEvents {
+  { envelopes: [], }
 }
 
 ///|
-impl @devkit.BusSubscriber for RecordingBus with fn on_bus_event(
-  self : RecordingBus,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+/// A fresh event system already subscribed to `recorder`, plus the
+/// owner-bound capability the extension publishes through — the same pair a
+/// host mints at assembly time (`system.publisher(owner~)`).
+fn recording_events() -> (RecordingEvents, @posoco.Events) {
+  let recorder = RecordingEvents::RecordingEvents()
+  let system = @posoco.EventSystem()
+  match system.subscribe(fn(envelope) { recorder.envelopes.push(envelope) }) {
+    Ok(_) => ()
+    Err(_) => abort("subscribe on a fresh EventSystem failed")
+  }
+  let events = match system.publisher(owner="posoco_ext_profiles") {
+    Ok(events) => events
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  (recorder, events)
 }
 
 ///|
@@ -240,31 +251,34 @@ async test "hook_all_activates_every_deferred_member" {
 }
 
 ///|
-async test "hook_publishes_bus_event_on_injection_only" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = RecordingBus::RecordingBus()
-  bus.subscribe(recorder)
+async test "hook_publishes_activated_event_on_injection_only" {
+  let (recorder, events) = recording_events()
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit", exts=["nmem"])],
     defer_set=["nmem"],
     captured_prompts=Map::from_array([("nmem", "NMem manual.")]),
     attribution=Map::from_array([]),
-    bus=Some(bus),
+    events=Some(events),
   )
   let messages : Array[@posoco.Message] = [
     assistant_with_calls([activate_call("c1", profile="moonbit")]),
     tool_result("c1", "activated: moonbit"),
   ]
   let _ = profiles.before_model(messages)
-  assert_eq(recorder.events.length(), 1)
-  let event = recorder.events[0]
-  assert_eq(event.source, "posoco_ext_profiles")
-  assert_eq(event.topic, "profiles.activated")
-  assert_true(event.data.stringify().contains("\"id\":\"moonbit\""))
-  assert_true(event.data.stringify().contains("\"members\":[\"nmem\"]"))
+  assert_eq(recorder.envelopes.length(), 1)
+  let envelope = recorder.envelopes[0]
+  // The publisher's identity rides the capability, not the payload.
+  assert_eq(@kit_events.publisher_id(envelope), Some("posoco_ext_profiles"))
+  match @kit_events.profiles_activated_of(envelope) {
+    Some(payload) => {
+      assert_eq(payload.id, "moonbit")
+      assert_eq(payload.members, ["nmem"])
+    }
+    None => fail("expected a ProfilesActivated event")
+  }
   // The satisfied transcript stays silent on the next pass.
   let _ = profiles.before_model(messages)
-  assert_eq(recorder.events.length(), 1)
+  assert_eq(recorder.envelopes.length(), 1)
 }
 
 ///|
@@ -444,16 +458,14 @@ async test "profiles_command_select_submits_through_host_sink" {
 ///|
 async test "profiles_command_sink_failure_does_not_publish_activation" {
   let sink = RecordingActivationSink::{ calls: [], failure: Some("busy"), }
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = RecordingBus::RecordingBus()
-  bus.subscribe(recorder)
+  let (recorder, events) = recording_events()
   let ui = @tk.RecordingUiPort(responses=[@posoco.UiResponse::Selected(0)])
   let profiles = Profiles::build(
     manifests=[parsed_manifest("moonbit")],
     defer_set=[],
     captured_prompts=Map::from_array([]),
     attribution=Map::from_array([]),
-    bus=Some(bus),
+    events=Some(events),
     activation_sink=Some(sink),
   )
   profiles.on_compose(
@@ -473,7 +485,7 @@ async test "profiles_command_sink_failure_does_not_publish_activation" {
     _ => fail("rejected host submission must fail")
   }
   assert_eq(sink.calls.length(), 0)
-  assert_eq(recorder.events.length(), 0)
+  assert_eq(recorder.envelopes.length(), 0)
 }
 
 ///|

@@ -5,7 +5,7 @@
 
 ///|
 async test "start completes one admitted execution and reports detached progress" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     let idle = h.runner.status()
     assert_true(workflow_phase_eq(idle.phase, @workflow.Idle))
@@ -44,7 +44,7 @@ async test "start completes one admitted execution and reports detached progress
 
 ///|
 async test "start rejects concurrent runs and a reused run identity" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -83,7 +83,7 @@ async test "start rejects concurrent runs and a reused run identity" {
 
 ///|
 async test "pause before the first dispatch admits nothing until resume" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     assert_true(h.runner.pause())
@@ -111,7 +111,7 @@ async test "pause before the first dispatch admits nothing until resume" {
 
 ///|
 async test "pause during an active execution lets it settle before pausing" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -147,7 +147,7 @@ async test "pause during an active execution lets it settle before pausing" {
 
 ///|
 async test "stop after current finishes the admitted run and skips the rest" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -174,7 +174,7 @@ async test "stop after current finishes the admitted run and skips the rest" {
 
 ///|
 async test "stop from paused ends the run without admissions" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     assert_true(h.runner.pause())
@@ -192,7 +192,7 @@ async test "stop from paused ends the run without admissions" {
 
 ///|
 async test "cancel from paused prevents any admission" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     assert_true(h.runner.pause())
@@ -214,7 +214,7 @@ async test "cancel from paused prevents any admission" {
 
 ///|
 async test "cancel during an active execution settles it as cancelled" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -241,7 +241,7 @@ async test "cancel during an active execution settles it as cancelled" {
 
 ///|
 async test "shutdown during an active run cancels joins and closes admission" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],

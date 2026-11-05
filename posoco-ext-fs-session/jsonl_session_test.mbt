@@ -507,11 +507,11 @@ async test "io[native]: overwrite existing session truncates correctly" {
   }
 }
 
-// Native status-publish tests (devkit status protocol, segment "session")
+// Native status-publish tests (@kit_events status protocol, segment "session")
 
 ///|
 priv struct StatusCapture {
-  events : Array[@devkit.BusEvent]
+  events : Array[@kit_events.StatusOp]
 }
 
 ///|
@@ -520,22 +520,41 @@ fn StatusCapture::StatusCapture() -> StatusCapture {
 }
 
 ///|
-impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
-  self : StatusCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+/// One test's status channel: a fresh event system that captures the closed
+/// `StatusChanged` operations plus the owner-bound capability the store
+/// publishes through (the pair assembly mints per extension).
+struct StatusChannel {
+  store : @posoco.Events
+}
+
+///|
+fn capture_status_system(capture : StatusCapture) -> StatusChannel {
+  let system = @posoco.EventSystem()
+  match
+    system.subscribe(fn(envelope) {
+      match @kit_events.status_changed_of(envelope) {
+        Some(op) => capture.events.push(op)
+        None => ()
+      }
+    }) {
+    Ok(_) => ()
+    Err(_) => abort("subscribe on a fresh EventSystem failed")
+  }
+  let store = match system.publisher(owner="posoco_ext_fs_session") {
+    Ok(store) => store
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  { store, }
 }
 
 ///|
 async test "io[native]: save and append publish the session status register" {
   let root = fresh_root("status-publish")
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
+  let channel = capture_status_system(capture)
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
   let session = @posoco.Session::{
     messages: [],
@@ -556,46 +575,39 @@ async test "io[native]: save and append publish the session status register" {
     e => fail("second append failed: \{e}")
   }
   assert_eq(capture.events.length(), 3)
-  assert_eq(capture.events[0].source, "posoco_ext_fs_session")
   debug_inspect(
-    @devkit.decode_status_op(capture.events[0]),
+    capture.events[0],
     content=(
-      #|Some(
-      #|  Register(
-      #|    segment="session",
-      #|    label=None,
-      #|    priority=80,
-      #|    value=Some("sess_save"),
-      #|    color=None,
-      #|  ),
+      #|Register(
+      #|  segment="session",
+      #|  label=None,
+      #|  priority=80,
+      #|  value=Some("sess_save"),
+      #|  color=None,
       #|)
     ),
   )
   debug_inspect(
-    @devkit.decode_status_op(capture.events[1]),
+    capture.events[1],
     content=(
-      #|Some(
-      #|  Register(
-      #|    segment="session",
-      #|    label=None,
-      #|    priority=80,
-      #|    value=Some("sess_append"),
-      #|    color=None,
-      #|  ),
+      #|Register(
+      #|  segment="session",
+      #|  label=None,
+      #|  priority=80,
+      #|  value=Some("sess_append"),
+      #|  color=None,
       #|)
     ),
   )
   debug_inspect(
-    @devkit.decode_status_op(capture.events[2]),
+    capture.events[2],
     content=(
-      #|Some(
-      #|  Register(
-      #|    segment="session",
-      #|    label=None,
-      #|    priority=80,
-      #|    value=Some("sess_append"),
-      #|    color=None,
-      #|  ),
+      #|Register(
+      #|  segment="session",
+      #|  label=None,
+      #|  priority=80,
+      #|  value=Some("sess_append"),
+      #|  color=None,
       #|)
     ),
   )
@@ -605,7 +617,7 @@ async test "io[native]: save and append publish the session status register" {
 }
 
 ///|
-async test "io[native]: bus=None store behaves exactly as before" {
+async test "io[native]: a store without a channel behaves exactly as before" {
   let root = fresh_root("status-silent")
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
@@ -613,16 +625,16 @@ async test "io[native]: bus=None store behaves exactly as before" {
     metadata: Map::from_array([]),
   }
   store.save("sess_c", session) catch {
-    e => fail("save without bus failed: \{e}")
+    e => fail("save without a channel failed: \{e}")
   }
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
   ]
   store.append_messages("sess_c", 0, msgs[:]) catch {
-    e => fail("append without bus failed: \{e}")
+    e => fail("append without a channel failed: \{e}")
   }
   let loaded = store.load("sess_c") catch {
-    e => fail("load without bus failed: \{e}")
+    e => fail("load without a channel failed: \{e}")
   }
   assert_eq(loaded.messages.length(), 1)
   @fs.rmdir(root, recursive=true) catch {
@@ -633,12 +645,11 @@ async test "io[native]: bus=None store behaves exactly as before" {
 ///|
 async test "io[native]: failed persist publishes nothing" {
   let root = fresh_root("status-error")
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
+  let channel = capture_status_system(capture)
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
   let session = @posoco.Session::{
     messages: [],

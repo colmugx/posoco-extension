@@ -45,7 +45,6 @@ pub fn BunrakuExtension::BunrakuExtension(
   exposed~ : Array[@posoco.ToolDef] = [],
   scoped_invoker? : &ToolInvoker,
   call_observers~ : Array[(NestedCallEvent) -> Unit] = [],
-  bus? : @devkit.EventBus,
   home? : String,
   max_output_bytes~ : Int32 = 65536,
   build_cache? : String,
@@ -60,7 +59,6 @@ pub fn BunrakuExtension::BunrakuExtension(
   }
   {
     runtime: @mbtx.Runtime(
-      bus?,
       home?,
       build_cache=build_cache.unwrap_or_else(() => {
         let path = home.unwrap_or(@devkit.home_dir().unwrap_or(""))

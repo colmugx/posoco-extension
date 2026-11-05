@@ -5,7 +5,7 @@
 
 ///|
 async test "a confirmed failure stops after the wave under the default policy" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -47,7 +47,7 @@ async test "a confirmed failure stops after the wave under the default policy" {
 
 ///|
 async test "confirmed failures continue to the next wave under the continuing policy" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma", "delta"],
@@ -106,7 +106,7 @@ async test "confirmed failures continue to the next wave under the continuing po
 
 ///|
 async test "cancel remaining withdraws and cancels the still-running sibling" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -160,7 +160,7 @@ async test "an unconfirmed settlement overrides every policy and cancels sibling
       @parallel.ContinueOnConfirmedFailure,
       @parallel.CancelRemainingOnFailure,
     ] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let h = parallel_harness(
         group,
         tasks=["alpha", "beta", "gamma"],

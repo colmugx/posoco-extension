@@ -514,7 +514,13 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     // 0.23.0: tool child declaration and catalog changes carry no ACP
     // counterpart; the bridge projects its own protocol surface.
     | ToolChildDeclared(..)
-    | ToolCatalogChanged(..) => ()
+    | ToolCatalogChanged(..)
+    // 0.24.0: queued-message delivery receipts settle the host's own
+    // submission bubble; the message body reaches the client through session
+    // content, so there is no ACP update to send. An undelivered message is
+    // reported by the client's own prompt lifecycle, not projected here.
+    | MessageApplied(..)
+    | MessageUndelivered(..) => ()
   }
 }
 

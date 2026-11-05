@@ -201,4 +201,3 @@ fn ticket_update_total_label(count : Int32) -> String {
     "\{count} updates"
   }
 }
-

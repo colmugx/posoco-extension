@@ -125,9 +125,7 @@ fn submit_editor(
       @rabbita.none,
     )
   }
-  guard (env.uuid)() is Some(uuid) else {
-    return missing_submission_id(model)
-  }
+  guard (env.uuid)() is Some(uuid) else { return missing_submission_id(model) }
   let revision = model.replica.revision()
   let (command, kind) = match editor.mode {
     CreateMode => (create_command(uuid, revision, editor), PendingCreate)
@@ -148,9 +146,7 @@ fn submit_move(
   if !mutations_allowed(model) {
     return (model, @rabbita.none)
   }
-  guard (env.uuid)() is Some(uuid) else {
-    return missing_submission_id(model)
-  }
+  guard (env.uuid)() is Some(uuid) else { return missing_submission_id(model) }
   if to is @client.Ready {
     match task_by_id(model.replica, task_id) {
       Some(task) =>

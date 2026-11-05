@@ -1,11 +1,12 @@
 ///|
 /// Goal completion is a claim made by the worker; this is the independent
 /// result of applying the user-authorized acceptance policy to evidence.
+#derive(Eq, Debug)
 pub(all) struct GoalEvidence {
   criterion : String
   source : String
   reference : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalEvidence with Eq::{not_equal, equal}
@@ -14,11 +15,12 @@ pub extend GoalEvidence with Eq::{not_equal, equal}
 pub extend GoalEvidence with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GoalAssessment {
   Verified(Array[GoalEvidence])
   Rejected(String)
   Inconclusive(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalAssessment with Eq::{not_equal, equal}
@@ -27,12 +29,13 @@ pub extend GoalAssessment with Eq::{not_equal, equal}
 pub extend GoalAssessment with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Debug)
 pub(all) struct GoalVerificationRequest {
   goal : String
   criteria : Array[String]
   session_id : String
   claim : String
-} derive(Debug)
+}
 
 ///|
 pub extend GoalVerificationRequest with @moonbitlang/core/debug.Debug::{to_repr}

@@ -9,8 +9,8 @@
 /// (zai/kimi) ride this generic path; codex has no registry source, so the
 /// router clears its own quota segments for it and the bar stays owned by
 /// `CodexQuotaStatus` (distinct source; provider scoping keeps them mutually
-/// exclusive). With `bus = None` every publication is a silent no-op, and no
-/// failure here ever escapes: refresh runs after the chat response and
+/// exclusive). With no event capability every publication is a silent no-op,
+/// and no failure here ever escapes: refresh runs after the chat response and
 /// captures every error into a backoff.
 
 ///|
@@ -42,32 +42,26 @@ fn quota_color_role(left_percent : Double) -> String? {
 }
 
 ///|
-/// Register one quota segment on the bus.
+/// Register one quota segment on the extension's event channel.
 fn publish_quota_segment(
-  bus : @devkit.EventBus,
+  events : @posoco.Events,
   segment~ : String,
   value~ : String,
   color~ : String?,
 ) -> Unit {
-  match color {
-    Some(role) =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_llm",
-        segment~,
-        priority=quota_segment_priority,
-        value~,
-        color=role,
-      )
-    None =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_llm",
-        segment~,
-        priority=quota_segment_priority,
-        value~,
-      )
-  }
+  ignore(
+    events.publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment~,
+          label=None,
+          priority=quota_segment_priority,
+          value=Some(value),
+          color~,
+        ),
+      ),
+    ),
+  )
 }
 
 ///|
@@ -75,8 +69,8 @@ fn publish_quota_segment(
 /// were published before but vanished from the current readings are
 /// unregistered, so a stale number never lingers on the bar.
 fn RouterModelPort::publish_quota_segments(self : RouterModelPort) -> Unit {
-  let bus = match self.bus {
-    Some(bus) => bus
+  let events = match self.channel() {
+    Some(events) => events
     None => return
   }
   let published : Array[String] = []
@@ -86,7 +80,7 @@ fn RouterModelPort::publish_quota_segments(self : RouterModelPort) -> Unit {
         Some((value, currency)) => {
           published.push("balance")
           publish_quota_segment(
-            bus,
+            events,
             segment="balance",
             value="\{value} \{currency}",
             color=None,
@@ -103,7 +97,7 @@ fn RouterModelPort::publish_quota_segments(self : RouterModelPort) -> Unit {
           let left = 100.0 - percent
           published.push(reading.window)
           publish_quota_segment(
-            bus,
+            events,
             segment=reading.window,
             value=format_status_percent(left) + "% left",
             color=quota_color_role(left),
@@ -115,7 +109,11 @@ fn RouterModelPort::publish_quota_segments(self : RouterModelPort) -> Unit {
   }
   for segment in self.quota_shown {
     if !published.contains(segment) {
-      @devkit.publish_status_unregister(bus, source="posoco_ext_llm", segment~)
+      ignore(
+        events.publish(
+          @kit_events.StatusChanged(@kit_events.Unregister(segment~)),
+        ),
+      )
     }
   }
   self.quota_shown = published
@@ -184,13 +182,13 @@ async fn RouterModelPort::refresh_quota_now(
 /// Unregister every quota segment this router published and reset the pull
 /// cache, so the next active provider starts clean.
 fn RouterModelPort::clear_quota_segments(self : RouterModelPort) -> Unit {
-  match self.bus {
-    Some(bus) =>
+  match self.channel() {
+    Some(events) =>
       for segment in self.quota_shown {
-        @devkit.publish_status_unregister(
-          bus,
-          source="posoco_ext_llm",
-          segment~,
+        ignore(
+          events.publish(
+            @kit_events.StatusChanged(@kit_events.Unregister(segment~)),
+          ),
         )
       }
     None => ()

@@ -23,26 +23,41 @@ pub fn BunrakuRuntime::BunrakuRuntime(
   fallback~ : &@runtime.Runtime,
   presentation? : BunrakuExtension,
   call_observers~ : Array[(NestedCallEvent) -> Unit] = [],
-  bus? : @devkit.EventBus,
   home? : String,
 ) -> BunrakuRuntime {
   // run_code is a transport, not a privileged operation. The permission
   // gate must inspect EVERY nested leaf call through the kernel child
   // pipeline, not require a second blanket approval for the enclosing tool.
-  match bus {
-    Some(bus) =>
-      bus.publish({
-        source: "posoco_ext_bunraku",
-        topic: "tool_exemptions",
-        data: { "tools": ["run_code"] },
-      })
-    None => ()
-  }
+  publish_tool_exemptions(["run_code"])
   {
     fallback,
     presentation: presentation.unwrap_or_else(() => {
-      BunrakuExtension(call_observers~, bus?, home?)
+      BunrakuExtension(call_observers~, home?)
     }),
+  }
+}
+
+///|
+/// Announce that `tools` carry their own governance and must bypass an
+/// approval gate's checks (legacy topic `"tool_exemptions"`).
+///
+/// The payload is the closed `@kit_events.ToolExemptions` record, published
+/// through an owner-bound capability: the envelope carries
+/// `Extension("posoco_ext_bunraku")` instead of a `BusEvent.source` field.
+/// Publication happens at construction — the host builds this runtime after
+/// the gate has subscribed — and a missing or closed system is a silent
+/// no-op, never an error path.
+fn publish_tool_exemptions(tools : Array[String]) -> Unit {
+  match @devkit.events_system_default() {
+    Some(system) =>
+      match system.publisher(owner="posoco_ext_bunraku") {
+        Ok(publisher) => {
+          let payload : @kit_events.ToolExemptionsPayload = { tools, }
+          ignore(publisher.publish(@kit_events.ToolExemptions(payload)))
+        }
+        Err(_) => ()
+      }
+    None => ()
   }
 }
 

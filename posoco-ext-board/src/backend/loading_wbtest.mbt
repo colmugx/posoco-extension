@@ -27,7 +27,7 @@ async test "authoritative bootstrap gates on readiness without faking a snapshot
     release: @aqueue.Queue(kind=@aqueue.Blocking(1)),
   }
   let backend = BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     store.entered.get()
     assert_eq(backend.coordinator.status(), @coordinator.Loading)
@@ -88,7 +88,7 @@ async test "backend loading restores its own store and stays isolated" {
   let durable = durable_seed()
   let restoring = BoardBackend::BoardBackend(store=durable)
   let isolated = BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     restoring.attach(group)
     isolated.attach(group)
     assert_true(restoring.coordinator.wait_ready() is Ok(_))

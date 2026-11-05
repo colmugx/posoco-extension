@@ -145,7 +145,7 @@ impl @posoco.ModelPort for WorkflowRealModel with fn compact(
 /// scripted trusted host resolver and an enabled Ready-stage policy, wired
 /// into one runner inside the same structured host lifetime.
 async fn workflow_real_harness(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   tasks~ : Array[String],
   model~ : WorkflowRealModel,
   resolver~ : ScriptedResolver,
@@ -178,7 +178,7 @@ async fn workflow_real_harness(
 
 ///|
 async test "the runner sequences two real scoped agent turns without parallelism" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let model = workflow_real_model()
     let resolver = scripted_resolver(available=[
       "alpha/attempt-alpha-1", "beta/attempt-beta-1",
@@ -250,7 +250,7 @@ async test "the runner sequences two real scoped agent turns without parallelism
 
 ///|
 async test "a real model failure stops the run under StopOnFailure" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let model = workflow_real_model(fail=true)
     let resolver = scripted_resolver(available=[
       "alpha/attempt-alpha-1", "beta/attempt-beta-1",
@@ -281,7 +281,7 @@ async test "a real model failure stops the run under StopOnFailure" {
 
 ///|
 async test "cancel during a real held model run settles it as cancelled" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let model = workflow_real_model(hold=true)
     let resolver = scripted_resolver(available=["alpha/attempt-alpha-1"])
     let h = workflow_real_harness(group, tasks=["alpha"], model~, resolver~)
@@ -304,7 +304,7 @@ async test "cancel during a real held model run settles it as cancelled" {
 
 ///|
 async test "pause and resume split two real model runs at a settled boundary" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let model = workflow_real_model(hold=true)
     let resolver = scripted_resolver(available=[
       "alpha/attempt-alpha-1", "beta/attempt-beta-1",

@@ -1,6 +1,6 @@
 ///|
 async test "real model timeout is confirmed settlement, not a workflow deadline" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let model = workflow_real_model(hold=true)
     let resolver = scripted_resolver(available=["alpha/attempt-alpha-1"])
     let h = workflow_real_harness(group, tasks=["alpha"], model~, resolver~)

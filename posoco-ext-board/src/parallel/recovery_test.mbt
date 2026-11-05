@@ -69,7 +69,7 @@ fn running_record(
 
 ///|
 async test "a recovered mixed journal blocks start and never auto-executes" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let journal = parallel_journal([
       settled_record("alpha", "attempt-alpha-1", "settled-exec"),
       running_record("beta", "attempt-beta-1", "recovered-exec"),
@@ -108,7 +108,7 @@ async test "a recovered mixed journal blocks start and never auto-executes" {
 
 ///|
 async test "settled history is never reused and fresh attempts run with fresh identity" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let journal = parallel_journal([
       settled_record("alpha", "attempt-alpha-1", "spent-exec"),
     ])

@@ -12,6 +12,7 @@ fn truncate_text(text : String, max_len : Int32) -> String {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GoalStatus {
   Idle // No goal set
   Running // Actively pursuing a goal
@@ -20,7 +21,7 @@ pub(all) enum GoalStatus {
   Blocked(String) // Agent declared it cannot proceed
   BudgetExhausted // Hit turn or token limit
   Failed(String) // Error during execution
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalStatus with Eq::{not_equal, equal}
@@ -46,20 +47,22 @@ pub extend GoalStatus with Show::{to_string, output}
 
 ///|
 /// Budget limits. All fields default to 0 (unlimited).
+#derive(Debug)
 pub(all) struct GoalBudget {
   mut max_turns : Int32
   mut max_total_tokens : Int32
-} derive(Debug)
+}
 
 ///|
 pub extend GoalBudget with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Accumulated usage counters, updated by the Observer impl.
+#derive(Debug, Eq)
 pub(all) struct GoalUsage {
   mut turns : Int32
   mut total_tokens : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend GoalUsage with Eq::{not_equal, equal}
@@ -68,6 +71,7 @@ pub extend GoalUsage with Eq::{not_equal, equal}
 pub extend GoalUsage with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+#derive(Debug)
 pub(all) struct GoalOptions {
   goal_condition : String
   budget : GoalBudget
@@ -83,18 +87,19 @@ pub(all) struct GoalOptions {
   mut enable_semantic_advice : Bool // opt-in; may disclose claim context to DecisionPort
   mut max_semantic_stall_deferrals : Int32 // bounded rescue attempts, default 1
   mut semantic_stall_threshold : Double // strictly advisory probability gate
-} derive(Debug)
+}
 
 ///|
 pub extend GoalOptions with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// One entry per completed turn in the execute loop.
+#derive(Eq, Debug)
 pub(all) struct GoalHistoryEntry {
   turn : Int32
   usage : GoalUsage
   summary : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend GoalHistoryEntry with Eq::{not_equal, equal}
@@ -104,6 +109,7 @@ pub extend GoalHistoryEntry with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Final result returned by GoalRunner.execute().
+#derive(Debug)
 pub(all) struct GoalResult {
   final_status : GoalStatus
   total_usage : GoalUsage
@@ -113,7 +119,7 @@ pub(all) struct GoalResult {
   stall_reason : String?
   assessment : GoalAssessment
   semantic_probability : Double?
-} derive(Debug)
+}
 
 ///|
 pub extend GoalResult with @moonbitlang/core/debug.Debug::{to_repr}

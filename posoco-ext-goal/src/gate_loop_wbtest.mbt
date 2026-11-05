@@ -56,6 +56,7 @@ fn gate_build_agent(
       goal,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   ) catch {
     e => abort("Agent failed: \{e}")
   }
@@ -573,6 +574,7 @@ async test "composed decision provider gives optional semantic advice" {
       goal,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   ) catch {
     e => abort("composition failed: \{e}")
   }

@@ -8,11 +8,10 @@ pub struct MbtxExtension {
 
 ///|
 pub fn MbtxExtension::MbtxExtension(
-  bus? : @devkit.EventBus,
   home? : String,
   prefer_system~ : Bool = true,
 ) -> MbtxExtension {
-  { runtime: Runtime(bus?, home?, prefer_system~), }
+  { runtime: Runtime(home?, prefer_system~), }
 }
 
 ///|

@@ -21,7 +21,6 @@ pub struct ShellTools {
   in_flight : Map[Int32, ShellChildHandle]
   /// Background work must be hosted by an explicit owner task group.
   mut host_group : @async.TaskGroup[Unit]?
-  bus : @devkit.EventBus?
   sessions : Map[String, ShellSession]
   mut next_session : Int32
   mut closed : Bool
@@ -31,13 +30,11 @@ pub struct ShellTools {
 /// Canonical constructor. Use this everywhere.
 pub fn ShellTools::ShellTools(
   anchor~ : @devkit.WorkspaceAnchor? = None,
-  bus~ : @devkit.EventBus? = None,
 ) -> ShellTools {
   ShellTools::{
     anchor,
     in_flight: Map::from_array([]),
     host_group: None,
-    bus,
     sessions: Map::from_array([]),
     next_session: 0,
     closed: false,
@@ -681,19 +678,30 @@ fn ShellTools::read_session(
 
 ///|
 /// Completion events are advisory, not an alternative to session snapshots.
-/// A host can subscribe to bash.session.finished and bash.session.stall.
+/// A host subscribes to `@posoco_ext_bash.BashSessionNotice` and selects on
+/// the payload's `kind` (`BASH_SESSION_FINISHED` / `BASH_SESSION_STALL`).
+///
+/// The capability is minted per publication and bound to this extension's id,
+/// so the envelope carries `Extension("posoco_ext_bash")` — the typed
+/// replacement for the legacy `BusEvent.source`. A missing or closed system
+/// is a silent no-op: notification is never an error path.
 fn ShellTools::emit_session(
-  self : ShellTools,
+  _self : ShellTools,
   session : ShellSession,
-  topic : String,
+  kind : String,
 ) -> Unit {
-  match self.bus {
-    Some(bus) =>
-      bus.publish({
-        source: "posoco_ext_bash",
-        topic,
-        data: session.snapshot(session.next_cursor),
-      })
+  match @devkit.events_system_default() {
+    Some(system) =>
+      match system.publisher(owner="posoco_ext_bash") {
+        Ok(publisher) => {
+          let payload : BashSessionNoticePayload = {
+            kind,
+            snapshot: session.snapshot(session.next_cursor),
+          }
+          ignore(publisher.publish(BashSessionNotice(payload)))
+        }
+        Err(_) => ()
+      }
     None => ()
   }
 }
@@ -710,7 +718,7 @@ async fn ShellTools::watch_stall(
     let idle = @async.now() - session.last_output_at_ms
     if idle >= BASH_STALL_WARNING_MS {
       if !warned {
-        self.emit_session(session, "bash.session.stall")
+        self.emit_session(session, BASH_SESSION_STALL)
         warned = true
       }
     } else {
@@ -837,7 +845,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
             }
             session.ended_at_ms = Some(@async.now())
           }
-          self.emit_session(session, "bash.session.finished")
+          self.emit_session(session, BASH_SESSION_FINISHED)
         }
         // Detached from the model effect's cancellation registration.
         let background_ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
@@ -874,7 +882,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         session.ended_at_ms = Some(@async.now())
       })
       session.worker = Some(worker)
-      self.emit_session(session, "bash.session.started")
+      self.emit_session(session, BASH_SESSION_STARTED)
       ignore(group.spawn(async fn() { self.watch_stall(session) }))
       if !background && yield_ms > 0 {
         let deadline = @async.now() + yield_ms.to_int64()

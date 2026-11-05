@@ -476,6 +476,7 @@ fn registry_test_bridge(
     mode: LoadMode::Eager,
     pending: [],
     group: None,
+    lifetime: None,
     activated: true,
     catalog_revision: 0,
     closing: false,

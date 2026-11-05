@@ -24,6 +24,7 @@ async test "e2e: context contributor injects configured envelope into model requ
       ]),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   ignore(agent.run_turn(@tk.tk_user_msg("hello"), "s1"))
   assert_true(model.received_messages.length() > 0)
@@ -65,6 +66,7 @@ async test "e2e: empty bundle contributes no configured envelope" {
       ]),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   ignore(agent.run_turn(@tk.tk_user_msg("hello"), "s1"))
   assert_true(model.received_messages.length() > 0)

@@ -107,7 +107,7 @@ async test "board command opens reuses and closes one runtime" {
     opener~,
   )
   let board = BoardExtension::with_runtime(runtime~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     board.attach(group)
     let first = board.invoke("board.open", Json::null())
     let second = board.invoke("board", Json::null())

@@ -65,6 +65,7 @@ impl ChildComposer for FakeComposer with fn compose(
       ),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   ) catch {
     error => raise ComposerError::Failed("child compose failed: \{error}")
   }

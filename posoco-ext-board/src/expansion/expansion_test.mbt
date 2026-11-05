@@ -362,7 +362,7 @@ async fn create_parent(backend : @backend.BoardBackend) -> Unit {
 }
 
 ///|
-async fn board(group : @async.TaskGroup[Unit]) -> @backend.BoardBackend {
+async fn board(group : @core_async.TaskGroup) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(now_ms=() => 100L)
   backend.attach(group)
   create_parent(backend)
@@ -371,7 +371,7 @@ async fn board(group : @async.TaskGroup[Unit]) -> @backend.BoardBackend {
 
 ///|
 async test "four steps exact approval atomic multi-task and S4B outlook" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let allocator : CountingAllocator = { calls: 0, }
     let host = @expansion.ExpansionHost(backend~, allocator~, now_ms=() => 100L)
@@ -438,7 +438,7 @@ async test "four steps exact approval atomic multi-task and S4B outlook" {
 
 ///|
 async test "pure DAG and scope rejection leaves all state and allocations untouched" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let before = backend.state().unwrap()
     let bad = [
@@ -506,7 +506,7 @@ async test "pure DAG and scope rejection leaves all state and allocations untouc
 
 ///|
 async test "default denial scope separation deadline and single-use per-proposal authority" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let denied = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
     assert_true(denied.prepare(payload()) is Err(@expansion.DefaultDenied))
@@ -566,7 +566,7 @@ async test "default denial scope separation deadline and single-use per-proposal
 
 ///|
 async test "approval cannot be swapped forged by content equality or denied implicitly" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let first = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
     let second = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
@@ -609,7 +609,7 @@ async test "approval cannot be swapped forged by content equality or denied impl
 
 ///|
 async test "stale revision and cumulative workflow budgets never allocate or partly commit" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let allocator : CountingAllocator = { calls: 0, }
     let stale = @expansion.ExpansionHost(backend~, allocator~, now_ms=() => 100L)
@@ -704,7 +704,7 @@ impl @store.BoardStore for AmbiguousStore with fn persist(
 ///|
 async test "durability uncertainty freezes whole mapping and reconciles without any replay" {
   for mode in [1, 2] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store : AmbiguousStore = {
         inner: @store.MemoryBoardStore(),
         mode: 0,
@@ -799,7 +799,7 @@ impl @expansion.ExpansionIdAllocator for FixedAllocator with fn canonical_task_i
 
 ///|
 async test "allocator invalid duplicate or colliding IDs cannot partially commit" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let before = backend.state().unwrap()
     for id in ["", "bad id", "parent", "duplicate"] {
@@ -840,7 +840,7 @@ impl @expansion.DynamicPlanSource for SlowSource with fn generate(self, context)
 
 ///|
 async test "generation is bounded single use and cannot race another operation on the host" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let host = @expansion.ExpansionHost(
       backend~,
@@ -848,7 +848,7 @@ async test "generation is bounded single use and cannot race another operation o
       now_ms=() => 100L,
     )
     let source : SlowSource = { entered: Ref(false), context: Ref(None), }
-    @async.with_task_group(generation => {
+    @core_async.with_task_group(generation => {
       let work = generation.spawn(() => {
         assert_true(
           host.generate(source, authorization=Some(authority(tasks=3, edges=4)))
@@ -884,7 +884,7 @@ async test "generation is bounded single use and cannot race another operation o
 
 ///|
 async test "concurrent commits have one complete winner and no partial loser" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let first = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
     let second = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
@@ -906,7 +906,7 @@ async test "concurrent commits have one complete winner and no partial loser" {
       .approve(second.preview().unwrap(), HostApprover::{ grant: true, })
       .unwrap()
     let outcomes : Array[Bool] = []
-    @async.with_task_group(commits => {
+    @core_async.with_task_group(commits => {
       let one = commits.spawn(() => outcomes.push(first.commit(a) is Ok(_)))
       let two = commits.spawn(() => outcomes.push(second.commit(b) is Ok(_)))
       one.wait()
@@ -938,7 +938,7 @@ impl @expansion.DynamicPlanSource for DeniedSource with fn generate(
 
 ///|
 async test "phase guards deny premature steps and denied generation spends authority" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = board(group)
     let fresh = @expansion.ExpansionHost(backend~, now_ms=() => 100L)
     assert_true(fresh.preview() is Err(@expansion.InvalidPhase))

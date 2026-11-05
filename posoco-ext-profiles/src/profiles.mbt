@@ -5,9 +5,10 @@
 /// extensions so the model can bring their full surface into the session in
 /// a single step. Activation = append one UserMessage carrying the frozen
 /// `profile <id> activated` header plus the members' stripped prompt
-/// manuals (tools stay behind the lazytools gateway), and one devkit
-/// EventBus event. The extension keeps ZERO in-memory activation state —
-/// the transcript is the single source of truth.
+/// manuals (tools stay behind the lazytools gateway), and one
+/// `@kit_events.ProfilesActivated` event. The extension keeps ZERO
+/// in-memory activation state — the transcript is the single source of
+/// truth.
 
 ///|
 /// One uniform profile view. The builtin `all` and every manifest become
@@ -45,7 +46,11 @@ pub struct Profiles {
   priv attribution : Map[String, String]
   /// Load-time warnings for manifests referencing uncomposed extensions.
   priv dangling_warnings : Array[String]
-  priv bus : @devkit.EventBus?
+  /// Owner-bound publication capability for the activation notice. Wired by
+  /// the host at composition (or by a test) as `system.publisher(owner~)`;
+  /// `None` means "no event channel", which makes publication a silent
+  /// no-op rather than an error.
+  priv events : @posoco.Events?
   priv store : &ProfileStore?
   /// Host-owned submission through an ordinary Agent turn, never direct store mutation.
   priv activation_sink : &ProfileActivationSink?
@@ -64,13 +69,15 @@ pub struct Profiles {
 /// constant; nothing here touches a session. The host resolves the
 /// two-level manifest directory (project overriding user, ids deduplicated)
 /// before calling; the deferred set and attribution table come from the
-/// same composition pass.
+/// same composition pass. `events~` is the host-minted owner-bound
+/// publication capability (`system.publisher(owner~)`) that carries the
+/// activation notice; see `extension/docs/events-migration.md`.
 pub fn Profiles::build(
   manifests~ : Array[ProfileManifest],
   defer_set~ : Array[String],
   captured_prompts~ : Map[String, String],
   attribution~ : Map[String, String],
-  bus~ : @devkit.EventBus? = None,
+  events~ : @posoco.Events? = None,
   store~ : &ProfileStore? = None,
   activation_sink~ : &ProfileActivationSink? = None,
   summarizer~ : ((Array[(String, Int32)]) -> (String, String))? = None,
@@ -111,7 +118,7 @@ pub fn Profiles::build(
     captured_prompts,
     attribution,
     dangling_warnings: warnings,
-    bus,
+    events,
     store,
     activation_sink,
     summarizer,

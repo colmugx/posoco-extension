@@ -79,7 +79,7 @@ async test "real scoped Agent with native identity journal preserves S3 snapshot
     input: "explicit input",
     timeout_ms: None,
   }
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = @backend.BoardBackend(store=board_store, now_ms=() => 100L)
     backend.attach(group)
     assert_true(backend.bootstrap_snapshot() is Ok(_))
@@ -123,7 +123,7 @@ async test "real scoped Agent with native identity journal preserves S3 snapshot
     journal.close()
   })
   let restarted_journal = @native.FileBoardExecutionStore(directory=root)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = @backend.BoardBackend(store=@store.FileBoardStore(root~))
     backend.attach(group)
     assert_true(backend.bootstrap_snapshot() is Ok(_))

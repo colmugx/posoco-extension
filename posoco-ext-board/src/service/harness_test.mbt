@@ -200,7 +200,7 @@ struct Harness {
 ///|
 fn harness(
   directory : String,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   enabled~ : Bool = true,
   max_executions~ : Int32 = 8,
   continue_on_confirmed_failure~ : Bool = false,
@@ -248,6 +248,7 @@ fn harness(
   let parent = @posoco.Agent(
     exts=[parent_model, ui, board],
     config=@posoco.agent_config(),
+    events=@posoco.EventSystem(),
   )
   { board, ui, state, parent, }
 }

@@ -84,7 +84,7 @@ fn wb_host(
 
 ///|
 async test "reconcile proves a matching record and freezes on contradiction" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = @backend.BoardBackend(now_ms=() => 100L)
     backend.attach(group)
     wb_parent(backend)

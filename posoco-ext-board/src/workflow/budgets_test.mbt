@@ -31,7 +31,7 @@ test "spec constructor defaults to stop on failure and detaches selected scope" 
 
 ///|
 async test "structurally invalid specs are rejected without reserving the runner" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     let invalid : Array[@workflow.WorkflowRunSpec] = [
       workflow_spec(run_id=""),
@@ -65,7 +65,7 @@ async test "structurally invalid specs are rejected without reserving the runner
 
 ///|
 async test "a selection naming an unknown task is rejected as out of scope" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(
       h.runner.start(
@@ -93,7 +93,7 @@ async test "a selection naming an unknown task is rejected as out of scope" {
 
 ///|
 async test "the execution budget stops the loop once spent" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha", "beta"])
     assert_true(
       h.runner.start(workflow_spec(run_id="run-1", max_executions=1)) is Ok(_),
@@ -113,7 +113,7 @@ async test "the execution budget stops the loop once spent" {
 
 ///|
 async test "a paused run still consumes its elapsed budget" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -153,7 +153,7 @@ async test "a paused run still consumes its elapsed budget" {
 
 ///|
 async test "the structured deadline stops a held run as DeadlineReached" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     // The stopped wall clock permits admission after delayed resolution. The
     // independent workflow timer must still beat the later Agent timeout.
     let h = workflow_harness(

@@ -2,7 +2,7 @@
 async test "wire snapshot and command share the workflow backend" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group, max_executions=1)
     defer ignore(h.board.shutdown())
     h.board.wire_ready().checked()

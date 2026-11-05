@@ -841,52 +841,66 @@ async test "a failing review keeps planning with a retryable tool error" {
 }
 
 ///|
-/// RecordingGate — captures bus events for exemption-report tests.
+/// RecordingGate — captures protocol envelopes for exemption-report and
+/// status-fact tests. Subscribed on a session event system before anything
+/// publishes, exactly as a composed gate would be.
 struct RecordingGate {
-  events : Array[@devkit.BusEvent]
+  envelopes : Array[@posoco.EventEnvelope]
 }
 
 ///|
-impl @devkit.BusSubscriber for RecordingGate with fn on_bus_event(
-  self : RecordingGate,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+/// One wired test rig: the session event system, the recorder listening on
+/// it, and the owner-bound capability plan publishes through.
+fn wired_plan_channel() -> (@posoco.EventSystem, RecordingGate) {
+  let system = @posoco.EventSystem()
+  let gate : RecordingGate = { envelopes: [], }
+  match system.subscribe(fn(envelope) { gate.envelopes.push(envelope) }) {
+    Ok(_) => ()
+    Err(_) => abort("subscribe on the session event system failed")
+  }
+  (system, gate)
 }
 
 ///|
-async test "constructor reports the enter/exit tools on the bus" {
-  let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [], }
-  bus.subscribe(gate as &@devkit.BusSubscriber)
+/// Mint plan's owner-bound capability, as the host assembly does.
+fn plan_capability(system : @posoco.EventSystem) -> @posoco.Events {
+  match system.publisher(owner="posoco_ext_plan") {
+    Ok(events) => events
+    Err(_) => abort("minting the posoco_ext_plan capability failed")
+  }
+}
+
+///|
+async test "constructor reports the enter/exit tools through the event channel" {
+  let (system, gate) = wired_plan_channel()
   ignore(
     PlanMode(
       config=PlanModeConfig::{
         ..PlanModeConfig::default(),
         allow_model_entry: true,
       },
-      bus=Some(bus),
+      events=Some(plan_capability(system)),
     ),
   )
-  assert_eq(gate.events.length(), 1)
-  assert_eq(gate.events[0].source, "posoco_ext_plan")
-  assert_eq(gate.events[0].topic, "tool_exemptions")
-  inspect(
-    gate.events[0].data.stringify(),
-    content="{\"tools\":[\"exit_plan_mode\",\"enter_plan_mode\"]}",
+  assert_eq(gate.envelopes.length(), 1)
+  assert_eq(
+    @kit_events.publisher_id(gate.envelopes[0]),
+    Some("posoco_ext_plan"),
+  )
+  assert_eq(
+    @kit_events.tool_exemptions_of(gate.envelopes[0]),
+    Some({ tools: ["exit_plan_mode", "enter_plan_mode"], }),
   )
 }
 
 ///|
 async test "without model entry only the exit tool is reported" {
-  let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [], }
-  bus.subscribe(gate as &@devkit.BusSubscriber)
-  ignore(PlanMode(bus=Some(bus)))
-  assert_eq(gate.events.length(), 1)
-  inspect(
-    gate.events[0].data.stringify(),
-    content="{\"tools\":[\"exit_plan_mode\"]}",
+  let (system, gate) = wired_plan_channel()
+  ignore(PlanMode(events=Some(plan_capability(system))))
+  assert_eq(gate.envelopes.length(), 1)
+  assert_eq(
+    @kit_events.tool_exemptions_of(gate.envelopes[0]),
+    Some({ tools: ["exit_plan_mode"], }),
   )
 }
 
@@ -955,15 +969,12 @@ async test "completed plans are echoed once in the tool result" {
 }
 
 ///|
-async test "plan transitions publish status facts on the bus" {
-  let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [], }
-  bus.subscribe(gate as &@devkit.BusSubscriber)
-  let plan = PlanMode(bus=Some(bus))
-  // The exemption report is the first event; status ops follow the devkit
-  // protocol on the status topic: segment "plan" (priority 10, value
-  // "Plan", or "Plan: <name>" once a plan waits) while active, unregister
-  // once off.
+async test "plan transitions publish status facts through the event channel" {
+  let (system, gate) = wired_plan_channel()
+  let plan = PlanMode(events=Some(plan_capability(system)))
+  // The exemption report is the first event; status ops follow the status
+  // protocol: segment "plan" (priority 10, value "Plan", or "Plan: <name>"
+  // once a plan waits) while active, unregister once off.
   plan.start()
   assert_true(plan.submit_plan("test plan", "p"))
   ignore(plan.approve())
@@ -975,18 +986,18 @@ async test "plan transitions publish status facts on the bus" {
     @posoco.CommandOutcome::Success(..) => ()
     _ => fail("expected Success")
   }
-  let ops : Array[@devkit.StatusOp] = gate.events
+  let ops : Array[@kit_events.StatusOp] = gate.envelopes
     .iter()
-    .filter_map(fn(event) { @devkit.decode_status_op(event) })
+    .filter_map(fn(envelope) { @kit_events.status_changed_of(envelope) })
     .collect()
-  let registered = @devkit.Register(
+  let registered = @kit_events.Register(
     segment="plan",
     label=None,
     priority=10,
     value=Some("Plan"),
     color=Some("accent"),
   )
-  let registered_named = @devkit.Register(
+  let registered_named = @kit_events.Register(
     segment="plan",
     label=None,
     priority=10,
@@ -996,12 +1007,12 @@ async test "plan transitions publish status facts on the bus" {
   assert_eq(ops.length(), 8)
   assert_eq(ops[0], registered)
   assert_eq(ops[1], registered_named)
-  assert_eq(ops[2], @devkit.Unregister(segment="plan"))
+  assert_eq(ops[2], @kit_events.Unregister(segment="plan"))
   assert_eq(ops[3], registered)
-  assert_eq(ops[4], @devkit.Unregister(segment="plan"))
+  assert_eq(ops[4], @kit_events.Unregister(segment="plan"))
   assert_eq(ops[5], registered)
   assert_eq(ops[6], registered_named)
-  assert_eq(ops[7], @devkit.Unregister(segment="plan"))
+  assert_eq(ops[7], @kit_events.Unregister(segment="plan"))
 }
 
 // ──────────────────────────────────────────────────────────────────────────

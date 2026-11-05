@@ -136,34 +136,36 @@ fn test_config() -> @zai.ZaiConfig {
 }
 
 ///|
-/// Bus recorder for the `mcp` status segment.
+/// Status recorder for the `mcp` segment: subscribes to the session event
+/// system and keeps the announced values (`<hidden>` for an unregister), so a
+/// switch is directly observable.
 struct SegmentRecorder {
   values : Array[String]
 }
 
 ///|
-impl @devkit.BusSubscriber for SegmentRecorder with fn on_bus_event(
+fn SegmentRecorder::bind(
   self : SegmentRecorder,
-  event : @devkit.BusEvent,
+  system : @posoco.EventSystem,
 ) -> Unit {
-  if event.topic != "status" || event.source != zai_coding_plan_tools_owner() {
-    return
-  }
-  match event.data {
-    Json::Object(fields) =>
-      if fields.get("segment") == Some(Json::string("mcp")) {
-        match fields.get("op") {
-          Some(Json::String("register")) =>
-            match fields.get("value") {
-              Some(Json::String(value)) => self.values.push(value)
-              _ => self.values.push("<none>")
-            }
-          Some(Json::String("unregister")) => self.values.push("<hidden>")
-          _ => ()
-        }
+  let _subscription = system
+    .subscribe(fn(envelope) {
+      if @kit_events.publisher_id(envelope) !=
+        Some(zai_coding_plan_tools_owner()) {
+        return
       }
-    _ => ()
-  }
+      match @kit_events.status_changed_of(envelope) {
+        Some(@kit_events.Register(segment="mcp", value~, ..)) =>
+          match value {
+            Some(value) => self.values.push(value)
+            None => self.values.push("<none>")
+          }
+        Some(@kit_events.Unregister(segment="mcp")) =>
+          self.values.push("<hidden>")
+        _ => ()
+      }
+    })
+    .unwrap()
 }
 
 ///|
@@ -197,13 +199,12 @@ async fn start_case(
   group : @async.TaskGroup[Unit],
   connected~ : Int32,
 ) -> (ZaiCodingPlanTools, FakeContributions, SegmentRecorder) {
-  let bus = @devkit.EventBus()
+  let system = @posoco.EventSystem()
   let recorder : SegmentRecorder = { values: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  recorder.bind(system)
   let record = fake_contributions()
   let tools = ZaiCodingPlanTools(
     config=test_config(),
-    bus~,
     group~,
     initial_slot_id="zai-coding-plan/glm-5.3-flash",
     open_plane=fn(
@@ -212,6 +213,9 @@ async fn start_case(
     ) -> Result[&ZaiMcpConnection, String] noraise {
       Ok(fake_connection(groups, connected) as &ZaiMcpConnection)
     },
+  )
+  tools.events = Some(
+    system.publisher(owner=zai_coding_plan_tools_owner()).unwrap(),
   )
   tools.contributions = Some(fake_handle(record))
   tools.on_start()
@@ -266,11 +270,10 @@ async test "switching away withdraws softly and hides the segment" {
 ///|
 async test "a resume on another provider starts idle" {
   @async.with_task_group(async fn(group) {
-    let bus = @devkit.EventBus()
+    let system = @posoco.EventSystem()
     let record = fake_contributions()
     let tools = ZaiCodingPlanTools(
       config=test_config(),
-      bus~,
       group~,
       initial_slot_id="deepseek/deepseek-flash",
       open_plane=fn(
@@ -279,6 +282,9 @@ async test "a resume on another provider starts idle" {
       ) -> Result[&ZaiMcpConnection, String] noraise {
         Ok(fake_connection([], 0) as &ZaiMcpConnection)
       },
+    )
+    tools.events = Some(
+      system.publisher(owner=zai_coding_plan_tools_owner()).unwrap(),
     )
     tools.contributions = Some(fake_handle(record))
     tools.on_start()
@@ -290,7 +296,6 @@ async test "a resume on another provider starts idle" {
 ///|
 async test "an unusable host declares nothing and opens nothing" {
   @async.with_task_group(async fn(group) {
-    let bus = @devkit.EventBus()
     let opened : Array[Int32] = [0]
     let tools = ZaiCodingPlanTools(
       config=@zai.ZaiConfig::for_model(
@@ -299,7 +304,6 @@ async test "an unusable host declares nothing and opens nothing" {
         base_url="",
         endpoint_prefix="/api/anthropic",
       ),
-      bus~,
       group~,
       initial_slot_id="",
       open_plane=fn(
@@ -340,14 +344,13 @@ impl @posoco.LogPort for FakeLog with fn flush(_self : FakeLog) -> Unit {
 ///|
 async test "a plane that cannot open reports 0/3, publishes nothing, and says why" {
   @async.with_task_group(async fn(group) {
-    let bus = @devkit.EventBus()
+    let system = @posoco.EventSystem()
     let recorder : SegmentRecorder = { values: [], }
-    bus.subscribe(recorder as &@devkit.BusSubscriber)
+    recorder.bind(system)
     let record = fake_contributions()
     let sink : FakeLog = { records: [], }
     let tools = ZaiCodingPlanTools(
       config=test_config(),
-      bus~,
       group~,
       initial_slot_id="zai-coding-plan/glm-5.3-flash",
       open_plane=fn(
@@ -356,6 +359,9 @@ async test "a plane that cannot open reports 0/3, publishes nothing, and says wh
       ) -> Result[&ZaiMcpConnection, String] noraise {
         Err("zai-coding-plan connect failed")
       },
+    )
+    tools.events = Some(
+      system.publisher(owner=zai_coding_plan_tools_owner()).unwrap(),
     )
     tools.contributions = Some(fake_handle(record))
     tools.log = Some(sink as &@posoco.LogPort)
@@ -373,5 +379,86 @@ async test "a plane that cannot open reports 0/3, publishes nothing, and says wh
       sink.records[0].message.unwrap(),
       content="zai-coding-plan connect failed",
     )
+  })
+}
+
+///|
+/// One router `model_selection` envelope, exactly as the ext-llm router
+/// publishes it: `Extension("posoco_ext_llm")` namespace, typed payload.
+fn selection_envelope(slot_id : String) -> @posoco.EventEnvelope {
+  @posoco.EventEnvelope::EventEnvelope(
+    namespace_=@posoco.EventNamespace::Extension("posoco_ext_llm"),
+    event=@kit_events.ModelSelection({ slot_id, effort: None, }),
+  )
+}
+
+///|
+test "the selection feed reads only the router's ModelSelection" {
+  assert_eq(
+    zai_selection_slot(selection_envelope("zai-coding-plan/glm-5.3-flash")),
+    Some("zai-coding-plan/glm-5.3-flash"),
+  )
+  // The publisher filter survives the migration: another owner's selection
+  // (a second provider router) never steers this companion.
+  assert_eq(
+    zai_selection_slot(
+      @posoco.EventEnvelope::EventEnvelope(
+        namespace_=@posoco.EventNamespace::Extension("posoco_ext_openai"),
+        event=@kit_events.ModelSelection({
+          slot_id: "zai-coding-plan/glm-5.3-flash",
+          effort: None,
+        }),
+      ),
+    ),
+    None,
+  )
+  // Core notifications are not a selection either.
+  assert_eq(
+    zai_selection_slot(
+      @posoco.EventEnvelope::EventEnvelope(
+        namespace_=@posoco.EventNamespace::Posoco,
+        event=@kit_events.ModelSelection({
+          slot_id: "zai-coding-plan/glm-5.3-flash",
+          effort: None,
+        }),
+      ),
+    ),
+    None,
+  )
+  // An empty slot is the router's "nothing selected".
+  assert_eq(zai_selection_slot(selection_envelope("")), None)
+}
+
+///|
+/// Wait until `ready()` holds, so a background switch is observed without
+/// trusting scheduler timing.
+async fn await_switch(ready : () -> Bool) -> Unit {
+  while !ready() {
+    @async.sleep(1)
+  }
+}
+
+///|
+async test "a router selection drives the tool plane through the typed feed" {
+  @async.with_task_group(async fn(group) {
+    let (tools, record, recorder) = start_case(group, connected=3)
+    inspect(
+      recorder.values.join(" | "),
+      content="0/3 Official MCP | 3/3 Official MCP",
+    )
+    // Leaving this provider withdraws softly, exactly as an untyped topic
+    // switch used to.
+    tools.on_selection(selection_envelope("deepseek/deepseek-flash"))
+    @async.with_timeout(2000, () => await_switch(() => tools.state is Inactive))
+    inspect(record.withdraws.join(","), content="Soft")
+    inspect(
+      recorder.values.join(" | "),
+      content="0/3 Official MCP | 3/3 Official MCP | <hidden>",
+    )
+    // ... and coming back re-declares the group.
+    tools.on_selection(selection_envelope("zai-coding-plan/glm-5.3-flash"))
+    @async.with_timeout(2000, () => await_switch(() => tools.state is Ready(_)))
+    inspect(tools.state.to_repr(), content="Ready(total=3)")
+    inspect(record.replaces.length(), content="2")
   })
 }

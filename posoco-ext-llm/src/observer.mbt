@@ -1,11 +1,27 @@
 ///|
-/// Status publication through the devkit status protocol.
+/// Status publication through the posoco event channel.
 ///
 /// The router owns three status-bar segments: `model` (priority 20, active
 /// model id and effort), `ctx` (priority 30, the core-projected context
 /// state of the active session), and `cache` (priority 40, last round's
-/// cache hit percentage). With `bus = None` every publication is a silent
+/// cache hit percentage). Every op travels as
+/// `@kit_events.StatusChanged(@kit_events.StatusOp)` from this extension's
+/// capability; with no capability injected every publication is a silent
 /// no-op.
+
+///|
+/// Publish one status op on behalf of this extension. A closed channel is
+/// dropped silently: status publication is a rendering path, never an error
+/// path.
+fn RouterModelPort::publish_status(
+  self : RouterModelPort,
+  op : @kit_events.StatusOp,
+) -> Unit {
+  match self.channel() {
+    Some(events) => ignore(events.publish(@kit_events.StatusChanged(op)))
+    None => ()
+  }
+}
 
 ///|
 fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
@@ -23,42 +39,35 @@ fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
         None => "default"
       }
   }
-  match self.bus {
-    Some(bus) =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_llm",
-        segment="model",
-        priority=20,
-        value="\{self.current_model_id()}:\{effort}",
-      )
-    None => ()
-  }
+  self.publish_status(
+    @kit_events.Register(
+      segment="model",
+      label=None,
+      priority=20,
+      value=Some("\{self.current_model_id()}:\{effort}"),
+      color=None,
+    ),
+  )
 }
 
 ///|
-/// Machine-readable twin of the `model` status segment: one bus event per
-/// selection change carrying the active slot id and the explicitly selected
-/// effort (`null` = slot default) — the same vocabulary as the persisted
-/// `ActiveModelSelection`, so peers such as the fs-session store can record
-/// it into session metadata and a later resume can restore the selection.
+/// Machine-readable twin of the `model` status segment: one `ModelSelection`
+/// event per selection change carrying the active slot id and the explicitly
+/// selected effort (`None` = slot default) — the same vocabulary as the
+/// persisted `ActiveModelSelection`, so peers such as the fs-session store can
+/// record it into session metadata and a later resume can restore the
+/// selection.
 fn RouterModelPort::publish_model_selection(self : RouterModelPort) -> Unit {
-  let effort = match self.active_effort {
-    Some(value) => Json::string(value)
-    None => Json::null()
-  }
-  match self.bus {
-    Some(bus) =>
-      bus.publish({
-        source: "posoco_ext_llm",
-        topic: "model_selection",
-        data: Json::object(
-          Map::from_array([
-            ("slot_id", Json::string(self.active_id)),
-            ("effort", effort),
-          ]),
+  match self.channel() {
+    Some(events) =>
+      ignore(
+        events.publish(
+          @kit_events.ModelSelection({
+            slot_id: self.active_id,
+            effort: self.active_effort,
+          }),
         ),
-      })
+      )
     None => ()
   }
 }
@@ -67,17 +76,15 @@ fn RouterModelPort::publish_model_selection(self : RouterModelPort) -> Unit {
 /// Provider-scoped status publishers (the Codex quota segments) show or
 /// hide their own segments on this event; republication is idempotent.
 fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
-  match self.bus {
-    Some(bus) =>
-      bus.publish({
-        source: "posoco_ext_llm",
-        topic: "provider",
-        data: Json::object(
-          Map::from_array([
-            ("provider_id", Json::string(self.current_provider_id())),
-          ]),
+  match self.channel() {
+    Some(events) =>
+      ignore(
+        events.publish(
+          @kit_events.ProviderStatus({
+            provider_id: self.current_provider_id(),
+          }),
         ),
-      })
+      )
     None => ()
   }
 }
@@ -90,24 +97,18 @@ fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
 /// off state (no selection, pending persisted id, or a provider that does
 /// not serve decisions) so hosts can surface it instead of guessing.
 fn RouterModelPort::publish_decision_selection(self : RouterModelPort) -> Unit {
-  let available = self.decision_off_reason() is None
-  let reason = match self.decision_off_reason() {
-    Some(text) => Json::string(text)
-    None => Json::null()
-  }
-  match self.bus {
-    Some(bus) =>
-      bus.publish({
-        source: "posoco_ext_llm",
-        topic: "decision_selection",
-        data: Json::object(
-          Map::from_array([
-            ("slot_id", Json::string(self.active_decision_id)),
-            ("available", Json::boolean(available)),
-            ("reason", reason),
-          ]),
+  let reason = self.decision_off_reason()
+  match self.channel() {
+    Some(events) =>
+      ignore(
+        events.publish(
+          @kit_events.DecisionSelection({
+            slot_id: self.active_decision_id,
+            available: reason is None,
+            reason,
+          }),
         ),
-      })
+      )
     None => ()
   }
 }
@@ -187,17 +188,15 @@ fn RouterModelPort::publish_ctx_status(
       )
     None => "ctx: ?"
   }
-  match self.bus {
-    Some(bus) =>
-      @devkit.publish_status_register(
-        bus,
-        source="posoco_ext_llm",
-        segment="ctx",
-        priority=30,
-        value~,
-      )
-    None => ()
-  }
+  self.publish_status(
+    @kit_events.Register(
+      segment="ctx",
+      label=None,
+      priority=30,
+      value=Some(value),
+      color=None,
+    ),
+  )
 }
 
 ///|
@@ -205,32 +204,26 @@ fn RouterModelPort::publish_cache_status(
   self : RouterModelPort,
   usage : @posoco.Usage?,
 ) -> Unit {
-  match self.bus {
-    Some(bus) => {
-      let percent = match usage {
-        Some(
-          { cached_input_tokens: Some(cached), input_tokens: Some(input), .. }
-        ) if input > 0 => Some(cached * 100 / input)
-        _ => None
-      }
-      match percent {
-        Some(value) =>
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_llm",
-            segment="cache",
-            priority=40,
-            value="\{value}%",
-          )
-        None =>
-          @devkit.publish_status_unregister(
-            bus,
-            source="posoco_ext_llm",
-            segment="cache",
-          )
-      }
-    }
-    None => ()
+  if self.channel() is None {
+    return
+  }
+  let percent = match usage {
+    Some({ cached_input_tokens: Some(cached), input_tokens: Some(input), .. }) if input >
+      0 => Some(cached * 100 / input)
+    _ => None
+  }
+  match percent {
+    Some(value) =>
+      self.publish_status(
+        @kit_events.Register(
+          segment="cache",
+          label=None,
+          priority=40,
+          value=Some("\{value}%"),
+          color=None,
+        ),
+      )
+    None => self.publish_status(@kit_events.Unregister(segment="cache"))
   }
 }
 

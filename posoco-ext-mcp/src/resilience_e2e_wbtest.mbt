@@ -84,10 +84,24 @@ async fn e2e_fixture_cwd(
 }
 
 ///|
-/// discover → attach → activate on the caller's long-lived task group.
+/// Run one e2e body inside the two host task groups production hands to the
+/// bridge: the core-async lifetime group every connection's fuwaroid actor
+/// loop spawns on, and the `moonbitlang/async` I/O group the stdio MCP child
+/// processes live on.
+async fn e2e_with_groups(
+  body : async (@core_async.TaskGroup, @async.TaskGroup[Unit]) -> Unit,
+) -> Unit {
+  @core_async.with_task_group(async fn(lifetime) {
+    @async.with_task_group(async fn(group) { body(lifetime, group) })
+  })
+}
+
+///|
+/// discover → attach → activate on the caller's long-lived task groups.
 /// Node availability is checked by the caller; an activation failure here is
 /// a real error, not a skip.
 async fn e2e_activate_bridge(
+  lifetime : @core_async.TaskGroup,
   group : @async.TaskGroup[Unit],
   node : String,
   extra_entry : String,
@@ -99,7 +113,7 @@ async fn e2e_activate_bridge(
     Ok(bridge) => bridge
     Err(message) => fail("discover failed: " + message)
   }
-  bridge.attach(group)
+  bridge.attach(group, lifetime~)
   let failures = bridge.activate()
   if failures.length() > 0 {
     fail("activate failed: " + failures[0].1)
@@ -198,10 +212,14 @@ fn e2e_cancelled_request_ids(log_text : String) -> Array[String] {
 /// error, and the stale-response safety default force-reconnects the
 /// connection so the very next call succeeds.
 async fn e2e_timeout_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, ",\"timeout_ms\":300", [
-      ("MCP_FIXTURE_RESILIENCE", "1"),
-    ])
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(
+      lifetime,
+      group,
+      node,
+      ",\"timeout_ms\":300",
+      [("MCP_FIXTURE_RESILIENCE", "1")],
+    )
     // The RESILIENCE gate reached the spawned server.
     let names : Array[String] = []
     for tool in @posoco.ToolProvider::list_tools(bridge) {
@@ -247,8 +265,8 @@ async test "e2e timeout bounds the call and stale safety recovers" {
 /// reconnect + retry under the default max_reconnects=1, and the call
 /// succeeds on the fresh connection.
 async fn e2e_exit_reconnect_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, "", [
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", [
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     let revision_after_activate = bridge.catalog_revision
@@ -286,10 +304,14 @@ async test "e2e server exit recovers through reactive reconnect" {
 /// the full discover chain) a connection-level failure fails fast with no
 /// retry and no recovery.
 async fn e2e_no_reconnect_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, ",\"max_reconnects\":0", [
-      ("MCP_FIXTURE_RESILIENCE", "1"),
-    ])
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(
+      lifetime,
+      group,
+      node,
+      ",\"max_reconnects\":0",
+      [("MCP_FIXTURE_RESILIENCE", "1")],
+    )
     let revision_before = bridge.catalog_revision
     match e2e_execute(bridge, "echo__echo", []) {
       Ok(_) => ()
@@ -325,12 +347,12 @@ async test "e2e max_reconnects zero keeps the failure unrecovered" {
 /// ToolProvider boundary (dedicated marker or the sticky cancel flag), never
 /// hangs, and leaves the connection usable for the next call.
 async fn e2e_cancel_scenario(node : String, notification_log : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let env : Array[(String, String)] = [("MCP_FIXTURE_RESILIENCE", "1")]
     if notification_log != "" {
       env.push(("MCP_FIXTURE_NOTIFICATION_LOG", notification_log))
     }
-    let bridge = e2e_activate_bridge(group, node, "", env)
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", env)
     let probe = CancelProbe::{
       settled: false,
       raised: false,
@@ -433,7 +455,7 @@ async fn e2e_probe_fixture_cwd(node : String) -> String {
 /// Probe success path: start_probes without activate connects the fixture
 /// server in the background; the live connection is executable afterwards.
 async fn e2e_probe_success_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let cwd = e2e_fixture_cwd(node, "", [])
     let bridge = match
       MCPToolBridge::discover(
@@ -443,7 +465,7 @@ async fn e2e_probe_success_scenario(node : String) -> Unit {
       Ok(bridge) => bridge
       Err(message) => fail("discover failed: " + message)
     }
-    bridge.attach(group)
+    bridge.attach(group, lifetime~)
     bridge.start_probes()
     assert_true(bridge.pending.is_empty())
     let mut waited = 0
@@ -477,7 +499,7 @@ async test "e2e start_probes connects in background and stays executable" {
 /// the settle window; the stability wait skips past its intermediate
 /// failure entries before asserting the single final one.
 async fn e2e_probe_failure_isolation_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let cwd = e2e_probe_fixture_cwd(node)
     let bridge = match
       MCPToolBridge::discover(
@@ -487,7 +509,7 @@ async fn e2e_probe_failure_isolation_scenario(node : String) -> Unit {
       Ok(bridge) => bridge
       Err(message) => fail("discover failed: " + message)
     }
-    bridge.attach(group)
+    bridge.attach(group, lifetime~)
     bridge.start_probes(backoff_ms=[100, 100, 100])
     let mut waited = 0
     while (bridge.catalog_revision < 1 || bridge.failures().length() < 1) &&
@@ -537,7 +559,7 @@ async test "e2e probe failure isolates the healthy server" {
 /// first probe fails — the background retry then connects the recovered
 /// server, scrubs the failure entry, and the live connection executes.
 async fn e2e_probe_flaky_recovery_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let state_root = @fs.tmpdir(prefix="posoco-mcp-e2e-flaky")
     let state_path = state_root + "/flaky_state"
     let cwd = e2e_fixture_cwd(node, "", [
@@ -552,7 +574,7 @@ async fn e2e_probe_flaky_recovery_scenario(node : String) -> Unit {
       Ok(bridge) => bridge
       Err(message) => fail("discover failed: " + message)
     }
-    bridge.attach(group)
+    bridge.attach(group, lifetime~)
     // First backoff stays well above the flaky process's time-to-EOF so the
     // retry cannot race the dying first attempt.
     bridge.start_probes(backoff_ms=[400, 250, 250])
@@ -613,12 +635,12 @@ fn e2e_fixture_config(
 /// `sleep` tool, so a misrouted retry would surface as its "echo:{}" success
 /// instead of the victim's own timeout.
 async fn e2e_neighbor_reconnect_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let script = @fs.realpath("test_fixtures/echo_server.mjs") catch {
       _ => "test_fixtures/echo_server.mjs"
     }
     let bridge = MCPToolBridge()
-    bridge.attach(group)
+    bridge.attach(group, lifetime~)
     match
       bridge.connect(
         e2e_fixture_config(
@@ -755,8 +777,8 @@ async fn e2e_wait_reconnecting(bridge : MCPToolBridge) -> Bool {
 /// back to Fresh with the paired admission counts, and the connection keeps
 /// serving calls.
 async fn e2e_dual_reconnect_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, "", [
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", [
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     let results : Array[Result[Unit, String]] = []
@@ -805,8 +827,9 @@ async test "e2e concurrent reconnects on one slot have a single winner" {
 /// stigma that smeared onto the successor would resurface as another forced
 /// reconnect.
 async fn e2e_stigma_generation_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
+  e2e_with_groups(async fn(lifetime, group) {
     let bridge = e2e_activate_bridge(
+      lifetime,
       group,
       node,
       ",\"timeout_ms\":300,\"max_reconnects\":0",
@@ -848,8 +871,8 @@ async test "e2e timeout stigma lands on its generation and clears with it" {
 /// an unobservable outcome reports TransportFail, never TimedOut), so the
 /// very next call runs on the SAME generation without a forced reconnect.
 async fn e2e_cancel_pairing_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, "", [
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", [
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     let probe = CancelProbe::{
@@ -914,8 +937,8 @@ async test "e2e cancelled call returns its admission without stigmatizing" {
 /// MailboxClosed becomes an honest stage=transport failure for calls and an
 /// honest error for refresh — never a swallowed success or a hang.
 async fn e2e_actor_close_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, "", [
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", [
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     match bridge.connections[0].actor {
@@ -964,8 +987,8 @@ fn e2e_slot0_actor(
 /// == 0 — a graceful drain serves everything it accepted). The /mcp status
 /// read before the close pins the Inspect data source end to end.
 async fn e2e_close_drain_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, "", [
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(lifetime, group, node, "", [
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     let outcome = @posoco.CommandPort::invoke(bridge, "mcp", Json::null()) catch {
@@ -1035,10 +1058,14 @@ async test "e2e close drains the actor folds queued reports and refuses late tel
 /// queued before the mailbox closed and folded, or was refused after it —
 /// neither disturbs the loop.
 async fn e2e_close_inflight_scenario(node : String) -> Unit {
-  @async.with_task_group(group => {
-    let bridge = e2e_activate_bridge(group, node, ",\"timeout_ms\":2000", [
-      ("MCP_FIXTURE_RESILIENCE", "1"),
-    ])
+  e2e_with_groups(async fn(lifetime, group) {
+    let bridge = e2e_activate_bridge(
+      lifetime,
+      group,
+      node,
+      ",\"timeout_ms\":2000",
+      [("MCP_FIXTURE_RESILIENCE", "1")],
+    )
     let actor = e2e_slot0_actor(bridge)
     let settled : Array[Result[String, String]] = []
     let _ = group.spawn(() => {

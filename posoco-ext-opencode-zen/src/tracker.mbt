@@ -4,9 +4,10 @@
 /// The tracker is provider-owned: each provider extension instantiates its
 /// own with its source id, records one estimated cost per settled model
 /// call, and publishes the calling session's cumulative total as a statusbar
-/// segment through the process default bus (same channel as the `cache`
-/// segment). With no bus registered the accounting still happens and the
-/// publish is a silent skip — a rendering gap, never an error.
+/// segment through the process default event system (same channel as the
+/// `cache` segment). With no system registered — or a closed one — the
+/// accounting still happens and the publish is a silent skip: a rendering
+/// gap, never an error.
 #derive(Eq, Debug)
 pub(all) struct ZenSpendTracker {
   /// The status source this tracker publishes under
@@ -55,24 +56,35 @@ pub fn ZenSpendTracker::session_spend(
 }
 
 ///|
-/// Record a settled step and publish the session total to the default bus.
-/// No-op when no bus is registered.
+/// Record a settled step and publish the session total on the status channel.
+///
+/// The op travels as `@kit_events.StatusChanged(@kit_events.Register(..))`
+/// through a capability bound to `self.source`, so the segment keeps the
+/// product's identity the way `BusEvent.source` used to carry it. No-op when
+/// no event system is registered or the system is closed.
 pub fn ZenSpendTracker::record_and_publish(
   self : ZenSpendTracker,
   session_id : String,
   cost : Double,
 ) -> Unit {
   let total = self.record(session_id, cost)
-  match @devkit.status_bus_default() {
-    Some(bus) =>
-      @devkit.publish_status_register(
-        bus,
-        source=self.source,
-        segment="spent",
-        label="$",
-        priority=85,
-        value=zen_format_usd(total),
-      )
+  match @devkit.events_system_default() {
+    Some(system) =>
+      match system.publisher(owner=self.source) {
+        Ok(publisher) => {
+          let op : @kit_events.StatusOp = @kit_events.Register(
+            segment="spent",
+            label=Some("$"),
+            priority=85,
+            value=Some(zen_format_usd(total)),
+            color=None,
+          )
+          ignore(publisher.publish(@kit_events.StatusChanged(op)))
+        }
+        // Closed system: the host is shutting down, so the total stays
+        // accounted and unrendered.
+        Err(_) => ()
+      }
     None => ()
   }
 }

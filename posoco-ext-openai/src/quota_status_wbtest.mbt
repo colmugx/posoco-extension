@@ -1,17 +1,72 @@
 ///|
-/// CodexQuotaStatus publication over the devkit bus.
+/// CodexQuotaStatus publication over the posoco event channel.
 
 ///|
-priv struct QuotaBusRecorder {
-  events : Array[@devkit.BusEvent]
+/// One test `EventSystem` plus every envelope it delivered: the recorder is a
+/// plain listener, so assertions see exactly what a real peer sees (publisher
+/// namespace included).
+priv struct QuotaRecorder {
+  system : @posoco.EventSystem
+  events : Array[@posoco.EventEnvelope]
 }
 
 ///|
-impl @devkit.BusSubscriber for QuotaBusRecorder with fn on_bus_event(
-  self : QuotaBusRecorder,
-  event : @devkit.BusEvent,
+fn QuotaRecorder::QuotaRecorder() -> QuotaRecorder {
+  let system = @posoco.EventSystem()
+  let events : Array[@posoco.EventEnvelope] = []
+  match system.subscribe(fn(envelope) { events.push(envelope) }) {
+    Ok(_) => ()
+    Err(_) => abort("test recorder subscription failed")
+  }
+  { system, events, }
+}
+
+///|
+/// The owner-bound capability a host mints with
+/// `EventSystem::publisher(owner~)` and hands to the publisher under test.
+fn QuotaRecorder::publisher(
+  self : QuotaRecorder,
+  owner~ : String,
+) -> @posoco.Events {
+  match self.system.publisher(owner~) {
+    Ok(events) => events
+    Err(_) => abort("test publisher capability unavailable: " + owner)
+  }
+}
+
+///|
+/// Announce the active provider the way the router does: one
+/// `ProviderStatus` from the llm extension's capability.
+fn QuotaRecorder::publish_provider(
+  self : QuotaRecorder,
+  provider_id : String,
 ) -> Unit {
-  self.events.push(event)
+  ignore(
+    self
+    .publisher(owner="posoco_ext_llm")
+    .publish(@kit_events.ProviderStatus({ provider_id, })),
+  )
+}
+
+///|
+/// Publish unrelated protocol traffic from another extension, the way a peer
+/// sharing the channel does.
+fn QuotaRecorder::publish_foreign_status(self : QuotaRecorder) -> Unit {
+  ignore(
+    self
+    .publisher(owner="posoco_ext_llm")
+    .publish(
+      @kit_events.StatusChanged(
+        @kit_events.Register(
+          segment="model",
+          label=None,
+          priority=20,
+          value=Some("model-a:default"),
+          color=None,
+        ),
+      ),
+    ),
+  )
 }
 
 ///|
@@ -26,21 +81,22 @@ fn tk_quota_assistant() -> @posoco.Message {
 
 ///|
 fn tk_quota_status(
-  bus : @devkit.EventBus,
+  recorder : QuotaRecorder,
   tracker : CodexQuotaTracker,
 ) -> CodexQuotaStatus {
-  CodexQuotaStatus(bus=Some(bus), tracker=Some(tracker))
+  CodexQuotaStatus(
+    events=Some(recorder.publisher(owner="posoco_ext_openai")),
+    tracker=Some(tracker),
+  )
 }
 
 ///|
 test "codex quota status publishes windows and unregisters vanished ones" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   // Before any capture, a model response publishes nothing.
   @posoco.Observer::on_event(
     status,
@@ -81,9 +137,9 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   )
   assert_eq(recorder.events.length(), 2)
   assert_eq(
-    @devkit.decode_status_op(recorder.events[0]),
+    @kit_events.status_changed_of(recorder.events[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="5h",
         label=None,
         priority=45,
@@ -93,9 +149,9 @@ test "codex quota status publishes windows and unregisters vanished ones" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(recorder.events[1]),
+    @kit_events.status_changed_of(recorder.events[1]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="weekly",
         label=None,
         priority=45,
@@ -136,9 +192,9 @@ test "codex quota status publishes windows and unregisters vanished ones" {
   )
   assert_eq(recorder.events.length(), 4)
   assert_eq(
-    @devkit.decode_status_op(recorder.events[2]),
+    @kit_events.status_changed_of(recorder.events[2]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="weekly",
         label=None,
         priority=45,
@@ -148,16 +204,14 @@ test "codex quota status publishes windows and unregisters vanished ones" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(recorder.events[3]),
-    Some(@devkit.StatusOp::Unregister(segment="5h")),
+    @kit_events.status_changed_of(recorder.events[3]),
+    Some(@kit_events.StatusOp::Unregister(segment="5h")),
   )
 }
 
 ///|
 test "codex quota status colors exhausted windows as errors" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
@@ -171,7 +225,7 @@ test "codex quota status colors exhausted windows as errors" {
       fetched_at_ms: 1757000000000L,
     },
   ])
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   @posoco.Observer::on_event(
     status,
     None,
@@ -182,9 +236,9 @@ test "codex quota status colors exhausted windows as errors" {
   )
   assert_eq(recorder.events.length(), 1)
   assert_eq(
-    @devkit.decode_status_op(recorder.events[0]),
+    @kit_events.status_changed_of(recorder.events[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="5h",
         label=None,
         priority=45,
@@ -197,9 +251,7 @@ test "codex quota status colors exhausted windows as errors" {
 
 ///|
 test "codex quota status publishes at compose" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
@@ -213,7 +265,7 @@ test "codex quota status publishes at compose" {
       fetched_at_ms: 1757000000000L,
     },
   ])
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_compose(
     status,
     @tk.tk_view(
@@ -224,9 +276,9 @@ test "codex quota status publishes at compose" {
   )
   assert_eq(recorder.events.length(), 1)
   assert_eq(
-    @devkit.decode_status_op(recorder.events[0]),
+    @kit_events.status_changed_of(recorder.events[0]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="5h",
         label=None,
         priority=45,
@@ -255,11 +307,11 @@ test "codex quota status reports its manifest and shares the default tracker" {
 ///|
 /// Status ops published by the codex publisher (its own source only), so
 /// assertions stay readable when the router or other peers also publish.
-fn codex_status_ops(recorder : QuotaBusRecorder) -> Array[@devkit.StatusOp] {
-  let ops : Array[@devkit.StatusOp] = []
+fn codex_status_ops(recorder : QuotaRecorder) -> Array[@kit_events.StatusOp] {
+  let ops : Array[@kit_events.StatusOp] = []
   for event in recorder.events {
-    if event.source == "posoco_ext_openai" {
-      match @devkit.decode_status_op(event) {
+    if @kit_events.publisher_id(event) == Some("posoco_ext_openai") {
+      match @kit_events.status_changed_of(event) {
         Some(op) => ops.push(op)
         None => ()
       }
@@ -269,21 +321,8 @@ fn codex_status_ops(recorder : QuotaBusRecorder) -> Array[@devkit.StatusOp] {
 }
 
 ///|
-fn tk_quota_provider_event(provider_id : String) -> @devkit.BusEvent {
-  {
-    source: "posoco_ext_llm",
-    topic: "provider",
-    data: Json::object(
-      Map::from_array([("provider_id", Json::string(provider_id))]),
-    ),
-  }
-}
-
-///|
 test "codex quota status hides windows when another provider activates" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
@@ -305,7 +344,7 @@ test "codex quota status hides windows when another provider activates" {
       fetched_at_ms: 1757000000000L,
     },
   ])
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_compose(
     status,
     @tk.tk_view(
@@ -315,26 +354,22 @@ test "codex quota status hides windows when another provider activates" {
     ),
   )
   assert_eq(recorder.events.length(), 2)
-  // A hand-built router event (the frozen provider contract) unregisters
-  // both windows; the recorder also records the provider event itself, and
-  // the queued unregister batch drains before publish returns.
-  bus.publish(tk_quota_provider_event("deepseek"))
+  // A router `ProviderStatus` (the frozen provider contract) unregisters
+  // both windows; the recorder also records the announcement itself, and the
+  // listener's publications land before publish returns.
+  recorder.publish_provider("deepseek")
   assert_eq(recorder.events.length(), 5)
-  assert_eq(@devkit.decode_status_op(recorder.events[2]), None)
+  assert_true(@kit_events.provider_status_of(recorder.events[2]) is Some(_))
   assert_eq(
-    @devkit.decode_status_op(recorder.events[3]),
-    Some(@devkit.StatusOp::Unregister(segment="5h")),
+    @kit_events.status_changed_of(recorder.events[3]),
+    Some(@kit_events.StatusOp::Unregister(segment="5h")),
   )
   assert_eq(
-    @devkit.decode_status_op(recorder.events[4]),
-    Some(@devkit.StatusOp::Unregister(segment="weekly")),
+    @kit_events.status_changed_of(recorder.events[4]),
+    Some(@kit_events.StatusOp::Unregister(segment="weekly")),
   )
-  // A provider payload without a usable provider_id is ignored.
-  bus.publish({
-    source: "posoco_ext_llm",
-    topic: "provider",
-    data: Json::null(),
-  })
+  // Unrelated protocol traffic on the shared channel is ignored.
+  recorder.publish_foreign_status()
   assert_eq(recorder.events.length(), 6)
   // The suppression gate: the other provider's responses republish nothing.
   @posoco.Observer::on_event(
@@ -350,9 +385,7 @@ test "codex quota status hides windows when another provider activates" {
 
 ///|
 test "codex quota status re-shows windows when codex re-activates" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
@@ -374,7 +407,7 @@ test "codex quota status re-shows windows when codex re-activates" {
       fetched_at_ms: 1757000000000L,
     },
   ])
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_compose(
     status,
     @tk.tk_view(
@@ -384,17 +417,17 @@ test "codex quota status re-shows windows when codex re-activates" {
     ),
   )
   assert_eq(recorder.events.length(), 2)
-  bus.publish(tk_quota_provider_event("deepseek"))
+  recorder.publish_provider("deepseek")
   assert_eq(recorder.events.length(), 5)
   // Codex re-activates: the cleared last-snapshot counts as a change, so the
   // windows re-register in remaining-quota spelling (the openai event itself
   // is recorded at index 5, the queued registers follow).
-  bus.publish(tk_quota_provider_event("openai"))
+  recorder.publish_provider("openai")
   assert_eq(recorder.events.length(), 8)
   assert_eq(
-    @devkit.decode_status_op(recorder.events[6]),
+    @kit_events.status_changed_of(recorder.events[6]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="5h",
         label=None,
         priority=45,
@@ -404,9 +437,9 @@ test "codex quota status re-shows windows when codex re-activates" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(recorder.events[7]),
+    @kit_events.status_changed_of(recorder.events[7]),
     Some(
-      @devkit.StatusOp::Register(
+      @kit_events.StatusOp::Register(
         segment="weekly",
         label=None,
         priority=45,
@@ -420,20 +453,18 @@ test "codex quota status re-shows windows when codex re-activates" {
 ///|
 /// Startup regression, end to end: the agent composes with an empty tracker,
 /// then the provider refresh's usage probe fills it — before any chat. The
-/// capture alone must publish the windows on the bus, and `/status` must
+/// capture alone must publish the windows on the channel, and `/status` must
 /// report the same percentages without a model response ever arriving.
 async test "startup usage probe publishes quota and /status reports it before any chat" {
   // This file owns the openai quota view through the injected tracker; a
   // build from another test file may have left a live source in the
   // process-global registry, so clear the id before composing.
   @devkit.quota_registry_unregister("openai")
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   let slot = @llm.ModelSlot::ModelSlot(
     id="codex-slot",
     label="Codex",
@@ -444,7 +475,7 @@ async test "startup usage probe publishes quota and /status reports it before an
   let source : &@devkit.QuotaSource = tracker
   let router = @llm.RouterModelPort(
     slots=[slot],
-    bus=Some(bus),
+    events=Some(recorder.publisher(owner="posoco_ext_llm")),
     extra_quota_sources=Map::from_array([("openai", source)]),
   )
   let view = @tk.tk_view(
@@ -469,7 +500,7 @@ async test "startup usage probe publishes quota and /status reports it before an
   assert_eq(ops.length(), 2)
   assert_eq(
     ops[0],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="5h",
       label=None,
       priority=45,
@@ -479,7 +510,7 @@ async test "startup usage probe publishes quota and /status reports it before an
   )
   assert_eq(
     ops[1],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="weekly",
       label=None,
       priority=45,
@@ -487,7 +518,7 @@ async test "startup usage probe publishes quota and /status reports it before an
       color=Some("warning"),
     ),
   )
-  // /status surfaces the same percentages from the bus cache.
+  // /status surfaces the same percentages from the event cache.
   let outcome = router.invoke("status", Json::null())
   match outcome {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
@@ -521,13 +552,11 @@ async test "startup usage probe publishes quota and /status reports it before an
 /// outlives the publisher, and a stale closure must not publish after the
 /// agent is gone.
 async test "shutdown unsubscribes the publisher from tracker changes" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
-  let status = tk_quota_status(bus, tracker)
+  let status = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_shutdown(status)
   tracker.capture_readings([
     {
@@ -567,24 +596,21 @@ fn codex_usage_fixture_later() -> Json {
 
 ///|
 /// Tracker subscriptions are per-registration: two publishers on different
-/// buses sharing the process tracker each receive captures, shutting the
-/// older one stops only its own notifications, and the surviving bus keeps
+/// channels sharing the process tracker each receive captures, shutting the
+/// older one stops only its own notifications, and the surviving channel keeps
 /// feeding both the bar and `/status` — all before any chat.
-async test "coexisting publishers stay independent across buses and lifetimes" {
+async test "coexisting publishers stay independent across channels and lifetimes" {
   // Same registry hygiene as the startup regression above.
   @devkit.quota_registry_unregister("openai")
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
-  let bus_a = @devkit.EventBus::EventBus()
-  let recorder_a = QuotaBusRecorder::{ events: [], }
-  bus_a.subscribe(recorder_a as &@devkit.BusSubscriber)
-  let bus_b = @devkit.EventBus::EventBus()
-  let recorder_b = QuotaBusRecorder::{ events: [], }
-  bus_b.subscribe(recorder_b as &@devkit.BusSubscriber)
-  // Older lifetime on bus A, newer on bus B; both watch the same tracker.
-  let status_a = tk_quota_status(bus_a, tracker)
-  let status_b = tk_quota_status(bus_b, tracker)
+  let recorder_a = QuotaRecorder::QuotaRecorder()
+  let recorder_b = QuotaRecorder::QuotaRecorder()
+  // Older lifetime on channel A, newer on channel B; both watch the same
+  // tracker.
+  let status_a = tk_quota_status(recorder_a, tracker)
+  let status_b = tk_quota_status(recorder_b, tracker)
   let slot = @llm.ModelSlot::ModelSlot(
     id="codex-slot",
     label="Codex",
@@ -595,7 +621,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
   let source : &@devkit.QuotaSource = tracker
   let router_b = @llm.RouterModelPort(
     slots=[slot],
-    bus=Some(bus_b),
+    events=Some(recorder_b.publisher(owner="posoco_ext_llm")),
     extra_quota_sources=Map::from_array([("openai", source)]),
   )
   let view = @tk.tk_view(
@@ -603,16 +629,17 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
     model=@tk.ScriptedModel([]) as &@posoco.ModelPort,
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
-  // bus B's router composes: its provider event scopes the newer publisher
+  // Channel B's router composes: its provider announcement scopes the newer
+  // publisher
   // to openai, exactly as at startup.
   @posoco.Lifecycle::on_compose(router_b, view)
-  // First capture: BOTH buses must see the windows.
+  // First capture: BOTH channels must see the windows.
   tracker.capture_readings(
     expect_codex_usage(codex_usage_fixture(), fetched_at_ms=1757000000000L),
   )
   assert_eq(codex_status_ops(recorder_a).length(), 2)
   assert_eq(codex_status_ops(recorder_b).length(), 2)
-  // /status on the surviving bus reports the captured percentages.
+  // /status on the surviving channel reports the captured percentages.
   let first = router_b.invoke("status", Json::null())
   match first {
     @posoco.CommandOutcome::Success(feedback~, ..) => {
@@ -623,7 +650,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
   }
   // The older lifetime shuts down: only ITS notifications may stop.
   @posoco.Lifecycle::on_shutdown(status_a)
-  // Second capture: bus A stays silent, bus B moves on.
+  // Second capture: channel A stays silent, channel B moves on.
   tracker.capture_readings(
     expect_codex_usage(
       codex_usage_fixture_later(),
@@ -635,7 +662,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
   assert_eq(ops_b.length(), 4)
   assert_eq(
     ops_b[2],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="5h",
       label=None,
       priority=45,
@@ -645,7 +672,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
   )
   assert_eq(
     ops_b[3],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="weekly",
       label=None,
       priority=45,
@@ -653,7 +680,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
       color=Some("warning"),
     ),
   )
-  // /status on bus B now reports the refreshed percentages.
+  // /status on channel B now reports the refreshed percentages.
   let second = router_b.invoke("status", Json::null())
   match second {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
@@ -674,7 +701,7 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
     }
     _ => fail("expected successful status report")
   }
-  // The newer lifetime shuts down too: no bus sees further captures.
+  // The newer lifetime shuts down too: no channel sees further captures.
   @posoco.Lifecycle::on_shutdown(status_b)
   tracker.capture_readings(
     expect_codex_usage(codex_usage_fixture(), fetched_at_ms=1757000002000L),
@@ -684,16 +711,14 @@ async test "coexisting publishers stay independent across buses and lifetimes" {
 }
 
 ///|
-/// A stopped publisher is dead. The bus keeps its (unsubscribable)
+/// A stopped publisher is dead. The channel keeps its (unsubscribable)
 /// registration, so late provider events must not act for it: no unregisters
 /// racing a successor that shares the source, no republish when codex
 /// re-activates. A late observer event cannot resurrect it either, and a
 /// capture that lands after shutdown stays the successor's alone. Normal
 /// compose-time publications are untouched.
 async test "stopped publisher ignores late provider and observer events" {
-  let bus = @devkit.EventBus::EventBus()
-  let recorder = QuotaBusRecorder::{ events: [], }
-  bus.subscribe(recorder as &@devkit.BusSubscriber)
+  let recorder = QuotaRecorder::QuotaRecorder()
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
@@ -706,29 +731,29 @@ async test "stopped publisher ignores late provider and observer events" {
     ui=@posoco.NoopUiPort() as &@posoco.UiPort,
   )
   // First lifetime: compose publishes normally, then it stops.
-  let status_a = tk_quota_status(bus, tracker)
+  let status_a = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_compose(status_a, view)
   assert_eq(codex_status_ops(recorder).length(), 2)
   @posoco.Lifecycle::on_shutdown(status_a)
-  // Successor on the same bus, same shared tracker and source id.
-  let status_b = tk_quota_status(bus, tracker)
+  // Successor on the same channel, same shared tracker and source id.
+  let status_b = tk_quota_status(recorder, tracker)
   @posoco.Lifecycle::on_compose(status_b, view)
   assert_eq(codex_status_ops(recorder).length(), 4)
   // Late non-openai provider event: only the live successor hides its
   // windows; the stopped one must not fire unregisters against the shared
   // source.
-  bus.publish(tk_quota_provider_event("deepseek"))
+  recorder.publish_provider("deepseek")
   let ops = codex_status_ops(recorder)
   assert_eq(ops.length(), 6)
-  assert_eq(ops[4], @devkit.StatusOp::Unregister(segment="5h"))
-  assert_eq(ops[5], @devkit.StatusOp::Unregister(segment="weekly"))
+  assert_eq(ops[4], @kit_events.StatusOp::Unregister(segment="5h"))
+  assert_eq(ops[5], @kit_events.StatusOp::Unregister(segment="weekly"))
   // Late openai event: only the successor republishes.
-  bus.publish(tk_quota_provider_event("openai"))
+  recorder.publish_provider("openai")
   let ops = codex_status_ops(recorder)
   assert_eq(ops.length(), 8)
   assert_eq(
     ops[6],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="5h",
       label=None,
       priority=45,
@@ -738,7 +763,7 @@ async test "stopped publisher ignores late provider and observer events" {
   )
   assert_eq(
     ops[7],
-    @devkit.StatusOp::Register(
+    @kit_events.StatusOp::Register(
       segment="weekly",
       label=None,
       priority=45,

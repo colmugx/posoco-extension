@@ -988,6 +988,7 @@ fn build_parent_agent(
       tools as &@posoco.Extension,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
     runtime=@runtime.PortRuntime(model~),
   )
 }
@@ -1699,7 +1700,7 @@ impl ChildComposer for AskingComposer with fn compose(
       observers~,
     ),
   )
-  @posoco.Agent(exts~, config=@tk.tk_config()) catch {
+  @posoco.Agent(exts~, config=@tk.tk_config(), events=@posoco.EventSystem()) catch {
     error => raise ComposerError::Failed("child compose failed: \{error}")
   }
 }

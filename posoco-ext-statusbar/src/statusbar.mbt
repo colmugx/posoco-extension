@@ -3,15 +3,16 @@
 ///
 /// The bar knows nothing about agents, turns, or tokens. Peer extensions
 /// own every segment: they publish `register` / `update` / `unregister`
-/// ops on the shared `@devkit.EventBus` (topic `"status"`, wire protocol
-/// in `@devkit.status_op`), and the bar keeps one registry entry per
-/// segment and projects the whole registry into a single
-/// `UiSlot::Status` render intent (key `"statusbar"`) through the
+/// ops as `@kit_events.StatusChanged` on the session's
+/// `@posoco.EventSystem` (see `extension/docs/events-migration.md`), and the
+/// bar
+/// keeps one registry entry per segment and projects the whole registry into
+/// a single `UiSlot::Status` render intent (key `"statusbar"`) through the
 /// composed UI. The host decides where (and whether) to mount it.
 ///
 /// Ownership: the first source to register-or-update a segment owns it;
 /// operations from any other source are ignored (no state change, no
-/// render). Hosts and tests that bypass the bus can drive the same
+/// render). Hosts and tests that bypass the event channel can drive the same
 /// semantics through `set_segment` / `clear_segment`.
 
 ///|
@@ -62,29 +63,63 @@ fn vocabulary_color(color : String?) -> String? {
 }
 
 ///|
-/// The status bar bridge: one struct, four port views — `BusSubscriber`
-/// (consumes status ops from the shared event bus), `CommandPort`
+/// The status bar bridge: one struct, three port views — `CommandPort`
 /// (`/statusbar` provider listing), `Lifecycle` (receives the composed
-/// UI), and `Extension` (self-reporting manifest).
+/// UI), and `Extension` (self-reporting manifest) — plus one listener
+/// registration on the session's `@posoco.EventSystem` that consumes the
+/// `@kit_events.StatusChanged` ops.
 pub struct StatusBar {
   /// The composed UI, delivered at `Lifecycle::on_compose`. `None` until
   /// then — applied changes stay silent instead of rendering nowhere.
   priv mut ui : &@posoco.UiPort?
   priv registry : Map[String, SegmentEntry]
   priv mut counter : Int32
+  /// The bar's single listener registration on the session's event system
+  /// (its only handle to detach, released at `on_shutdown`). `None` when the
+  /// bar was built with no channel to listen on.
+  priv mut subscription : @posoco.Subscription?
 }
 
 ///|
-/// Compose a status bar bridge. When a bus is given, the bar subscribes to
-/// it immediately; render intents start flowing only after the composed UI
-/// arrives at `on_compose`.
-pub fn StatusBar::StatusBar(bus~ : @devkit.EventBus? = None) -> StatusBar {
-  let bar : StatusBar = { ui: None, registry: Map::from_array([]), counter: 0, }
-  match bus {
-    Some(bus) => bus.subscribe(bar as &@devkit.BusSubscriber)
+/// Compose a status bar bridge. The bar subscribes immediately — before
+/// composition, so no fire-and-forget status op announced by an
+/// earlier-composed peer is dropped — and render intents start flowing only
+/// after the composed UI arrives at `on_compose`.
+///
+/// `events` is the session's `@posoco.EventSystem` (the host assembly's
+/// value, the same one handed to `Agent(events~)`). Without it the bar binds
+/// the process default system registered by the host
+/// (`@devkit.events_system_default()`), and with no registered system it
+/// never subscribes — hosts and tests can still drive the same semantics
+/// directly through `set_segment` / `clear_segment`.
+pub fn StatusBar::StatusBar(events~ : @posoco.EventSystem? = None) -> StatusBar {
+  let bar : StatusBar = {
+    ui: None,
+    registry: Map::from_array([]),
+    counter: 0,
+    subscription: None,
+  }
+  bar.attach(events)
+  bar
+}
+
+///|
+/// Register the bar's listener, once, on the session system (or the process
+/// default one when the host injected none). A closed system means the host
+/// is shutting down and there is no channel: the bar simply stays silent.
+fn StatusBar::attach(self : StatusBar, events : @posoco.EventSystem?) -> Unit {
+  let system = match events {
+    Some(system) => Some(system)
+    None => @devkit.events_system_default()
+  }
+  match system {
+    Some(system) =>
+      match system.subscribe(fn(envelope) { self.on_status_event(envelope) }) {
+        Ok(subscription) => self.subscription = Some(subscription)
+        Err(_) => ()
+      }
     None => ()
   }
-  bar
 }
 
 ///|
@@ -191,33 +226,33 @@ fn StatusBar::apply_unregister(
 }
 
 ///|
-/// Consume one bus event: decode the status-op wire protocol and apply it.
-/// Malformed events (wrong topic, bad payload) decode to `None` and are
+/// Consume one delivered event: apply its `@kit_events.StatusChanged` op on
+/// behalf of the publishing extension. The publisher identity is the
+/// envelope's namespace (`publisher_id`) and it decides segment ownership.
+/// Events that
+/// carry no status op (other protocol payloads) and core notifications are
 /// dropped without a render; ownership-rejected ops are dropped the same
 /// way. Every APPLIED change renders exactly once — even one that empties
 /// the bar (an empty Entries body clears the host line).
-pub impl @devkit.BusSubscriber for StatusBar with fn on_bus_event(
+fn StatusBar::on_status_event(
   self : StatusBar,
-  event : @devkit.BusEvent,
+  envelope : @posoco.EventEnvelope,
 ) -> Unit {
-  match @devkit.decode_status_op(event) {
-    Some(Register(segment~, label~, priority~, value~, color~)) =>
-      if self.apply_register(
-          event.source,
-          segment,
-          label,
-          priority,
-          value,
-          color,
-        ) {
+  let source = match @kit_events.publisher_id(envelope) {
+    Some(source) => source
+    None => return
+  }
+  match @kit_events.status_changed_of(envelope) {
+    Some(@kit_events.Register(segment~, label~, priority~, value~, color~)) =>
+      if self.apply_register(source, segment, label, priority, value, color) {
         self.render()
       }
-    Some(Update(segment~, value~)) =>
-      if self.apply_update(event.source, segment, value) {
+    Some(@kit_events.Update(segment~, value~)) =>
+      if self.apply_update(source, segment, value) {
         self.render()
       }
-    Some(Unregister(segment~)) =>
-      if self.apply_unregister(event.source, segment) {
+    Some(@kit_events.Unregister(segment~)) =>
+      if self.apply_unregister(source, segment) {
         self.render()
       }
     None => ()
@@ -225,12 +260,9 @@ pub impl @devkit.BusSubscriber for StatusBar with fn on_bus_event(
 }
 
 ///|
-pub extend StatusBar with @posoco/devkit.BusSubscriber::{on_bus_event}
-
-///|
-/// Direct path, same semantics as a bus `update` op: set `segment` on
-/// behalf of `source` (auto-registering unknown segments, rejecting
-/// foreign owners). Not a bus publish — hosts and tests drive the bar
+/// Direct path, same semantics as a `StatusChanged(Update)` op: set
+/// `segment` on behalf of `source` (auto-registering unknown segments,
+/// rejecting foreign owners). Not a publish — hosts and tests drive the bar
 /// without a round trip.
 pub fn StatusBar::set_segment(
   self : StatusBar,
@@ -244,7 +276,7 @@ pub fn StatusBar::set_segment(
 }
 
 ///|
-/// Direct path, same semantics as a bus `unregister` op.
+/// Direct path, same semantics as a `StatusChanged(Unregister)` op.
 pub fn StatusBar::clear_segment(
   self : StatusBar,
   source~ : String,

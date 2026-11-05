@@ -2310,22 +2310,46 @@ test "zen_format_usd renders four decimals and guards bad input" {
 }
 
 ///|
-/// The tracker accumulates per session and publishes the session total as
-/// the `spent` segment through the default bus; the quota read states the
+/// The tracker accumulates per session and publishes the session total as the
+/// `spent` segment through the default event system; the quota read states the
 /// spend per session and stays silent before the first recorded step.
+///
+/// The tracker publishes under a test-only source id so the assertion counts
+/// its own operations even while other in-process tests publish their spend
+/// segments on the same channel: the publisher identity is the envelope's
+/// namespace, exactly as `BusEvent.source` used to carry it.
 async test "spend tracker accumulates, publishes, and reads back" {
-  let tracker = ZenSpendTracker::ZenSpendTracker()
-  let bus = @devkit.EventBus()
+  let source_id = "posoco_ext_opencode_zen_test_spend"
+  let tracker = ZenSpendTracker::ZenSpendTracker(source=source_id)
+  let system = @posoco.EventSystem()
+  @devkit.events_system_register(system)
   let capture = SpendCapture::SpendCapture()
-  bus.subscribe(capture)
-  @devkit.status_bus_register(bus)
+  match
+    system.subscribe(fn(envelope) {
+      if @kit_events.publisher_id(envelope) == Some(source_id) {
+        match @kit_events.status_changed_of(envelope) {
+          Some(op) => capture.events.push(op)
+          None => ()
+        }
+      }
+    }) {
+    Ok(_) => ()
+    Err(_) => abort("subscribe on a fresh EventSystem failed")
+  }
   tracker.record_and_publish("s1", 0.25)
   tracker.record_and_publish("s1", 0.125)
   tracker.record_and_publish("s2", 2.0)
   assert_eq(capture.events.length(), 3)
-  let op = @devkit.decode_status_op(capture.events[2])
-  guard op is Some(_) else { fail("expected a status op") }
-  assert_eq(capture.events[2].source, "posoco_ext_opencode_zen")
+  assert_true(
+    capture.events[2]
+    is @kit_events.Register(
+      segment="spent",
+      label=Some("$"),
+      priority=85,
+      value=Some("$2.0000"),
+      ..
+    ),
+  )
   assert_eq(tracker.session_spend("s1"), Some(0.375))
   assert_eq(tracker.session_spend("s3"), None)
   // The pull-style reading states one spend entry per recorded session.
@@ -2341,28 +2365,22 @@ async test "spend tracker accumulates, publishes, and reads back" {
     Err(_) => []
   }
   assert_eq(no_readings.length(), 0)
-  // With no bus registered the accounting still happens.
-  @devkit.status_bus_register(@devkit.EventBus())
+  // With a closed channel the accounting still happens and nothing is
+  // published.
+  assert_true(system.close() is Ok(_))
   tracker.record_and_publish("s1", 0.0)
   assert_eq(tracker.session_spend("s1"), Some(0.375))
+  assert_eq(capture.events.length(), 3)
 }
 
 ///|
 priv struct SpendCapture {
-  events : Array[@devkit.BusEvent]
+  events : Array[@kit_events.StatusOp]
 }
 
 ///|
 fn SpendCapture::SpendCapture() -> SpendCapture {
   { events: [], }
-}
-
-///|
-impl @devkit.BusSubscriber for SpendCapture with fn on_bus_event(
-  self : SpendCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
 }
 
 ///|

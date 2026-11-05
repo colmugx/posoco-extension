@@ -50,7 +50,7 @@ pub fn BoardRuntime::backend(self : BoardRuntime) -> @backend.BoardBackend {
 /// Tasks capability is attached.
 pub fn BoardRuntime::attach(
   self : BoardRuntime,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   if self.supervisor is None {
     self.supervisor = Some(@fuwaroid.Supervisor(group~))

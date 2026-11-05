@@ -39,18 +39,13 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   self : RouterModelPort,
   _ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
+  // The composition-time publications and the peer-status listener find their
+  // channel through the capability handed to the router by the host.
+  self.attach_events()
   self.publish_model_status()
   self.publish_decision_selection()
   self.publish_provider_event()
-  match self.bus {
-    Some(bus) =>
-      @devkit.publish_status_unregister(
-        bus,
-        source="posoco_ext_llm",
-        segment="ctx",
-      )
-    None => ()
-  }
+  self.publish_status(@kit_events.Unregister(segment="ctx"))
 }
 
 ///|
@@ -70,6 +65,12 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_start(
     Some(group) => group.spawn_bg(() => self.refresh_model_metadata())
     None => self.refresh_model_metadata()
   }
+  // Announce the active provider once composition is over. Provider-scoped
+  // publishers register their listener from their own `on_compose` — after
+  // this router, which composes earlier, made its compose-time announcement.
+  // Republication is idempotent by contract: a listener that already saw the
+  // same provider re-applies the same state and publishes nothing new.
+  self.publish_provider_event()
 }
 
 ///|

@@ -1,6 +1,6 @@
 ///|
 async test "optional reservation revision and policy guards reject before journal and receive detached state" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let storage = journal()
     let adapter = controlled()

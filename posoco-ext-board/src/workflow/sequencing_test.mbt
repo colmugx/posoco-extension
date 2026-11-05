@@ -4,7 +4,7 @@
 
 ///|
 async test "two tasks run strictly sequentially in deterministic planning order" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha", "beta"])
     assert_true(h.runner.start(workflow_spec(run_id="run-1")) is Ok(_))
     let status = h.runner.wait()
@@ -33,7 +33,7 @@ async test "two tasks run strictly sequentially in deterministic planning order"
 
 ///|
 async test "selected scope executes only the authorized tasks" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha", "beta", "gamma"])
     let previous_events = h.backend.event_history().length()
     assert_true(
@@ -66,7 +66,7 @@ async test "selected scope executes only the authorized tasks" {
 
 ///|
 async test "selected scope cannot authorize a task twice in one run" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(
       h.runner.start(

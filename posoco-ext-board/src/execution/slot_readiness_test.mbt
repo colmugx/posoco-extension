@@ -1,6 +1,6 @@
 ///|
 async test "admission skips unavailable free drivers without blocking healthy slots" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let unavailable = controlled(available=false)
     let healthy = controlled(block=true)
@@ -37,7 +37,7 @@ async test "admission skips unavailable free drivers without blocking healthy sl
 
 ///|
 async test "shutdown withdraws occupied runs even while another reservation is held" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let store = held_journal(block_write=4, signal_write=99)
     let drivers : Array[ControlledAdapter] = []

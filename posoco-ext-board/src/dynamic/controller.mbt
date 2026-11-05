@@ -6,7 +6,7 @@ pub struct DynamicWorkflowController {
   priv owner : @execution.BoardExecutionOwner
   priv orchestrator : @orchestration.BoardOrchestrator
   priv runner : @parallel.ParallelWorkflowRunner
-  priv group : @async.TaskGroup[Unit]
+  priv group : @core_async.TaskGroup
   priv spec : DynamicWorkflowSpec
   priv policy : @expansion.ExpansionPolicy
   priv now_ms : () -> Int64
@@ -16,7 +16,7 @@ pub struct DynamicWorkflowController {
   priv mut cancel_requested : Bool
   priv mut host_paused : Bool
   priv mut busy : Bool
-  priv mut operation : @async.Task[Unit]?
+  priv mut operation : @core_async.Task[Unit]?
   priv mut unresolved : Bool
   priv mut op : @expansion.ExpansionHost?
   priv mut uncertain : @expansion.ExpansionHost?
@@ -41,7 +41,7 @@ pub fn DynamicWorkflowController::create(
   owner~ : @execution.BoardExecutionOwner,
   backend~ : @backend.BoardBackend,
   resolver~ : &@orchestration.BoardExecutionInputResolver,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @core_async.TaskGroup,
   spec~ : DynamicWorkflowSpec,
   now_ms~ : () -> Int64 = @async.now,
 ) -> Result[DynamicWorkflowController, DynamicWorkflowError] {
@@ -605,7 +605,7 @@ pub async fn DynamicWorkflowController::shutdown(
 /// Waiting may report a failed or cancelled operation, both of which prove
 /// termination. Its failure is returned by perform; this helper proves join
 /// only. A timeout, unlike a task failure, never proves termination.
-async fn join_operation(task : @async.Task[Unit], timeout : Int32) -> Bool {
+async fn join_operation(task : @core_async.Task[Unit], timeout : Int32) -> Bool {
   @async.with_timeout(timeout, () => {
     task.wait() catch {
       _ => ()

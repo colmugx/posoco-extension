@@ -42,7 +42,7 @@ async test "read-only server and telemetry operate while domain startup is block
     server~,
     opener~,
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     runtime.attach(group)
     store.entered.get()
     assert_true(runtime.open_board() is Ok(_))

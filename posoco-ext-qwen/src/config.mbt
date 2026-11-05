@@ -45,6 +45,7 @@ fn qwen_reasoning_effort_supported(value : String) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct QwenConfig {
   api_key : String
   base_url : String
@@ -57,7 +58,7 @@ pub(all) struct QwenConfig {
   tool_stream : Bool
   supports_images : Bool
   context_window : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend QwenConfig with Eq::{not_equal, equal}

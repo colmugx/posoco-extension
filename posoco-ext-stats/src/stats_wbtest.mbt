@@ -1,25 +1,38 @@
 ///|
-/// Whitebox tests for the speed and cache metrics extension: a real bus with
-/// a capture subscriber, a scripted clock, and synthetic turn events driven
-/// straight into the Observer (scoped and unscoped), plus the read-only
-/// `cache_doctor` command.
+/// Whitebox tests for the speed and cache metrics extension: the session event
+/// system with a typed status capture, a scripted clock, and synthetic turn
+/// events driven straight into the Observer (scoped and unscoped), plus the
+/// read-only `cache_doctor` command.
 
 ///|
+/// Typed status capture: every `@kit_events.StatusChanged` op the extension
+/// publishes, in delivery order.
 priv struct BusCapture {
-  events : Array[@devkit.BusEvent]
+  ops : Array[@kit_events.StatusOp]
 }
 
 ///|
 fn BusCapture::BusCapture() -> BusCapture {
-  { events: [], }
+  { ops: [], }
 }
 
 ///|
-impl @devkit.BusSubscriber for BusCapture with fn on_bus_event(
-  self : BusCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+/// Open the channel `publish_status_*` publishes on — the process-default
+/// `@posoco.EventSystem`, exactly as the host assembly registers it — and
+/// subscribe before the publisher exists.
+fn status_channel() -> BusCapture {
+  let system = @posoco.EventSystem()
+  let capture = BusCapture::BusCapture()
+  ignore(
+    system.subscribe(fn(envelope) {
+      match @kit_events.status_changed_of(envelope) {
+        Some(op) => capture.ops.push(op)
+        None => ()
+      }
+    }),
+  )
+  @devkit.events_system_register(system)
+  capture
 }
 
 ///|
@@ -112,45 +125,40 @@ fn tk_tool_success(id : String) -> @posoco.TurnEvent {
 let suppress_live : Int64 = 1000000000L
 
 ///|
-/// Assert one captured bus event is a register op for `segment` with the
+/// Assert one captured status event is a register op for `segment` with the
 /// pinned priority and value.
 fn assert_segment(
-  events : Array[@devkit.BusEvent],
+  ops : Array[@kit_events.StatusOp],
   index~ : Int32,
   segment~ : String,
   priority~ : Int32,
   value~ : String,
 ) -> Unit raise {
   assert_eq(
-    @devkit.decode_status_op(events[index]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment~,
-        label=None,
-        priority~,
-        value=Some(value),
-        color=None,
-      ),
+    ops[index],
+    @kit_events.Register(
+      segment~,
+      label=None,
+      priority~,
+      value=Some(value),
+      color=None,
     ),
   )
 }
 
 ///|
 test "full round publishes ttft at first token then tps avg and cache at close" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 2200, 2500]),
     live_interval_ms=suppress_live,
   )
   stats.on_event(None, @posoco.TurnEvent::TurnStarted)
   // First token at 1300: ttft publishes immediately, before the round ends.
   stats.on_event(None, tk_delta("Hel"))
-  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.ops.length(), 1)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
@@ -165,23 +173,23 @@ test "full round publishes ttft at first token then tps avg and cache at close" 
       usage=Some(tk_usage_out(24)),
     ),
   )
-  assert_eq(capture.events.length(), 4)
+  assert_eq(capture.ops.length(), 4)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="tps",
     priority=60,
     value="26.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=2,
     segment="avg",
     priority=70,
     value="26.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="cache",
     priority=80,
@@ -191,11 +199,8 @@ test "full round publishes ttft at first token then tps avg and cache at close" 
 
 ///|
 test "second round re-anchors and avg aggregates tokens over decode time" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 2200, 2700, 3200, 4000, 4300]),
     live_interval_ms=suppress_live,
   )
@@ -227,37 +232,37 @@ test "second round re-anchors and avg aggregates tokens over decode time" {
       usage=Some(tk_usage_out(24)),
     ),
   )
-  assert_eq(capture.events.length(), 8)
+  assert_eq(capture.ops.length(), 8)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="cache",
     priority=80,
     value="n/a",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="ttft",
     priority=50,
     value="500ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=5,
     segment="tps",
     priority=60,
     value="30.0/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=6,
     segment="avg",
     priority=70,
     value="28.2/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=7,
     segment="cache",
     priority=80,
@@ -267,11 +272,8 @@ test "second round re-anchors and avg aggregates tokens over decode time" {
 
 ///|
 test "chunk events publish ttft immediately and non-delta chunks stay silent" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1400, 1500]),
     live_interval_ms=suppress_live,
   )
@@ -316,9 +318,9 @@ test "chunk events publish ttft immediately and non-delta chunks stay silent" {
     ),
   )
   stats.on_event(None, @posoco.TurnEvent::TurnCompleted)
-  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.ops.length(), 1)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
@@ -328,11 +330,8 @@ test "chunk events publish ttft immediately and non-delta chunks stay silent" {
 
 ///|
 test "missing usage settles on the calibrated estimate and still re-anchors" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 3900, 4000]),
     live_interval_ms=suppress_live,
   )
@@ -355,44 +354,44 @@ test "missing usage settles on the calibrated estimate and still re-anchors" {
       usage=Some(tk_usage_out(24)),
     ),
   )
-  assert_eq(capture.events.length(), 7)
+  assert_eq(capture.ops.length(), 7)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="tps",
     priority=60,
     value="≈1.6/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=2,
     segment="avg",
     priority=70,
     value="1.6/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="tps",
     priority=60,
     value="26.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=6,
     segment="cache",
     priority=80,
@@ -402,11 +401,8 @@ test "missing usage settles on the calibrated estimate and still re-anchors" {
 
 ///|
 test "zero decode span produces no tps but the round still re-anchors" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1300, 2000, 3000, 4000, 4100]),
     live_interval_ms=suppress_live,
   )
@@ -432,44 +428,44 @@ test "zero decode span produces no tps but the round still re-anchors" {
       usage=Some(tk_usage_out(12)),
     ),
   )
-  assert_eq(capture.events.length(), 6)
+  assert_eq(capture.ops.length(), 6)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="cache",
     priority=80,
     value="n/a",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=2,
     segment="ttft",
     priority=50,
     value="1000ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="tps",
     priority=60,
     value="12.0/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="avg",
     priority=70,
     value="12.0/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=5,
     segment="cache",
     priority=80,
@@ -478,7 +474,10 @@ test "zero decode span produces no tps but the round still re-anchors" {
 }
 
 ///|
-test "stats with no bus is a silent no-op that still tracks rounds" {
+test "stats with no listener is a silent no-op that still tracks rounds" {
+  // A registered channel without subscribers is the "nobody is rendering"
+  // case: publication stays silent while the observer keeps its accounting.
+  @devkit.events_system_register(@posoco.EventSystem())
   let stats = Stats(
     clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 4000, 4100]),
     live_interval_ms=suppress_live,
@@ -519,11 +518,8 @@ test "stats with no bus is a silent no-op that still tracks rounds" {
 
 ///|
 test "live tps throttles to the interval and tracks the estimate" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1400, 1500, 2000, 2300, 2600, 2700]),
     live_interval_ms=250,
   )
@@ -554,37 +550,37 @@ test "live tps throttles to the interval and tracks the estimate" {
   // Round two: ttft(500), live ≈13.3/s at 2300 (14 chars), live ≈18.1/s at
   // 2600 (38 chars), settled 16.7/s over the 600ms decode span. avg is the
   // aggregate: 14 tokens over 100+600=700ms -> 20.0/s, cache.
-  assert_eq(capture.events.length(), 10)
+  assert_eq(capture.ops.length(), 10)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="ttft",
     priority=50,
     value="500ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=5,
     segment="tps",
     priority=60,
     value="≈13.3/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=6,
     segment="tps",
     priority=60,
     value="≈18.1/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=7,
     segment="tps",
     priority=60,
     value="16.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=8,
     segment="avg",
     priority=70,
@@ -594,11 +590,8 @@ test "live tps throttles to the interval and tracks the estimate" {
 
 ///|
 test "decode span excludes prefill and the commit tail" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 5000, 5100, 7000]),
     live_interval_ms=suppress_live,
   )
@@ -617,14 +610,14 @@ test "decode span excludes prefill and the commit tail" {
     ),
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
     value="4000ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="tps",
     priority=60,
@@ -634,11 +627,8 @@ test "decode span excludes prefill and the commit tail" {
 
 ///|
 test "model request started re-anchors the pending round over tool time" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1400, 1500, 5000, 5300, 5400, 5500]),
     live_interval_ms=suppress_live,
   )
@@ -666,7 +656,7 @@ test "model request started re-anchors the pending round over tool time" {
     ),
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="ttft",
     priority=50,
@@ -676,11 +666,8 @@ test "model request started re-anchors the pending round over tool time" {
 
 ///|
 test "mid-stream usage chunk makes the live rate exact" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1700, 1800, 1900]),
     live_interval_ms=100,
   )
@@ -709,23 +696,23 @@ test "mid-stream usage chunk makes the live rate exact" {
       usage=Some(tk_usage_out(18)),
     ),
   )
-  assert_eq(capture.events.length(), 6)
+  assert_eq(capture.ops.length(), 6)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="tps",
     priority=60,
     value="≈43.6/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=2,
     segment="tps",
     priority=60,
     value="36.0/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="tps",
     priority=60,
@@ -735,19 +722,16 @@ test "mid-stream usage chunk makes the live rate exact" {
 
 ///|
 test "non-streamed round publishes no speed segments but still counts cache" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 2000]),
     live_interval_ms=suppress_live,
   )
   stats.on_event(None, @posoco.TurnEvent::TurnStarted)
   stats.on_event(None, tk_response(Some(tk_usage_cache(Some(100), Some(50)))))
-  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.ops.length(), 1)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="cache",
     priority=80,
@@ -757,13 +741,8 @@ test "non-streamed round publishes no speed segments but still counts cache" {
 
 ///|
 test "cache buckets split by session scope and the segment aggregates them" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
-  let stats = Stats(
-    bus=Some(bus),
-    clock=stepped_clock([1000, 1100, 1200, 1300]),
-  )
+  let capture = status_channel()
+  let stats = Stats(clock=stepped_clock([1000, 1100, 1200, 1300]))
   let scope_a = tk_scope("session_a")
   let scope_b = tk_scope("session_b")
   stats.on_event(
@@ -780,25 +759,14 @@ test "cache buckets split by session scope and the segment aggregates them" {
     tk_response(Some(tk_usage_cache(Some(200), Some(0)))),
   )
   stats.on_event(None, tk_response(Some(tk_usage_cache(Some(50), Some(40)))))
-  assert_eq(capture.events.length(), 4)
+  assert_eq(capture.ops.length(), 4)
   let expected = [
     "1/1·50.0%", "1/1·50.0%", "1/2·16.7%",
     // Reported cache telemetry covers 90 cached tokens of 350 input tokens.
      "2/3·25.7%",
   ]
   for i, value in expected {
-    assert_eq(
-      @devkit.decode_status_op(capture.events[i]),
-      Some(
-        @devkit.StatusOp::Register(
-          segment="cache",
-          label=None,
-          priority=80,
-          value=Some(value),
-          color=None,
-        ),
-      ),
-    )
+    assert_segment(capture.ops, index=i, segment="cache", priority=80, value~)
   }
   match stats.cache_buckets.get("session_a") {
     Some(bucket) => {
@@ -848,38 +816,26 @@ test "cache accounting never coerces absent fields to zero" {
 
 ///|
 test "cache segment marks unreported metrics as n/a" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
-  let stats = Stats(bus=Some(bus), clock=stepped_clock([1000, 2000, 3000]))
+  let capture = status_channel()
+  let stats = Stats(clock=stepped_clock([1000, 2000, 3000]))
   stats.on_event(None, tk_response(Some(tk_usage_cache(None, None))))
   stats.on_event(None, tk_response(None))
-  assert_eq(capture.events.length(), 1)
-  assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_eq(capture.ops.length(), 1)
+  assert_segment(
+    capture.ops,
+    index=0,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
   stats.on_event(None, tk_response(Some(tk_usage_cache(Some(100), Some(10)))))
-  assert_eq(capture.events.length(), 2)
-  assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("1/1·10.0%"),
-        color=None,
-      ),
-    ),
+  assert_eq(capture.ops.length(), 2)
+  assert_segment(
+    capture.ops,
+    index=1,
+    segment="cache",
+    priority=80,
+    value="1/1·10.0%",
   )
 }
 
@@ -1108,11 +1064,8 @@ async test "usage on a fresh stats renders an empty aggregate without a rate" {
 
 ///|
 test "burst round above the plausibility bound stays out of tps and avg" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1303, 1305, 1605, 2505, 2605]),
     live_interval_ms=suppress_live,
   )
@@ -1130,16 +1083,16 @@ test "burst round above the plausibility bound stays out of tps and avg" {
     ),
   )
   assert_eq(stats.tps_rounds, 0)
-  assert_eq(capture.events.length(), 2)
+  assert_eq(capture.ops.length(), 2)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="cache",
     priority=80,
@@ -1157,30 +1110,30 @@ test "burst round above the plausibility bound stays out of tps and avg" {
     ),
   )
   assert_eq(stats.tps_rounds, 1)
-  assert_eq(capture.events.length(), 6)
+  assert_eq(capture.ops.length(), 6)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=2,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=3,
     segment="tps",
     priority=60,
     value="26.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=4,
     segment="avg",
     priority=70,
     value="26.7/s",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=5,
     segment="cache",
     priority=80,
@@ -1190,11 +1143,8 @@ test "burst round above the plausibility bound stays out of tps and avg" {
 
 ///|
 test "avg weights by decode time so short tool rounds cannot dominate" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1100, 1200, 1300, 2000, 2020, 2100]),
     live_interval_ms=suppress_live,
   )
@@ -1245,8 +1195,8 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
   // Aggregate: 22 tokens over 100+20=120ms -> 183.3/s. The per-round mean
   // would read 150.0/s, so this pins the token-and-time weighting.
   assert_segment(
-    capture.events,
-    index=capture.events.length() - 2,
+    capture.ops,
+    index=capture.ops.length() - 2,
     segment="avg",
     priority=70,
     value="183.3/s",
@@ -1255,11 +1205,8 @@ test "avg weights by decode time so short tool rounds cannot dominate" {
 
 ///|
 test "live burst estimate above the plausibility bound is not published" {
-  let bus = @devkit.EventBus()
-  let capture = BusCapture::BusCapture()
-  bus.subscribe(capture)
+  let capture = status_channel()
   let stats = Stats(
-    bus=Some(bus),
     clock=stepped_clock([1000, 1300, 1500, 1600, 8800]),
     live_interval_ms=200,
   )
@@ -1277,16 +1224,16 @@ test "live burst estimate above the plausibility bound is not published" {
   // live publishing resumes (60006 chars ≈ 17144.6 tokens over 7.5s).
   stats.on_event(None, tk_delta("x"))
   assert_eq(stats.last_live_ms, Some(8800L))
-  assert_eq(capture.events.length(), 2)
+  assert_eq(capture.ops.length(), 2)
   assert_segment(
-    capture.events,
+    capture.ops,
     index=0,
     segment="ttft",
     priority=50,
     value="300ms",
   )
   assert_segment(
-    capture.events,
+    capture.ops,
     index=1,
     segment="tps",
     priority=60,

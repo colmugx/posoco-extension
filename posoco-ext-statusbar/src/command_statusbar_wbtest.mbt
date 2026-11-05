@@ -1,20 +1,18 @@
 ///|
-/// `/statusbar` listing command tests. The bus side uses a real devkit
-/// EventBus so the command is exercised against the same protocol path
-/// publishers use.
+/// `/statusbar` listing command tests. The status side publishes
+/// `@kit_events.StatusChanged` ops on a real `@posoco.EventSystem`, so the
+/// command is exercised against the same protocol path publishers use.
 
 ///|
 async test "listing reports every registered segment with its owner" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="posoco_ext_plan",
     segment="plan",
     label="Plan",
     priority=10,
   )
-  @devkit.publish_status_register(
-    bus,
+  channel.register(
     source="posoco_ext_llm",
     segment="model",
     label="Model",
@@ -61,7 +59,7 @@ async test "listing reports every registered segment with its owner" {
 
 ///|
 async test "empty bar lists a zero count" {
-  let (bar, _ui, _bus) = new_composed_bar()
+  let (bar, _ui, _channel) = new_composed_bar()
   let outcome = bar.invoke("statusbar", Json::null())
   match outcome {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
@@ -77,7 +75,7 @@ async test "empty bar lists a zero count" {
 
 ///|
 async test "non-empty arguments are rejected" {
-  let (bar, _ui, _bus) = new_composed_bar()
+  let (bar, _ui, _channel) = new_composed_bar()
   try
     bar.invoke(
       "statusbar",

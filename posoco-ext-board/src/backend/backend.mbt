@@ -51,7 +51,7 @@ pub fn BoardBackend::BoardBackend(
 /// capability is attached.
 pub fn BoardBackend::attach(
   self : BoardBackend,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   self.coordinator.attach(group~)
 }

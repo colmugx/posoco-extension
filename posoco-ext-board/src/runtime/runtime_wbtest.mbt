@@ -118,7 +118,7 @@ async test "ensure_server is idempotent under concurrent opens" {
     server~,
     opener~,
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     runtime.attach(group)
     let results = @async.all([
       () => runtime.open_board(),
@@ -148,7 +148,7 @@ async test "close is idempotent and later open rebinds" {
     server~,
     opener~,
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     runtime.attach(group)
     assert_true(runtime.ensure_server() is Ok(_))
     runtime.close_server()
@@ -244,7 +244,7 @@ async test "runtime shutdown cleanup completes even when cancelled" {
     server~,
     opener~,
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     runtime.attach(group)
     assert_true(
       runtime.backend().handle_command(wire_create("t1", "t1", 0L)).accepted,

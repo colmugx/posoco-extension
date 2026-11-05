@@ -4,7 +4,7 @@
 /// `Initializing`. `recover_expansion` is the after-restart identity lookup,
 /// so it must wait out that window instead of surfacing a transient error.
 async test "recovery reads settled durable history right after attach" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store : @store.MemoryBoardStore = @store.MemoryBoardStore::MemoryBoardStore()
     let first = @backend.BoardBackend(store~, now_ms=() => 100L)
     first.attach(group)

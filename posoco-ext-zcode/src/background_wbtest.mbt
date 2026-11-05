@@ -159,6 +159,7 @@ async test "background receipt accepted and outcome delivered next turn" {
       ext as &@posoco.Extension,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   ignore(
     agent.run_scoped(async fn(agent) {
@@ -229,6 +230,7 @@ async test "background timeout survives cancellation masked as a return" {
       ext as &@posoco.Extension,
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
   ignore(
     agent.run_scoped(async fn(agent) {

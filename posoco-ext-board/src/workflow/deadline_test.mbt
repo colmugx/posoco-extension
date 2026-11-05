@@ -27,7 +27,7 @@ impl @execution.BoardExecutionStore for WorkflowSettlementJournal with fn persis
 
 ///|
 async test "workflow deadline during settlement joins without fabricating cancellation outcome" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let journal : WorkflowSettlementJournal = {
       entered: @aqueue.Queue(kind=Unbounded),
       release: @aqueue.Queue(kind=Unbounded),
@@ -62,7 +62,7 @@ async test "workflow deadline during settlement joins without fabricating cancel
 
 ///|
 async test "deadline withdraws admission during held authorization with no reservation" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = workflow_board(group, tasks=["alpha"])
     let adapter = scripted_adapter()
     let owner = @execution.BoardExecutionOwner(

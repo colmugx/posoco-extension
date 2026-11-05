@@ -35,14 +35,12 @@ pub struct ToolchainManager {
   priv mut resolved : ResolvedToolchain?
   priv mut phase : String
   priv mut reason : String
-  priv bus : @devkit.EventBus?
   priv home : String
   priv prefer_system : Bool
 }
 
 ///|
 pub fn ToolchainManager::ToolchainManager(
-  bus? : @devkit.EventBus,
   home? : String,
   prefer_system~ : Bool = true,
 ) -> ToolchainManager {
@@ -51,7 +49,6 @@ pub fn ToolchainManager::ToolchainManager(
     resolved: None,
     phase: "uninitialized",
     reason: "",
-    bus,
     home: home.unwrap_or(@devkit.home_dir().unwrap_or("")),
     prefer_system,
   }
@@ -84,6 +81,12 @@ fn mbtx_env(tc : ResolvedToolchain) -> Map[String, String] {
 }
 
 ///|
+/// Announce the provisioning phase on the status channel: a `StatusChanged`
+/// register while work is in flight, an unregister once the toolchain is
+/// ready. The payload is the closed `@kit_events.StatusOp` the devkit
+/// `publish_status_*` helpers publish, so the segment renders exactly as
+/// before; the capability is minted per publication and bound to this
+/// extension's id, and a missing or closed event system is a silent no-op.
 fn ToolchainManager::publish(
   self : ToolchainManager,
   phase : String,
@@ -91,25 +94,31 @@ fn ToolchainManager::publish(
 ) -> Unit {
   self.phase = phase
   self.reason = reason
-  match self.bus {
-    None => ()
-    Some(bus) =>
-      if phase == "ready" {
-        @devkit.publish_status_unregister(
-          bus,
-          source="posoco_ext_mbtx",
-          segment="mbtx",
-        )
-      } else {
-        @devkit.publish_status_register(
-          bus,
-          source="posoco_ext_mbtx",
-          segment="mbtx",
-          priority=85,
-          value="mbtx: " + phase,
-          color=if phase == "failed" { "error" } else { "info" },
-        )
+  match @devkit.events_system_default() {
+    Some(system) =>
+      match system.publisher(owner="posoco_ext_mbtx") {
+        Ok(publisher) =>
+          if phase == "ready" {
+            ignore(
+              publisher.publish(
+                @kit_events.StatusChanged(
+                  @kit_events.Unregister(segment="mbtx"),
+                ),
+              ),
+            )
+          } else {
+            let op : @kit_events.StatusOp = @kit_events.Register(
+              segment="mbtx",
+              label=None,
+              priority=85,
+              value=Some("mbtx: " + phase),
+              color=Some(if phase == "failed" { "error" } else { "info" }),
+            )
+            ignore(publisher.publish(@kit_events.StatusChanged(op)))
+          }
+        Err(_) => ()
       }
+    None => ()
   }
 }
 

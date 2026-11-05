@@ -44,4 +44,3 @@ fn board_static_assets(assets : Map[String, Bytes]) -> @moonback.Middleware {
     }
   })
 }
-

@@ -61,7 +61,7 @@ fn xexp_candidate(
 
 ///|
 async test "expand graph commits durably with one persist and one event" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(1L, [task_record("p1", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(seeded)))
@@ -124,7 +124,7 @@ async test "expand graph commits durably with one persist and one event" {
 
 ///|
 async test "a committed expansion id rejects every reuse through the coordinator" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(1L, [task_record("p1", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(seeded)))
@@ -178,7 +178,7 @@ async test "a committed expansion id rejects every reuse through the coordinator
 
 ///|
 async test "uncertain durability that landed adopts the candidate and never replays" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(1L, [task_record("p1", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(seeded)))
@@ -217,7 +217,7 @@ async test "uncertain durability that landed adopts the candidate and never repl
 
 ///|
 async test "uncertain durability that never landed keeps the prior board" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(1L, [task_record("p1", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(seeded)))
@@ -242,7 +242,7 @@ async test "uncertain durability that never landed keeps the prior board" {
 
 ///|
 async test "a durable expansion survives restart with its history intact" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(1L, [task_record("p1", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(seeded)))

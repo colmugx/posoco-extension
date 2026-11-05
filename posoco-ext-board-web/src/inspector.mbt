@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 priv struct DependencyDraft {
   task_id : String
   base_dependencies : Array[String]
   dependencies : Array[String]
-} derive(Eq)
+}
 
 ///|
 fn DependencyDraft::from_task(

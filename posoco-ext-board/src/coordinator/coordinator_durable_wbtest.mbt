@@ -210,7 +210,7 @@ fn load_of(snapshot : @domain.BoardStateSnapshot) -> @store.BoardLoad {
 ///|
 /// Release one startup load immediately so the coordinator becomes Ready.
 async fn ready_scripted(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   store : ScriptedBoardStore,
 ) -> BoardCoordinator {
   let coordinator = scripted_coordinator(store)
@@ -221,7 +221,7 @@ async fn ready_scripted(
 
 ///|
 async test "startup restores an empty board and reports loading then ready" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = scripted_coordinator(store)
     coordinator.attach(group~)
@@ -243,7 +243,7 @@ async test "startup restores an empty board and reports loading then ready" {
 
 ///|
 async test "startup restores a nonzero durable board" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let seeded = snapshot_of(
       2L,
@@ -274,7 +274,7 @@ async test "startup restores a nonzero durable board" {
 
 ///|
 async test "startup recovers running work, persists it once and stays idempotent" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let running = snapshot_of(5L, [task_record("t1", @domain.Running, 20L)], [
       attempt_record("a1", "t1", @domain.Running),
@@ -326,7 +326,7 @@ async test "startup recovers running work, persists it once and stays idempotent
 
 ///|
 async test "a corrupt snapshot fails restore with a typed error and rejects parked submissions" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     // Store-decodable, but the attempt references a task that does not
     // exist: from_snapshot must reject it.
@@ -365,7 +365,7 @@ async test "a corrupt snapshot fails restore with a typed error and rejects park
 
 ///|
 async test "a recovery persist failure fails restore before anything is served" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let running = snapshot_of(1L, [task_record("t1", @domain.Running, 5L)], [])
     store.loads.push_back(LoadOk(load_of(running)))
@@ -393,7 +393,7 @@ async test "a recovery persist failure fails restore before anything is served" 
 
 ///|
 async test "startup recovery uncertainty that reloads recovered candidate becomes ready" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let running = snapshot_of(4L, [task_record("t1", @domain.Running, 5L)], [
       attempt_record("a1", "t1", @domain.Running),
@@ -423,7 +423,7 @@ async test "startup recovery uncertainty that reloads recovered candidate become
 
 ///|
 async test "startup recovery uncertainty never exposes unrecovered old snapshot" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let running = snapshot_of(4L, [task_record("t1", @domain.Running, 5L)], [
       attempt_record("a1", "t1", @domain.Running),
@@ -461,7 +461,7 @@ async test "every pre-visibility persist failure keeps the committed board untou
       @store.JournalFsync,
       @store.Rename,
     ] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store = ScriptedBoardStore::new()
       let coordinator = ready_scripted(group, store)
       // A first successful transaction establishes a committed baseline.
@@ -498,7 +498,7 @@ async test "every pre-visibility persist failure keeps the committed board untou
 
 ///|
 async test "uncertain durability that finds the candidate keeps the commit" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let landed = snapshot_of(
@@ -534,7 +534,7 @@ async test "uncertain durability that finds the candidate keeps the commit" {
 
 ///|
 async test "uncertain durability that finds the old board retains it" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     store.persists.push_back(StepUncertain("directory fsync lost"))
@@ -559,7 +559,7 @@ async test "uncertain durability that finds the old board retains it" {
 
 ///|
 async test "uncertainty against a foreign authoritative board fails read-only and rejects deferred" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let foreign = snapshot_of(7L, [task_record("zz", @domain.Done, 9L)], [])
@@ -605,7 +605,7 @@ async test "uncertainty against a foreign authoritative board fails read-only an
 
 ///|
 async test "a failed reload after uncertainty turns the coordinator read-only" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     store.persists.push_back(StepUncertain("directory fsync lost"))
@@ -633,7 +633,7 @@ async test "a failed reload after uncertainty turns the coordinator read-only" {
 
 ///|
 async test "same revision concurrency: one durable winner, one typed conflict" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let results = @async.all([
@@ -656,7 +656,7 @@ async test "same revision concurrency: one durable winner, one typed conflict" {
 
 ///|
 async test "same revision concurrency: a failed first write rolls back and the parked proposal wins" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     store.persists.push_back(StepFail(@store.TempWrite))
@@ -685,7 +685,7 @@ async test "same revision concurrency: a failed first write rolls back and the p
 
 ///|
 async test "deferred submissions persist in fifo order, one transaction each, never early" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let coordinator = ready_scripted(group, store)
@@ -725,7 +725,7 @@ async test "deferred submissions persist in fifo order, one transaction each, ne
 
 ///|
 async test "queries never see the pending candidate and an unfinished submit leaks nothing" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let coordinator = ready_scripted(group, store)
@@ -754,7 +754,7 @@ async test "queries never see the pending candidate and an unfinished submit lea
 
 ///|
 async test "a cancelled caller leaves the accepted submission settling without state leak" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let coordinator = ready_scripted(group, store)
@@ -780,7 +780,7 @@ async test "a cancelled caller leaves the accepted submission settling without s
 
 ///|
 async test "wait_ready parks every waiter on completion queues without polling" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let seeded = snapshot_of(4L, [task_record("t0", @domain.Created, 3L)], [])
@@ -825,7 +825,7 @@ async test "wait_ready parks every waiter on completion queues without polling" 
 
 ///|
 async test "stale worker reports are no-ops" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let actor = coordinator.actor.unwrap()
@@ -848,7 +848,7 @@ async test "stale worker reports are no-ops" {
 
 ///|
 async test "a duplicate persist error during reconciliation is a no-op" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let landed = snapshot_of(
@@ -895,7 +895,7 @@ async test "a duplicate persist error during reconciliation is a no-op" {
 
 ///|
 async test "shutdown finishes the in-flight persist, rejects deferred and stops" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let coordinator = ready_scripted(group, store)
@@ -926,7 +926,7 @@ async test "shutdown finishes the in-flight persist, rejects deferred and stops"
 
 ///|
 async test "concurrent shutdown and submissions stay safe" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let results : Array[Int32] = @async.all([
@@ -967,7 +967,7 @@ async test "concurrent shutdown and submissions stay safe" {
 
 ///|
 async test "shutdown during a load finishes the load and closes cleanly" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     let seeded = snapshot_of(2L, [task_record("t0", @domain.Created, 3L)], [])

@@ -55,12 +55,13 @@ async test "hook events mutate only actor-owned recovery state" {
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 49000L }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @async.sleep(60000)
+    @core_async.sleep(60000)
   })
   let model = @tk.ScriptedModel::ScriptedModel([
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
   ])
   let agent = @posoco.Agent(
+    events=@posoco.EventSystem(),
     exts=[
       @tk.tk_ext(id="model", model=Some(model)),
       @tk.tk_ext(id="io", sessions=[
@@ -70,7 +71,7 @@ async test "hook events mutate only actor-owned recovery state" {
     ],
     config=@tk.tk_config(),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
@@ -89,12 +90,13 @@ async test "cancel_pending invalidates actor schedule" {
   let guard_ext = RateLimitGuard(now_ms=fn() { 1000L }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @async.sleep(60000)
+    @core_async.sleep(60000)
   })
   let model = @tk.ScriptedModel::ScriptedModel([
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
   ])
   let agent = @posoco.Agent(
+    events=@posoco.EventSystem(),
     exts=[
       @tk.tk_ext(id="model", model=Some(model)),
       @tk.tk_ext(id="io", sessions=[
@@ -104,7 +106,7 @@ async test "cancel_pending invalidates actor schedule" {
     ],
     config=@tk.tk_config(),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
@@ -131,6 +133,7 @@ async test "429 failed turn auto-resumes through supervised event timer" {
   let store = @tk.RecordingSessionPort::RecordingSessionPort()
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 0L })
   let agent = @posoco.Agent(
+    events=@posoco.EventSystem(),
     exts=[
       @tk.tk_ext(id="model", model=Some(model)),
       @tk.tk_ext(id="io", sessions=[store]),
@@ -138,7 +141,7 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     ],
     config=@tk.tk_config(),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let first : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
       agent.run_turn(@tk.tk_user_msg("task"), "s1"),
@@ -147,9 +150,9 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     }
     assert_true(first is Err(_))
     let resumed : Result[Unit, Error] = Ok(
-      @async.with_timeout(2000, () => {
+      @core_async.with_timeout(2000, () => {
         while model.call_count() < 2 {
-          @async.sleep(1)
+          @core_async.sleep(1)
         }
       }),
     ) catch {
@@ -186,7 +189,7 @@ pub impl @posoco.ModelPort for DelayedModel with fn chat(
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   self.started = self.started + 1
-  @async.sleep(self.delay_ms)
+  @core_async.sleep(self.delay_ms)
   self.finished = self.finished + 1
   @tk.tk_stop_response("done")
 }
@@ -222,7 +225,7 @@ async test "simultaneous due sessions serialize resume execution" {
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { now.val }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @async.sleep(60000)
+    @core_async.sleep(60000)
   })
   let store = @tk.RecordingSessionPort::RecordingSessionPort()
   store.seed("s1", {
@@ -234,6 +237,7 @@ async test "simultaneous due sessions serialize resume execution" {
     metadata: Map::from_array([]),
   })
   let agent = @posoco.Agent(
+    events=@posoco.EventSystem(),
     exts=[
       @tk.tk_ext(id="model", model=Some(model)),
       @tk.tk_ext(id="io", sessions=[store]),
@@ -241,7 +245,7 @@ async test "simultaneous due sessions serialize resume execution" {
     ],
     config=@tk.tk_config(),
   )
-  @async.with_task_group(group => {
+  @core_async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     let observer : &@posoco.Observer = guard_ext
@@ -254,9 +258,9 @@ async test "simultaneous due sessions serialize resume execution" {
     }
     guard_ext.poll()
     let first_started : Result[Unit, Error] = Ok(
-      @async.with_timeout(1000, () => {
+      @core_async.with_timeout(1000, () => {
         while model.started < 1 {
-          @async.sleep(1)
+          @core_async.sleep(1)
         }
       }),
     ) catch {
@@ -266,9 +270,9 @@ async test "simultaneous due sessions serialize resume execution" {
     assert_eq(model.started, 1)
     assert_eq(model.finished, 0)
     let both_finished : Result[Unit, Error] = Ok(
-      @async.with_timeout(2000, () => {
+      @core_async.with_timeout(2000, () => {
         while model.finished < 2 {
-          @async.sleep(1)
+          @core_async.sleep(1)
         }
       }),
     ) catch {
@@ -279,4 +283,46 @@ async test "simultaneous due sessions serialize resume execution" {
     assert_eq(model.finished, 2)
     guard_ext.shutdown()
   })
+}
+
+///|
+test "recovery status publishes typed StatusChanged ops on the session system" {
+  let system = @posoco.EventSystem()
+  let ops : Array[@kit_events.StatusOp] = []
+  let subscription = system
+    .subscribe(fn(envelope) {
+      match @kit_events.status_changed_of(envelope) {
+        Some(op) => ops.push(op)
+        None => ()
+      }
+    })
+    .unwrap()
+  let sink = RecoveryStatusSink::RecoveryStatusSink()
+  sink.bind(Some(system.publisher(owner="posoco_ext_ratelimit").unwrap()))
+  sink.publish(Some({ earliest_resume_at: 50000L, window_label: Some("5h"), }))
+  // The same projection twice is one bar update, not two.
+  sink.publish(Some({ earliest_resume_at: 50000L, window_label: Some("5h"), }))
+  sink.publish(None)
+  assert_eq(ops.length(), 2)
+  assert_eq(
+    ops[0],
+    @kit_events.Register(
+      segment="🕐 5h reset",
+      label=None,
+      priority=90,
+      value=Some("1970-01-01T00:00:50Z"),
+      color=Some("warning"),
+    ),
+  )
+  assert_eq(ops[1], @kit_events.Unregister(segment="🕐 5h reset"))
+  subscription.cancel()
+  assert_true(system.close() is Ok(_))
+}
+
+///|
+test "an unbound status sink announces nothing" {
+  let sink = RecoveryStatusSink::RecoveryStatusSink()
+  assert_false(sink.is_bound())
+  sink.publish(Some({ earliest_resume_at: 50000L, window_label: None, }))
+  assert_true(sink.announced_segment is None)
 }

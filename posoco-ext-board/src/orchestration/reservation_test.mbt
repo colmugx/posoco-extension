@@ -33,7 +33,7 @@ impl @orchestration.BoardExecutionInputResolver for WithdrawalProbe with fn reso
 
 ///|
 async test "owner reservation guard rejection returns fresh StalePlan without journal or execution" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let journal = orch_journal()
     let adapter = orch_adapter()

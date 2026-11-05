@@ -23,7 +23,7 @@ impl @service.WorkflowAgentFactory for SharedExecutionFactory with fn prepare(
 async test "yielding factories cannot lease the same extension capability to parallel slots" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,
       fail: false,
@@ -64,6 +64,7 @@ async test "yielding factories cannot lease the same extension capability to par
     let parent = @posoco.Agent(
       exts=[model, ui, board],
       config=@posoco.agent_config(),
+      events=@posoco.EventSystem(),
     )
     defer ignore(board.shutdown())
     let h = Harness::{ board, ui, state, parent, }

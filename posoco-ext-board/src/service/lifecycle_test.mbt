@@ -7,7 +7,7 @@
 async test "default StopOnFailure joins cancelled planning into a terminal workflow without resume" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group)
     defer ignore(h.board.shutdown())
     let started = h.board.start(title="Cancelled planning").checked()

@@ -28,7 +28,7 @@ fn headless_create(
 ///|
 async test "headless backend serves commands snapshots and subscriptions without transport" {
   let backend = @backend.BoardBackend::BoardBackend(now_ms=() => 1234L)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     // A wire command commits and answers its correlated result.
     assert_eq(backend.handle_command(headless_create("c1", "t1", 0L)), {
@@ -120,7 +120,7 @@ async test "headless backend serves commands snapshots and subscriptions without
 ///|
 async test "headless revision conflict rejects and reports the committed revision" {
   let backend = @backend.BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(
       backend.handle_command(headless_create("c1", "t1", 0L)).accepted,
@@ -144,7 +144,7 @@ async test "headless revision conflict rejects and reports the committed revisio
 ///|
 async test "headless telemetry and commits share one ordered sequence" {
   let backend = @backend.BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(
       backend.handle_command(headless_create("c1", "t1", 0L)).accepted,
@@ -220,7 +220,7 @@ async test "headless persistence failure answers without minting an event" {
     landed: None,
   }
   let backend = @backend.BoardBackend::BoardBackend(store~)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     let rejected = backend.handle_command(headless_create("doomed", "t1", 0L))
     assert_eq(rejected.accepted, false)
@@ -245,7 +245,7 @@ async test "headless uncertain durability commits once and answers false with th
     landed: None,
   }
   let backend = @backend.BoardBackend::BoardBackend(store~, now_ms=() => 1234L)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     let uncertain = backend.handle_command(headless_create("t1", "t1", 0L))
     // The reload found the candidate: it committed exactly once and its
@@ -263,7 +263,7 @@ async test "headless uncertain durability commits once and answers false with th
 ///|
 async test "headless shutdown closes admission and keeps answers wire-safe" {
   let backend = @backend.BoardBackend::BoardBackend()
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     backend.attach(group)
     assert_true(
       backend.handle_command(headless_create("c1", "t1", 0L)).accepted,

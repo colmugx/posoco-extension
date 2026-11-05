@@ -17,7 +17,7 @@ extern "js" fn js_now_ms() -> Int32 =
 
 ///|
 priv struct StatusCapture {
-  events : Array[@devkit.BusEvent]
+  events : Array[@kit_events.StatusOp]
 }
 
 ///|
@@ -26,11 +26,53 @@ fn StatusCapture::StatusCapture() -> StatusCapture {
 }
 
 ///|
-impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
-  self : StatusCapture,
-  event : @devkit.BusEvent,
-) -> Unit {
-  self.events.push(event)
+/// One test's status channel: a fresh event system that captures the closed
+/// `StatusChanged` operations plus the owner-bound capability the store
+/// publishes through (the pair assembly mints per extension).
+struct StatusChannel {
+  store : @posoco.Events
+}
+
+///|
+fn capture_status_system(capture : StatusCapture) -> StatusChannel {
+  let system = @posoco.EventSystem()
+  match
+    system.subscribe(fn(envelope) {
+      match @kit_events.status_changed_of(envelope) {
+        Some(op) => capture.events.push(op)
+        None => ()
+      }
+    }) {
+    Ok(_) => ()
+    Err(_) => abort("subscribe on a fresh EventSystem failed")
+  }
+  let store = match system.publisher(owner="posoco_ext_fs_session") {
+    Ok(store) => store
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  { store, }
+}
+
+///|
+/// One test's selection channel: a fresh system, the capability ext-llm's
+/// router publishes `ModelSelection` through, and the store's own capability.
+struct SelectionChannel {
+  publisher : @posoco.Events
+  store : @posoco.Events
+}
+
+///|
+fn selection_system() -> SelectionChannel {
+  let system = @posoco.EventSystem()
+  let publisher = match system.publisher(owner="posoco_ext_llm") {
+    Ok(publisher) => publisher
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  let store = match system.publisher(owner="posoco_ext_fs_session") {
+    Ok(store) => store
+    Err(_) => abort("publisher on a fresh EventSystem failed")
+  }
+  { publisher, store, }
 }
 
 ///|
@@ -39,12 +81,11 @@ async test "io[js]: save and append publish the session status register" {
     return
   }
   let root = "/tmp/posoco-fs-session-js-status-" + js_now_ms().to_string()
-  let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
-  bus.subscribe(capture)
+  let channel = capture_status_system(capture)
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
@@ -59,17 +100,16 @@ async test "io[js]: save and append publish the session status register" {
     e => fail("append failed: \{e}")
   }
   assert_eq(capture.events.length(), 2)
-  assert_eq(capture.events[0].source, "posoco_ext_fs_session")
   debug_inspect(
-    @devkit.decode_status_op(capture.events[0]),
+    capture.events[0],
     content=(
-      #|Some(Register(segment="session", label=None, priority=80, value=Some("sess_s")))
+      #|Register(segment="session", label=None, priority=80, value=Some("sess_s"), color=None)
     ),
   )
   debug_inspect(
-    @devkit.decode_status_op(capture.events[1]),
+    capture.events[1],
     content=(
-      #|Some(Register(segment="session", label=None, priority=80, value=Some("sess_a")))
+      #|Register(segment="session", label=None, priority=80, value=Some("sess_a"), color=None)
     ),
   )
 }
@@ -146,28 +186,14 @@ async test "io[js]: append_messages on existing file appends only new lines" {
 extern "js" fn js_test_read_sync(path : String, encoding : String) -> String = "readFileSync"
 
 ///|
-/// Publish one `model_selection` bus event the way ext-llm's router does.
+/// Publish one `ModelSelection` event the way ext-llm's router does.
 fn js_publish_selection(
-  bus : @devkit.EventBus,
+  publisher : @posoco.Events,
   slot~ : String,
   effort~ : String? = None,
 ) -> Unit {
-  bus.publish({
-    source: "posoco_ext_llm",
-    topic: "model_selection",
-    data: Json::object(
-      Map::from_array([
-        ("slot_id", Json::string(slot)),
-        (
-          "effort",
-          match effort {
-            Some(value) => Json::string(value)
-            None => Json::null()
-          },
-        ),
-      ]),
-    ),
-  })
+  let payload : @kit_events.ModelSelectionPayload = { slot_id: slot, effort, }
+  ignore(publisher.publish(@kit_events.ModelSelection(payload)))
 }
 
 ///|
@@ -182,12 +208,16 @@ async test "io[js]: observed selection decorates save, append, and summary" {
     return
   }
   let root = "/tmp/posoco-fs-session-js-sel-" + js_now_ms().to_string()
-  let bus = @devkit.EventBus()
+  let channel = selection_system()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  js_publish_selection(bus, slot="qwen/glm-4.6", effort=Some("high"))
+  js_publish_selection(
+    channel.publisher,
+    slot="qwen/glm-4.6",
+    effort=Some("high"),
+  )
   let one : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
   ]
@@ -199,7 +229,7 @@ async test "io[js]: observed selection decorates save, append, and summary" {
   assert_eq(s.effort, Some("high"))
   // A later selection change is picked up by the next append's line-1
   // rewrite.
-  js_publish_selection(bus, slot="z/d")
+  js_publish_selection(channel.publisher, slot="z/d")
   let two : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("two")]),
   ]
@@ -223,12 +253,12 @@ async test "io[js]: append without a change keeps the metadata line" {
     return
   }
   let root = "/tmp/posoco-fs-session-js-selfast-" + js_now_ms().to_string()
-  let bus = @devkit.EventBus()
+  let channel = selection_system()
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
     root,
-    bus=Some(bus),
+    events=channel.store,
   )
-  js_publish_selection(bus, slot="a/b")
+  js_publish_selection(channel.publisher, slot="a/b")
   let one : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
   ]

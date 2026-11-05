@@ -254,4 +254,3 @@ fn ticket_result_card(
     ]),
   ])
 }
-

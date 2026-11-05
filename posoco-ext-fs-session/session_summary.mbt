@@ -13,7 +13,7 @@ pub(all) struct SessionSummary {
   name : String?
   title : String?
   /// Router slot id recorded for the session's last persisted turn; `None`
-  /// for legacy journals and stores composed without the model bus.
+  /// for legacy journals and stores composed without an event channel.
   model : String?
   /// Explicit reasoning effort recorded with `model`; `None` = slot default.
   effort : String?

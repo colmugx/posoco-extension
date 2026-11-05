@@ -613,6 +613,7 @@ fn review_block(
 }
 
 ///|
+
 ///|
 fn task_assignments(
   model : Model,
@@ -646,12 +647,15 @@ fn task_assignments(
               value=role_id,
               checked=enabled,
               attrs=@html.Attrs::build().disabled(!editable || role_id == "rd"),
-              on_change=_ =>
-                emit(RolePlanToggled(task.id, role_id, !enabled)),
+              on_change=_ => emit(RolePlanToggled(task.id, role_id, !enabled)),
             ),
             @html.span(
               class="team-slot-name",
-              if label == "" { team_member_label(model, role_id) } else { label },
+              if label == "" {
+                team_member_label(model, role_id)
+              } else {
+                label
+              },
             ),
             @html.span(class="team-slot-role", role_id),
           ],
@@ -660,7 +664,11 @@ fn task_assignments(
     ),
     @html.p(
       class="section-note",
-      if editable { "Choose who runs this ticket. RD is required; SET and TE are optional." } else { "Role plan is editable while the ticket is Ready." },
+      if editable {
+        "Choose who runs this ticket. RD is required; SET and TE are optional."
+      } else {
+        "Role plan is editable while the ticket is Ready."
+      },
     ),
   ])
 }

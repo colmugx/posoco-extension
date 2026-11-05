@@ -1,6 +1,6 @@
 ///|
 async test "controlled admission keeps detached task versions through fresh planning" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()

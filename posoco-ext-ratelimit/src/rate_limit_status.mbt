@@ -1,17 +1,38 @@
 ///|
 /// Status presentation adapter. The rate-limit domain/runtime only emits a
-/// RecoveryStatus projection; this adapter owns EventBus naming/formatting.
-priv struct DevkitStatusSink {
-  bus : @devkit.EventBus?
+/// RecoveryStatus projection; this adapter owns segment naming/formatting and
+/// publishes the typed `@kit_events.StatusChanged` ops on the session's
+/// `@posoco.Events` capability.
+///
+/// The capability arrives through `CompositionView::events()` in `on_compose`
+/// (the manifest declares `Capability::Events`), so the owner namespace is the
+/// extension id and no publisher string is repeated here. A guard that was
+/// never composed (or a host that did not grant the capability) has nowhere to
+/// publish and stays silent — a missing bar is a rendering gap, never an error.
+priv struct RecoveryStatusSink {
+  mut events : @posoco.Events?
   mut announced_segment : String?
   mut announced_value : String?
 }
 
 ///|
-fn DevkitStatusSink::DevkitStatusSink(
-  bus : @devkit.EventBus?,
-) -> DevkitStatusSink {
-  { bus, announced_segment: None, announced_value: None, }
+fn RecoveryStatusSink::RecoveryStatusSink() -> RecoveryStatusSink {
+  { events: None, announced_segment: None, announced_value: None, }
+}
+
+///|
+/// Bind the owner-bound capability minted by the host.
+fn RecoveryStatusSink::bind(
+  self : RecoveryStatusSink,
+  events : @posoco.Events?,
+) -> Unit {
+  self.events = events
+}
+
+///|
+/// Whether this sink has a channel at all.
+fn RecoveryStatusSink::is_bound(self : RecoveryStatusSink) -> Bool {
+  self.events is Some(_)
 }
 
 ///|
@@ -56,13 +77,25 @@ fn fmt_reset_at(reset_at_ms : Int64) -> String {
 }
 
 ///|
-fn DevkitStatusSink::publish(
-  self : DevkitStatusSink,
+/// Publish one status op on the bound capability. A closed system (the host is
+/// shutting down) drops the op: publication is never an error path.
+fn RecoveryStatusSink::emit(
+  self : RecoveryStatusSink,
+  op : @kit_events.StatusOp,
+) -> Unit {
+  match self.events {
+    Some(events) => ignore(events.publish(@kit_events.StatusChanged(op)))
+    None => ()
+  }
+}
+
+///|
+fn RecoveryStatusSink::publish(
+  self : RecoveryStatusSink,
   status : RecoveryStatus?,
 ) -> Unit {
-  let bus = match self.bus {
-    Some(bus) => bus
-    None => return
+  if !self.is_bound() {
+    return
   }
   let next : (String, String)? = match status {
     Some(status) =>
@@ -77,17 +110,9 @@ fn DevkitStatusSink::publish(
 
   match (self.announced_segment, self.announced_value, next) {
     (Some(previous), _, Some((segment, _))) if previous != segment =>
-      @devkit.publish_status_unregister(
-        bus,
-        source="posoco_ext_ratelimit",
-        segment=previous,
-      )
+      self.emit(@kit_events.Unregister(segment=previous))
     (Some(previous), _, None) =>
-      @devkit.publish_status_unregister(
-        bus,
-        source="posoco_ext_ratelimit",
-        segment=previous,
-      )
+      self.emit(@kit_events.Unregister(segment=previous))
     _ => ()
   }
 
@@ -96,13 +121,14 @@ fn DevkitStatusSink::publish(
       let unchanged = self.announced_segment == Some(segment) &&
         self.announced_value == Some(value)
       if !unchanged {
-        @devkit.publish_status_register(
-          bus,
-          source="posoco_ext_ratelimit",
-          segment~,
-          priority=90,
-          value~,
-          color="warning",
+        self.emit(
+          @kit_events.Register(
+            segment~,
+            label=None,
+            priority=90,
+            value=Some(value),
+            color=Some("warning"),
+          ),
         )
       }
       self.announced_segment = Some(segment)

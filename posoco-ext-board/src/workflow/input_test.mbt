@@ -5,7 +5,7 @@
 
 ///|
 async test "progress carries identities only and input never reaches the Board" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -51,7 +51,7 @@ async test "progress carries identities only and input never reaches the Board" 
 
 ///|
 async test "a missing input hint stops the run before any dispatch" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     // beta has no authorized input hint: the precheck stops the run instead
     // of silently executing the available alpha.
     let h = workflow_harness(

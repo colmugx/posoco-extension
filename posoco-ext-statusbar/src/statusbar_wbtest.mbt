@@ -65,13 +65,80 @@ impl @posoco.UiPort for RecordingUi with fn request(
 }
 
 ///|
-/// A bridge subscribed to a real devkit bus and composed against a
-/// RecordingUi — the full wiring the agent composer would build. Publishes
-/// on the bus exercise the cross-package protocol end to end.
-fn new_composed_bar() -> (StatusBar, RecordingUi, @devkit.EventBus) raise @posoco.CompositionError {
-  let ui = RecordingUi()
-  let bus = @devkit.EventBus()
-  let bar = StatusBar(bus=Some(bus))
+/// Test-side status channel: one fresh `@posoco.EventSystem`, registered as
+/// the process default exactly as the host assembly does, so the bar under
+/// test and the publishes below travel the production channel. Each publish
+/// mints a capability for its `source`, so the envelope carries the publisher
+/// identity the ownership rule filters on (`@kit_events.publisher_id`).
+priv struct Channel {
+  system : @posoco.EventSystem
+}
+
+///|
+fn Channel::Channel() -> Channel {
+  let system = @posoco.EventSystem()
+  @devkit.events_system_register(system)
+  { system, }
+}
+
+///|
+fn Channel::publish(
+  self : Channel,
+  source~ : String,
+  op~ : @kit_events.StatusOp,
+) -> Unit {
+  let events = match self.system.publisher(owner=source) {
+    Ok(events) => events
+    Err(_) => abort("minting a publisher capability failed")
+  }
+  ignore(events.publish(@kit_events.StatusChanged(op)))
+}
+
+///|
+/// Publish a register op on behalf of `source`, the way a peer extension
+/// does.
+fn Channel::register(
+  self : Channel,
+  source~ : String,
+  segment~ : String,
+  label? : String,
+  priority~ : Int32 = 0,
+  value? : String,
+  color? : String,
+) -> Unit {
+  self.publish(
+    source~,
+    op=@kit_events.Register(segment~, label~, priority~, value~, color~),
+  )
+}
+
+///|
+/// Publish an update op on behalf of `source`.
+fn Channel::update(
+  self : Channel,
+  source~ : String,
+  segment~ : String,
+  value~ : String,
+) -> Unit {
+  self.publish(source~, op=@kit_events.Update(segment~, value~))
+}
+
+///|
+/// Publish an unregister op on behalf of `source`.
+fn Channel::unregister(
+  self : Channel,
+  source~ : String,
+  segment~ : String,
+) -> Unit {
+  self.publish(source~, op=@kit_events.Unregister(segment~))
+}
+
+///|
+/// Deliver the composed UI to a bar the way composition does.
+fn compose_bar(
+  bar : StatusBar,
+  ui : RecordingUi,
+) -> Unit raise @posoco.CompositionError {
   let model = @tk.ScriptedModel([])
   bar.on_compose(
     @tk.tk_view(
@@ -80,14 +147,24 @@ fn new_composed_bar() -> (StatusBar, RecordingUi, @devkit.EventBus) raise @posoc
       ui=ui as &@posoco.UiPort,
     ),
   )
-  (bar, ui, bus)
+}
+
+///|
+/// A bridge subscribed to a real event system and composed against a
+/// RecordingUi — the full wiring the agent composer would build. Publishes on
+/// that system exercise the cross-package protocol end to end.
+fn new_composed_bar() -> (StatusBar, RecordingUi, Channel) raise @posoco.CompositionError {
+  let ui = RecordingUi()
+  let channel = Channel::Channel()
+  let bar = StatusBar(events=Some(channel.system))
+  compose_bar(bar, ui)
+  (bar, ui, channel)
 }
 
 ///|
 test "register with a value renders the segment through the status slot" {
-  let (_bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (_bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="posoco_ext_plan",
     segment="plan",
     label="Plan",
@@ -111,28 +188,16 @@ test "register with a value renders the segment through the status slot" {
 ///|
 test "compose with no announced segments stays silent" {
   let ui = RecordingUi()
-  let bus = @devkit.EventBus()
-  let bar = StatusBar(bus=Some(bus))
-  let model = @tk.ScriptedModel([])
-  bar.on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Ui],
-      model=model as &@posoco.ModelPort,
-      ui=ui as &@posoco.UiPort,
-    ),
-  )
+  let channel = Channel::Channel()
+  let bar = StatusBar(events=Some(channel.system))
+  compose_bar(bar, ui)
   assert_eq(ui.renders.length(), 0)
 }
 
 ///|
 test "update on an unknown segment auto-registers it" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_update(
-    bus,
-    source="posoco_ext_stats",
-    segment="tps",
-    value="42.0/s",
-  )
+  let (bar, ui, channel) = new_composed_bar()
+  channel.update(source="posoco_ext_stats", segment="tps", value="42.0/s")
   assert_eq(ui.renders.length(), 1)
   let entries = bar_entries(ui.last())
   assert_eq(entries.length(), 1)
@@ -153,20 +218,15 @@ test "update on an unknown segment auto-registers it" {
 
 ///|
 test "unregister renders the emptied bar" {
-  let (_bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (_bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="posoco_ext_plan",
     segment="plan",
     priority=10,
     value="Plan",
   )
   assert_eq(ui.renders.length(), 1)
-  @devkit.publish_status_unregister(
-    bus,
-    source="posoco_ext_plan",
-    segment="plan",
-  )
+  channel.unregister(source="posoco_ext_plan", segment="plan")
   // The applied change that empties the bar still renders: an empty
   // Entries body tells the host to clear the line.
   assert_eq(ui.renders.length(), 2)
@@ -180,9 +240,8 @@ test "unregister renders the emptied bar" {
 
 ///|
 test "ownership: a second source cannot update, clear, or re-register" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="posoco_ext_llm",
     segment="model",
     priority=20,
@@ -190,23 +249,17 @@ test "ownership: a second source cannot update, clear, or re-register" {
   )
   assert_eq(ui.renders.length(), 1)
   // Foreign update: ignored — no state change, no render.
-  @devkit.publish_status_update(
-    bus,
+  channel.update(
     source="posoco_ext_imposter",
     segment="model",
     value="hijacked",
   )
   assert_eq(ui.renders.length(), 1)
   // Foreign unregister: ignored.
-  @devkit.publish_status_unregister(
-    bus,
-    source="posoco_ext_imposter",
-    segment="model",
-  )
+  channel.unregister(source="posoco_ext_imposter", segment="model")
   assert_eq(ui.renders.length(), 1)
   // Foreign register: ignored.
-  @devkit.publish_status_register(
-    bus,
+  channel.register(
     source="posoco_ext_imposter",
     segment="model",
     priority=99,
@@ -237,21 +290,9 @@ test "ownership: a second source cannot update, clear, or re-register" {
 
 ///|
 test "owner re-register overwrites metadata but keeps first_seen order" {
-  let (bar, _ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="first",
-    priority=50,
-    value="1",
-  )
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="second",
-    priority=50,
-    value="2",
-  )
+  let (bar, _ui, channel) = new_composed_bar()
+  channel.register(source="ext", segment="first", priority=50, value="1")
+  channel.register(source="ext", segment="second", priority=50, value="2")
   // Same priority: registration order so far.
   debug_inspect(
     bar.segments().map(fn(info) { info.segment }),
@@ -260,8 +301,7 @@ test "owner re-register overwrites metadata but keeps first_seen order" {
     ),
   )
   // Overwriting "first" must not move it behind "second".
-  @devkit.publish_status_register(
-    bus,
+  channel.register(
     source="ext",
     segment="first",
     label="Renamed",
@@ -290,35 +330,11 @@ test "owner re-register overwrites metadata but keeps first_seen order" {
 
 ///|
 test "ordering is priority ascending then first-seen ascending" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="c",
-    priority=30,
-    value="C",
-  )
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="a",
-    priority=10,
-    value="A",
-  )
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="d",
-    priority=30,
-    value="D",
-  )
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="b",
-    priority=20,
-    value="B",
-  )
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(source="ext", segment="c", priority=30, value="C")
+  channel.register(source="ext", segment="a", priority=10, value="A")
+  channel.register(source="ext", segment="d", priority=30, value="D")
+  channel.register(source="ext", segment="b", priority=20, value="B")
   debug_inspect(
     bar.segments().map(fn(info) { info.segment }),
     content=(
@@ -340,13 +356,8 @@ test "ordering is priority ascending then first-seen ascending" {
 
 ///|
 test "valueless segments render nothing but stay listed" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
-    source="posoco_ext_plan",
-    segment="plan",
-    priority=10,
-  )
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(source="posoco_ext_plan", segment="plan", priority=10)
   // Applied registration, so one render fires — with the segment absent.
   assert_eq(ui.renders.length(), 1)
   debug_inspect(
@@ -359,12 +370,7 @@ test "valueless segments render nothing but stay listed" {
   assert_eq(bar.segments().length(), 1)
   assert_eq(bar.segments()[0].value, None)
   // A later update makes it visible, keeping priority and owner.
-  @devkit.publish_status_update(
-    bus,
-    source="posoco_ext_plan",
-    segment="plan",
-    value="Plan",
-  )
+  channel.update(source="posoco_ext_plan", segment="plan", value="Plan")
   debug_inspect(
     bar_entries(ui.last()),
     content=(
@@ -376,102 +382,73 @@ test "valueless segments render nothing but stay listed" {
 }
 
 ///|
-test "direct set_segment matches the bus path" {
-  let bus_bar = StatusBar(bus=None)
-  let bus_ui = RecordingUi()
-  let bus = @devkit.EventBus()
-  let wired = StatusBar(bus=Some(bus))
-  let model = @tk.ScriptedModel([])
-  wired.on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Ui],
-      model=model as &@posoco.ModelPort,
-      ui=bus_ui as &@posoco.UiPort,
-    ),
-  )
+test "direct set_segment matches the event path" {
+  // The direct bar listens on a system nobody publishes to, so only its own
+  // direct calls move its registry.
+  let idle = @posoco.EventSystem()
+  let wired_ui = RecordingUi()
+  let channel = Channel::Channel()
+  let wired = StatusBar(events=Some(channel.system))
+  compose_bar(wired, wired_ui)
   let direct_ui = RecordingUi()
-  let direct = StatusBar()
-  direct.on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Ui],
-      model=model as &@posoco.ModelPort,
-      ui=direct_ui as &@posoco.UiPort,
-    ),
-  )
+  let direct = StatusBar(events=Some(idle))
+  compose_bar(direct, direct_ui)
   // Same op sequence, same order, through both doors: updates
   // auto-register at priority 0 on either path.
-  @devkit.publish_status_update(bus, source="llm", segment="model", value="m1")
+  channel.update(source="llm", segment="model", value="m1")
   direct.set_segment(source="llm", segment="model", value="m1")
-  @devkit.publish_status_update(
-    bus,
-    source="llm",
-    segment="session",
-    value="s1",
-  )
+  channel.update(source="llm", segment="session", value="s1")
   direct.set_segment(source="llm", segment="session", value="s1")
   assert_eq(wired.segments(), direct.segments())
-  assert_same_entries(bar_entries(bus_ui.last()), bar_entries(direct_ui.last()))
+  assert_same_entries(
+    bar_entries(wired_ui.last()),
+    bar_entries(direct_ui.last()),
+  )
   // The clear path lands in the same state too.
-  @devkit.publish_status_unregister(bus, source="llm", segment="model")
+  channel.unregister(source="llm", segment="model")
   direct.clear_segment(source="llm", segment="model")
   assert_eq(wired.segments(), direct.segments())
-  assert_same_entries(bar_entries(bus_ui.last()), bar_entries(direct_ui.last()))
-  assert_eq(bus_bar.segments().length(), 0)
+  assert_same_entries(
+    bar_entries(wired_ui.last()),
+    bar_entries(direct_ui.last()),
+  )
 }
 
 ///|
-test "malformed bus events render nothing" {
-  let (_bar, ui, bus) = new_composed_bar()
-  bus.publish({ source: "ext", topic: "other", data: Json::null(), })
-  bus.publish({ source: "ext", topic: "status", data: Json::string("text"), })
-  bus.publish({
-    source: "ext",
-    topic: "status",
-    data: Json::object({ "op": Json::string("nonsense") }),
-  })
-  bus.publish({
-    source: "ext",
-    topic: "status",
-    data: Json::object({
-      "op": Json::string("update"),
-      "segment": Json::string("x"),
-    }),
-  })
-  bus.publish({
-    source: "ext",
-    topic: "status",
-    data: Json::object({
-      "op": Json::string("update"),
-      "segment": Json::string("x"),
-      "value": Json::boolean(true),
-    }),
-  })
+test "non-status and core events render nothing" {
+  let (bar, ui, channel) = new_composed_bar()
+  // The channel carries every protocol payload: only `StatusChanged` ops move
+  // the registry.
+  let events = match channel.system.publisher(owner="posoco_ext_plan") {
+    Ok(events) => events
+    Err(_) => abort("minting a publisher capability failed")
+  }
+  ignore(events.publish(@kit_events.ToolExemptions({ tools: ["plan_enter"], })))
+  ignore(events.publish(@kit_events.ProviderStatus({ provider_id: "openai", })))
+  // Core notifications carry no publisher identity, so even a status-shaped
+  // payload delivered by the core namespace is ignored.
+  bar.on_status_event(
+    @events.EventEnvelope(
+      namespace_=@events.Posoco,
+      event=@kit_events.StatusChanged(
+        @kit_events.Update(segment="core", value="x"),
+      ),
+    ),
+  )
   assert_eq(ui.renders.length(), 0)
+  assert_eq(bar.segments().length(), 0)
 }
 
 ///|
 test "segments announced before the UI project at compose" {
   let ui = RecordingUi()
-  let bus = @devkit.EventBus()
-  let bar = StatusBar(bus=Some(bus))
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="model",
-    priority=20,
-    value="m",
-  )
+  let channel = Channel::Channel()
+  let bar = StatusBar(events=Some(channel.system))
+  channel.register(source="ext", segment="model", priority=20, value="m")
   // Applied (registry updated) but silent: no UI to render through.
   assert_eq(ui.renders.length(), 0)
   assert_eq(bar.segments().length(), 1)
-  let model = @tk.ScriptedModel([])
-  bar.on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Ui],
-      model=model as &@posoco.ModelPort,
-      ui=ui as &@posoco.UiPort,
-    ),
-  )
+  compose_bar(bar, ui)
   // UI arrival projects the announced backlog immediately: resident
   // segments are visible from the start, not after their next change.
   assert_eq(ui.renders.length(), 1)
@@ -481,7 +458,7 @@ test "segments announced before the UI project at compose" {
       #|[{ key: "model", value: "m", color: None }]
     ),
   )
-  @devkit.publish_status_update(bus, source="ext", segment="model", value="m2")
+  channel.update(source="ext", segment="model", value="m2")
   // Later changes re-render the full current registry, not just the delta.
   assert_eq(ui.renders.length(), 2)
   debug_inspect(
@@ -490,6 +467,35 @@ test "segments announced before the UI project at compose" {
       #|[{ key: "model", value: "m2", color: None }]
     ),
   )
+}
+
+///|
+test "a bar with no explicit system listens on the process default one" {
+  // The host assembly registers its system before constructing extensions, so
+  // a bar built without one still reaches the session channel.
+  let ui = RecordingUi()
+  let channel = Channel::Channel()
+  let bar = StatusBar()
+  compose_bar(bar, ui)
+  channel.register(source="ext", segment="plan", priority=10, value="P")
+  assert_eq(ui.renders.length(), 1)
+  debug_inspect(
+    bar_entries(ui.last()),
+    content=(
+      #|[{ key: "plan", value: "P", color: None }]
+    ),
+  )
+}
+
+///|
+async test "shutdown detaches the listener" {
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(source="ext", segment="plan", priority=10, value="P")
+  assert_eq(ui.renders.length(), 1)
+  bar.on_shutdown()
+  channel.register(source="ext", segment="plan", priority=10, value="P2")
+  // Cancelled: later ops on the same system reach nobody.
+  assert_eq(ui.renders.length(), 1)
 }
 
 ///|
@@ -507,9 +513,8 @@ test "manifest declares the Ui requirement, lifecycle, and command" {
 
 ///|
 async test "register with a color role round-trips to a colored entry" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="posoco_ext_plan",
     segment="plan",
     priority=10,
@@ -554,9 +559,8 @@ async test "register with a color role round-trips to a colored entry" {
 
 ///|
 test "unknown color role decolors instead of failing the register" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="ext",
     segment="mood",
     priority=5,
@@ -575,9 +579,8 @@ test "unknown color role decolors instead of failing the register" {
 
 ///|
 test "owner re-register overwrites the color role" {
-  let (bar, ui, bus) = new_composed_bar()
-  @devkit.publish_status_register(
-    bus,
+  let (bar, ui, channel) = new_composed_bar()
+  channel.register(
     source="ext",
     segment="plan",
     priority=10,
@@ -585,8 +588,7 @@ test "owner re-register overwrites the color role" {
     color="accent",
   )
   assert_eq(bar.segments()[0].color, Some("accent"))
-  @devkit.publish_status_register(
-    bus,
+  channel.register(
     source="ext",
     segment="plan",
     priority=10,
@@ -597,12 +599,6 @@ test "owner re-register overwrites the color role" {
   assert_eq(bar.segments()[0].color, Some("warning"))
   // Color is register metadata like label: a re-register without one
   // clears it.
-  @devkit.publish_status_register(
-    bus,
-    source="ext",
-    segment="plan",
-    priority=10,
-    value="Plan",
-  )
+  channel.register(source="ext", segment="plan", priority=10, value="Plan")
   assert_eq(bar.segments()[0].color, None)
 }

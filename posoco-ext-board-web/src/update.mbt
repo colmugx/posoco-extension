@@ -19,7 +19,7 @@ fn team_mcp_update(
     None => TeamMcp::defaults()
   }
   mcp[role] = update(current)
-  { ..draft, mcp }
+  { ..draft, mcp, }
 }
 
 ///|
@@ -37,7 +37,7 @@ fn team_skills_update(
     None => TeamSkills::defaults()
   }
   skills[role] = update(current)
-  { ..draft, skills }
+  { ..draft, skills, }
 }
 
 ///|
@@ -515,18 +515,17 @@ fn update(
       )
     }
     TeamClosed => ({ ..model, team_open: false, }, @rabbita.none)
-    TeamTabChanged(role) =>
-      ({ ..model, team_tab: role }, @rabbita.none)
+    TeamTabChanged(role) => ({ ..model, team_tab: role, }, @rabbita.none)
     TeamNameChanged(role, value) =>
       (
         {
           ..model,
           team_draft: match role {
-            "po" => { ..model.team_draft, po: value }
-            "sm" => { ..model.team_draft, sm: value }
-            "rd" => { ..model.team_draft, rd: value }
-            "set" => { ..model.team_draft, set: value }
-            "te" => { ..model.team_draft, te: value }
+            "po" => { ..model.team_draft, po: value, }
+            "sm" => { ..model.team_draft, sm: value, }
+            "rd" => { ..model.team_draft, rd: value, }
+            "set" => { ..model.team_draft, set: value, }
+            "te" => { ..model.team_draft, te: value, }
             _ => model.team_draft
           },
         },
@@ -537,7 +536,8 @@ fn update(
         {
           ..model,
           team_draft: team_mcp_update(model.team_draft, role, current => {
-            { ..current, enabled }
+            ..current,
+            enabled,
           }),
         },
         @rabbita.none,
@@ -547,7 +547,8 @@ fn update(
         {
           ..model,
           team_draft: team_mcp_update(model.team_draft, role, current => {
-            { ..current, all }
+            ..current,
+            all,
           }),
         },
         @rabbita.none,
@@ -564,7 +565,7 @@ fn update(
               next.push(server)
               next
             }
-            { ..current, servers }
+            { ..current, servers, }
           }),
         },
         @rabbita.none,
@@ -575,7 +576,7 @@ fn update(
           ..model,
           team_draft: team_mcp_update(model.team_draft, role, current => {
             if !restricted {
-              { ..current, tools: [] }
+              { ..current, tools: [], }
             } else {
               let tools : Array[String] = []
               for server in model.tickets.mcp_servers {
@@ -589,7 +590,7 @@ fn update(
                   }
                 }
               }
-              { ..current, tools }
+              { ..current, tools, }
             }
           }),
         },
@@ -607,7 +608,7 @@ fn update(
               next.push(tool)
               next
             }
-            { ..current, tools }
+            { ..current, tools, }
           }),
         },
         @rabbita.none,
@@ -617,7 +618,8 @@ fn update(
         {
           ..model,
           team_draft: team_skills_update(model.team_draft, role, current => {
-            { ..current, enabled }
+            ..current,
+            enabled,
           }),
         },
         @rabbita.none,
@@ -627,7 +629,8 @@ fn update(
         {
           ..model,
           team_draft: team_skills_update(model.team_draft, role, current => {
-            { ..current, all }
+            ..current,
+            all,
           }),
         },
         @rabbita.none,
@@ -644,7 +647,7 @@ fn update(
               next.push(name)
               next
             }
-            { ..current, skills }
+            { ..current, skills, }
           }),
         },
         @rabbita.none,
@@ -654,8 +657,8 @@ fn update(
         {
           ..model,
           team_profile_draft: match id {
-            "document" => { id: "document", label: "Document" }
-            "analysis" => { id: "analysis", label: "Analysis" }
+            "document" => { id: "document", label: "Document", }
+            "analysis" => { id: "analysis", label: "Analysis", }
             _ => WorkProfile::software()
           },
         },
@@ -705,16 +708,13 @@ fn update(
       } else {
         (
           { ..model, ticket_sending: true, },
-          ticket_answer(
-            question_id,
-            TicketText(answer),
-            emit,
-            answered_by="po",
-          ),
+          ticket_answer(question_id, TicketText(answer), emit, answered_by="po"),
         )
       }
     RolePlanToggled(task_id, role, enabled) =>
-      if model.ticket_sending || !model.can_connect || !model.ticket_available ||
+      if model.ticket_sending ||
+        !model.can_connect ||
+        !model.ticket_available ||
         role == "rd" {
         (model, @rabbita.none)
       } else {
@@ -723,7 +723,11 @@ fn update(
           None => ["rd", "set", "te"]
         }
         let next = if enabled {
-          if roles.contains(role) { roles } else { roles + [role] }
+          if roles.contains(role) {
+            roles
+          } else {
+            roles + [role]
+          }
         } else {
           roles.filter(item => item != role)
         }
@@ -842,7 +846,7 @@ fn update(
           ticket_run_ready(emit),
         )
       }
-    SmDraftChanged(value) => ({ ..model, sm_draft: value }, @rabbita.none)
+    SmDraftChanged(value) => ({ ..model, sm_draft: value, }, @rabbita.none)
     SmConsult(task_id) =>
       if model.ticket_sending ||
         !model.can_connect ||
@@ -851,7 +855,7 @@ fn update(
         (model, @rabbita.none)
       } else {
         (
-          { ..model, ticket_sending: true },
+          { ..model, ticket_sending: true, },
           ticket_consult_sm(task_id, model.sm_draft, emit),
         )
       }

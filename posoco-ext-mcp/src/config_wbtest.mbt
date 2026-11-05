@@ -420,6 +420,7 @@ fn bridge_with_mode(mode : LoadMode) -> MCPToolBridge {
     mode,
     pending: [stdio_config("s")],
     group: None,
+    lifetime: None,
     activated: false,
     catalog_revision: 0,
     closing: false,

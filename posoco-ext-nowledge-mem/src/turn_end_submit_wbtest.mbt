@@ -34,6 +34,7 @@ fn turn_end_agent(
       ),
     ],
     config=@tk.tk_config(),
+    events=@posoco.EventSystem(),
   )
 }
 

@@ -106,7 +106,7 @@ impl @execution.BoardExecutionAdapter for ControlledAdapter with fn run(
 
 ///|
 async test "admission validates live queued Execute state and rejects host unavailable without effects" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled()
     let owner = @execution.BoardExecutionOwner(
@@ -174,7 +174,7 @@ async test "admission validates live queued Execute state and rejects host unava
 
 ///|
 async test "one active execution owner rejects concurrent admission and duplicate gate settlement" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled(block=true, repeat_gate=true)
     let store = journal()
@@ -210,7 +210,7 @@ async test "one active execution owner rejects concurrent admission and duplicat
 async test "journal failures at every admission and settlement boundary never retry ambiguous writes" {
   for visible in [false, true] {
     for step in 1..<=5 {
-      @async.with_task_group(group => {
+      @core_async.with_task_group(group => {
         let backend = prepared_board(group)
         let adapter = controlled()
         let store = journal(fail_write=step, visible_failure=visible)
@@ -246,7 +246,7 @@ async test "journal failures at every admission and settlement boundary never re
 
 ///|
 async test "wrong actual scope cannot start Board or model effects and records unresolved identity" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled(wrong_scope=true)
     let store = journal()
@@ -264,7 +264,7 @@ async test "wrong actual scope cannot start Board or model effects and records u
 
 ///|
 async test "manual finish race is never overwritten by owned completion" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled(block=true)
     let owner = @execution.BoardExecutionOwner(
@@ -308,7 +308,7 @@ async test "restart never replays reserved running completed or unresolved execu
       @execution.Unresolved,
       @execution.Settled,
     ] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = prepared_board(group)
       let store = journal()
       let run : @execution.BoardExecutionRun? = if phase == @execution.Reserved {
@@ -385,7 +385,7 @@ impl @store.BoardStore for FailingBoardStorage with fn persist(
 ///|
 async test "durable finish failure or uncertainty never retries and keeps authoritative reconciliation" {
   for uncertain in [false, true] {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let storage = FailingBoardStorage::{
         inner: @store.MemoryBoardStore(),
         fail: false,
@@ -435,7 +435,7 @@ async test "durable finish failure or uncertainty never retries and keeps author
 
 ///|
 async test "final shutdown confirms scoped cancellation before settlement and stops admission" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled(block=true)
     let owner = @execution.BoardExecutionOwner(

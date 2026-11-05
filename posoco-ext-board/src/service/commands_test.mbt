@@ -2,7 +2,7 @@
 async test "board workflow commands are internal and expose no slash command" {
   let directory = @fixtures.temporary_directory()
   defer @fixtures.cleanup(directory)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = harness(directory, group)
     defer ignore(h.board.shutdown())
     let definitions = (h.board as &@posoco.CommandPort).commands()

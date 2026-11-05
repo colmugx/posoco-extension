@@ -198,12 +198,18 @@ priv struct ConnActor[ClientT] {
 }
 
 ///|
-/// Spawn the fold loop on the host's task group with the initial client
-/// (production passes the freshly connected `@client.MCPClient`) at
+/// Spawn the fold loop on the host's lifetime task group with the initial
+/// client (production passes the freshly connected `@client.MCPClient`) at
 /// generation 0, Fresh, empty in-flight. The mailbox is the default
 /// Unbounded: this round serializes state arbitration, not admission.
+///
+/// The group is the host's `moonbitlang/core/async` `TaskGroup` — fuwaroid
+/// 0.4 spawns on posoco's core stack, while an MCP client's transport keeps
+/// running on the host's `moonbitlang/async` I/O group. The two stacks share
+/// one scheduler, so the actor loop and its transport stay in the same
+/// structured-concurrency lifetime.
 fn[ClientT] ConnActor::start(
-  group~ : @async.TaskGroup[Unit],
+  group~ : @core_async.TaskGroup,
   client~ : ClientT,
 ) -> ConnActor[ClientT] {
   let init : ConnState[ClientT] = {

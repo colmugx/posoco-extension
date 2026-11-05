@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv struct TicketQuestion {
   id : String
   task_id : String
@@ -9,16 +10,18 @@ priv struct TicketQuestion {
   asked_by : String
   audience : String
   status : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct TicketActivity {
   at_ms : Int64
   kind : String
   text : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct TicketRun {
   task_id : String
   session_id : String
@@ -32,12 +35,13 @@ priv struct TicketRun {
   preview : String
   reasoning : String
   activities : Array[TicketActivity]
-} derive(Eq)
+}
 
 ///|
 /// One non-blocking worker update from `ticket_state.progress`. It is
 /// information only: it carries no question, no answer and no stage, so the
 /// inbox renders it and never offers a reply, a resolve or a move.
+#derive(Eq)
 priv struct TicketProgress {
   task_id : String
   /// Bounded tone: `normal`, `milestone`, `attention` or `blocked`. Anything
@@ -46,12 +50,13 @@ priv struct TicketProgress {
   kind : String
   message : String
   at_ms : Int64
-} derive(Eq)
+}
 
 ///|
 /// One selectable model as the host advertises it in `ticket_state`. The
 /// catalog is runtime state: it is never persisted with the ticket journal,
 /// and every field except the stable slot id may be missing.
+#derive(Eq)
 priv struct ModelOption {
   id : String
   label : String
@@ -61,17 +66,18 @@ priv struct ModelOption {
   default_effort : String?
   context_window : Int64?
   capabilities : Array[String]
-} derive(Eq)
+}
 
 ///|
 /// The host's per-ticket model catalog. An absent catalog and
 /// `selectable=false` both mean the picker stays read-only, so a pinned
 /// ticket keeps the model it already has instead of silently falling back.
+#derive(Eq)
 priv struct ModelCatalog {
   selectable : Bool
   kind : String
   models : Array[ModelOption]
-} derive(Eq)
+}
 
 ///|
 fn ModelCatalog::unavailable() -> ModelCatalog {
@@ -95,6 +101,7 @@ priv struct ModelChoice {
 ///|
 /// Host runtime facts for the Live popover. Quota is optional: a manager that
 /// does not expose it renders "not exposed", never a made-up number.
+#derive(Eq)
 priv struct TicketLiveInfo {
   manager : String
   active_model : String
@@ -103,28 +110,30 @@ priv struct TicketLiveInfo {
   context_window : Int64?
   model_count : Int32
   quota_lines : Array[String]
-} derive(Eq)
+}
 
 ///|
 /// One host-configured MCP server. `tools` is display metadata; execution
 /// still goes through the host bridge and its per-role allowlist.
+#derive(Eq)
 priv struct McpServer {
   name : String
   connected : Bool
   tools : Array[String]
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct TeamMcp {
   enabled : Bool
   all : Bool
   servers : Array[String]
   tools : Array[String]
-} derive(Eq)
+}
 
 ///|
 fn TeamMcp::defaults() -> TeamMcp {
-  { enabled: false, all: true, servers: [], tools: [] }
+  { enabled: false, all: true, servers: [], tools: [], }
 }
 
 ///|
@@ -139,21 +148,23 @@ fn default_team_mcp() -> Map[String, TeamMcp] {
 }
 
 ///|
+#derive(Eq)
 priv struct SkillInfo {
   name : String
   description : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct TeamSkills {
   enabled : Bool
   all : Bool
   skills : Array[String]
-} derive(Eq)
+}
 
 ///|
 fn TeamSkills::defaults() -> TeamSkills {
-  { enabled: false, all: true, skills: [] }
+  { enabled: false, all: true, skills: [], }
 }
 
 ///|
@@ -170,6 +181,7 @@ fn default_team_skills() -> Map[String, TeamSkills] {
 ///|
 /// Lightweight names shown in prompts and on the Board. Defaults are used
 /// when the host frame has no team field.
+#derive(Eq)
 priv struct TeamNames {
   po : String
   sm : String
@@ -178,7 +190,7 @@ priv struct TeamNames {
   te : String
   mcp : Map[String, TeamMcp]
   skills : Map[String, TeamSkills]
-} derive(Eq)
+}
 
 ///|
 fn TeamNames::defaults() -> TeamNames {
@@ -194,26 +206,28 @@ fn TeamNames::defaults() -> TeamNames {
 }
 
 ///|
+#derive(Eq)
 priv struct WorkProfile {
   id : String
   label : String
-} derive(Eq)
+}
 
 ///|
 fn WorkProfile::software() -> WorkProfile {
-  { id: "software", label: "Software" }
+  { id: "software", label: "Software", }
 }
 
 ///|
 fn work_profiles() -> Array[WorkProfile] {
   [
     WorkProfile::software(),
-    { id: "document", label: "Document" },
-    { id: "analysis", label: "Analysis" },
+    { id: "document", label: "Document", },
+    { id: "analysis", label: "Analysis", },
   ]
 }
 
 ///|
+#derive(Eq)
 priv struct TicketState {
   project : String
   team : TeamNames?
@@ -231,7 +245,7 @@ priv struct TicketState {
   /// Absent when this frame did not carry a catalog; the previous catalog is
   /// retained so a `ticket_result` cannot blank the picker mid-edit.
   model_selection : ModelCatalog?
-} derive(Eq)
+}
 
 ///|
 fn TicketState::empty() -> TicketState {
@@ -248,4 +262,3 @@ fn TicketState::empty() -> TicketState {
     model_selection: None,
   }
 }
-

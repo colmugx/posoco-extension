@@ -1,7 +1,7 @@
 ///|
 /// model_selection.mbt — session-scoped record of the last model selection.
 ///
-/// The store subscribes to the ext-llm `model_selection` bus event and
+/// The store subscribes to the ext-llm `ModelSelection` event and
 /// decorates every persisted metadata line with the selection observed at
 /// write time, so a session file remembers which slot/effort produced its
 /// transcript tail. Hosts read it back through `summary()` (or
@@ -9,9 +9,9 @@
 ///
 /// Semantics: the metadata records the selection at the moment of the last
 /// persist — the model that produced the transcript's tail. A switch that is
-/// never followed by a persist is not recorded. Stores composed without a
-/// bus never observe anything and never decorate, so legacy journals and
-/// plain-library uses are untouched.
+/// never followed by a persist is not recorded. Stores composed without an
+/// event channel never observe anything and never decorate, so legacy
+/// journals and plain-library uses are untouched.
 
 ///|
 /// V2 selection metadata is owner-qualified. The legacy `slot_id` value
@@ -271,10 +271,18 @@ pub fn metadata_with_selection_v2(
 pub const MODEL_SELECTION_METADATA_KEY : String = "posoco.model_selection"
 
 ///|
-/// Source filter for the observed events: only the ext-llm router's
-/// `model_selection` topic is recorded.
-fn is_model_selection_event(event : @devkit.BusEvent) -> Bool {
-  event.source == "posoco_ext_llm" && event.topic == "model_selection"
+/// The extension id the ext-llm router publishes under. Its capability is
+/// minted as `system.publisher(owner=MODEL_SELECTION_PUBLISHER)`, so every
+/// envelope it produces carries `Extension(MODEL_SELECTION_PUBLISHER)`.
+pub const MODEL_SELECTION_PUBLISHER : String = "posoco_ext_llm"
+
+///|
+/// Publisher filter for the observed events: only the ext-llm router's
+/// `@kit_events.ModelSelection` is recorded. The namespace of the envelope is
+/// the typed replacement for the legacy `BusEvent.source` field, and the
+/// closed payload replaces the `model_selection` topic.
+fn is_model_selection_event(envelope : @posoco.EventEnvelope) -> Bool {
+  @kit_events.publisher_id(envelope) == Some(MODEL_SELECTION_PUBLISHER)
 }
 
 ///|
@@ -316,8 +324,8 @@ fn selection_from_payload(data : Json) -> (String, String?)? {
 
 ///|
 /// Read a recorded selection back out of session metadata. Absent or
-/// malformed payloads return `None` (legacy journals, stores without the
-/// model bus).
+/// malformed payloads return `None` (legacy journals, stores without an
+/// event channel).
 pub fn model_selection_from_metadata(
   metadata : Map[String, Json],
 ) -> (String, String?)? {
@@ -329,7 +337,7 @@ pub fn model_selection_from_metadata(
 
 ///|
 /// Copy `metadata` and inject the recorded selection. A `None` selection (no
-/// bus, no event observed yet) returns the metadata untouched so legacy
+/// channel, no event observed yet) returns the metadata untouched so legacy
 /// journals are never decorated by accident.
 fn metadata_with_selection(
   metadata : Map[String, Json],
@@ -389,29 +397,64 @@ pub fn rewrite_metadata_line(
 }
 
 ///|
-/// Observe the ext-llm selection channel. Foreign topics/sources are
-/// ignored; a malformed payload keeps the previous observation.
-impl @devkit.BusSubscriber for JsonlSessionStore with fn on_bus_event(
+/// Observe the ext-llm selection channel. Foreign publishers and foreign
+/// events are ignored; the payload is a closed `ModelSelectionPayload`, so
+/// there is no malformed-payload branch left — an empty slot id is the one
+/// value that is still discarded, exactly as the legacy decoder did.
+fn JsonlSessionStore::on_model_selection(
   self : JsonlSessionStore,
-  event : @devkit.BusEvent,
+  envelope : @posoco.EventEnvelope,
 ) -> Unit {
-  if is_model_selection_event(event) {
-    match selection_from_payload(event.data) {
-      Some(pair) => self.observed_selection = Some(pair)
-      None => ()
-    }
+  if !is_model_selection_event(envelope) {
+    return
+  }
+  match @kit_events.model_selection_of(envelope) {
+    Some(payload) =>
+      if !payload.slot_id.is_empty() {
+        self.observed_selection = Some((payload.slot_id, payload.effort))
+      }
+    None => ()
   }
 }
 
 ///|
-/// Register the store on the shared bus so selection changes reach it.
-/// Called from the target-specific constructors.
+/// The store's channel: the host-injected capability, or one minted for this
+/// extension on the process default system the host registered before
+/// construction. Resolving at construction (never at publish time) keeps a
+/// store bound to the session that assembled it.
+fn resolve_session_events(events : @posoco.Events?) -> @posoco.Events? {
+  match events {
+    Some(events) => Some(events)
+    None =>
+      match @devkit.events_system_default() {
+        Some(system) =>
+          match system.publisher(owner="posoco_ext_fs_session") {
+            Ok(publisher) => Some(publisher)
+            // Closed system: the host is shutting down, so the store simply
+            // has no channel.
+            Err(_) => None
+          }
+        None => None
+      }
+  }
+}
+
+///|
+/// Register the store on its event channel so selection changes reach it.
+/// Called from the target-specific constructors. Listening is not limited to
+/// the capability's own namespace: `Events::subscribe` may observe any
+/// namespace, which is how the ext-llm publisher is filtered by
+/// `is_model_selection_event`.
 fn JsonlSessionStore::subscribe_model_selection(
   self : JsonlSessionStore,
-  bus : @devkit.EventBus?,
 ) -> Unit {
-  match bus {
-    Some(bus) => bus.subscribe(self as &@devkit.BusSubscriber)
+  match self.events {
+    Some(events) =>
+      match
+        events.subscribe(fn(envelope) { self.on_model_selection(envelope) }) {
+        Ok(_) => ()
+        Err(_) => ()
+      }
     None => ()
   }
 }

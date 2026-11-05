@@ -1,6 +1,6 @@
 ///|
 async test "actual owned Agent proposal becomes separately authorized generated execution under shared budgets" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group, max_executions=4)
     dynamic_move(h, "parent", @domain.Refining)
     dynamic_move(h, "parent", @domain.Ready)
@@ -145,7 +145,7 @@ async test "actual owned Agent proposal becomes separately authorized generated 
 
 ///|
 async test "actual invalid or failed planning output never mutates the graph" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let h = dynamic_harness(group)
     dynamic_queue(h, "parent", "invalid-plan")
     h.model.payload = "not a proposal"
