@@ -40,6 +40,53 @@ pub struct ToolchainManager {
 }
 
 ///|
+/// Resolve MBTX's home without pulling extension UI/event dependencies into
+/// the guest runtime. Match native Windows home semantics: USERPROFILE first,
+/// then HOMEDRIVE + HOMEPATH; HOME is used only on Unix.
+fn mbtx_trimmed_home(value : String?) -> String? {
+  match value {
+    Some(path) => {
+      let trimmed = path.trim().to_owned()
+      if trimmed == "" { None } else { Some(trimmed) }
+    }
+    None => None
+  }
+}
+
+///|
+fn mbtx_home_from_env(
+  windows~ : Bool,
+  home~ : String?,
+  userprofile~ : String?,
+  homedrive~ : String?,
+  homepath~ : String?,
+) -> String? {
+  if windows {
+    match mbtx_trimmed_home(userprofile) {
+      Some(path) => Some(path)
+      None =>
+        match (mbtx_trimmed_home(homedrive), mbtx_trimmed_home(homepath)) {
+          (Some(drive), Some(rest)) => Some(drive + rest)
+          _ => None
+        }
+    }
+  } else {
+    mbtx_trimmed_home(home)
+  }
+}
+
+///|
+fn mbtx_home_dir() -> String? {
+  mbtx_home_from_env(
+    windows=mbtx_is_windows(),
+    home=@env.get_env_var("HOME"),
+    userprofile=@env.get_env_var("USERPROFILE"),
+    homedrive=@env.get_env_var("HOMEDRIVE"),
+    homepath=@env.get_env_var("HOMEPATH"),
+  )
+}
+
+///|
 pub fn ToolchainManager::ToolchainManager(
   home? : String,
   prefer_system~ : Bool = true,
@@ -49,7 +96,7 @@ pub fn ToolchainManager::ToolchainManager(
     resolved: None,
     phase: "uninitialized",
     reason: "",
-    home: home.unwrap_or(@devkit.home_dir().unwrap_or("")),
+    home: home.unwrap_or(mbtx_home_dir().unwrap_or("")),
     prefer_system,
   }
 }
@@ -81,45 +128,15 @@ fn mbtx_env(tc : ResolvedToolchain) -> Map[String, String] {
 }
 
 ///|
-/// Announce the provisioning phase on the status channel: a `StatusChanged`
-/// register while work is in flight, an unregister once the toolchain is
-/// ready. The payload is the closed `@kit_events.StatusOp` the devkit
-/// `publish_status_*` helpers publish, so the segment renders exactly as
-/// before; the capability is minted per publication and bound to this
-/// extension's id, and a missing or closed event system is a silent no-op.
-fn ToolchainManager::publish(
+/// Keep provisioning status local to the runtime. Guest execution must not
+/// publish UI/status events or depend on the host's default EventSystem.
+fn ToolchainManager::set_status(
   self : ToolchainManager,
   phase : String,
   reason : String,
 ) -> Unit {
   self.phase = phase
   self.reason = reason
-  match @devkit.events_system_default() {
-    Some(system) =>
-      match system.publisher(owner="posoco_ext_mbtx") {
-        Ok(publisher) =>
-          if phase == "ready" {
-            ignore(
-              publisher.publish(
-                @kit_events.StatusChanged(
-                  @kit_events.Unregister(segment="mbtx"),
-                ),
-              ),
-            )
-          } else {
-            let op : @kit_events.StatusOp = @kit_events.Register(
-              segment="mbtx",
-              label=None,
-              priority=85,
-              value=Some("mbtx: " + phase),
-              color=Some(if phase == "failed" { "error" } else { "info" }),
-            )
-            ignore(publisher.publish(@kit_events.StatusChanged(op)))
-          }
-        Err(_) => ()
-      }
-    None => ()
-  }
 }
 
 ///|
@@ -193,9 +210,8 @@ async fn mbtx_candidate(
 }
 
 ///|
-/// The catch in `ensure_ready` publishes the failure segment, then
-/// re-raises: error reporting, not cleanup. Suppress the warning until
-/// `errdefer` can carry the error message (it cannot bind the error yet).
+/// Resolve the toolchain, keeping phase diagnostics local. Failures propagate
+/// to the caller; no status event is emitted by MBTX.
 pub async fn ToolchainManager::ensure_ready(
   self : ToolchainManager,
 ) -> ResolvedToolchain {
@@ -207,7 +223,7 @@ pub async fn ToolchainManager::ensure_ready(
   }
   let tc = self.discover()
   self.resolved = Some(tc)
-  self.publish("ready", "")
+  self.set_status("ready", "")
   tc
 }
 
@@ -215,7 +231,7 @@ pub async fn ToolchainManager::ensure_ready(
 async fn ToolchainManager::discover(
   self : ToolchainManager,
 ) -> ResolvedToolchain {
-  self.publish("checking", "looking for a usable MoonBit runner")
+  self.set_status("checking", "looking for a usable MoonBit runner")
   if self.prefer_system {
     match mbtx_candidate(System, "moon", "moonx", "moonrun", "PATH") {
       Some(tc) => return tc
@@ -277,7 +293,7 @@ async fn ToolchainManager::install(
   root : String,
   stage : String,
 ) -> Unit {
-  self.publish("downloading", "fetching MoonBit installer")
+  self.set_status("downloading", "fetching MoonBit installer")
   let windows = mbtx_is_windows()
   let suffix = if windows { "powershell.ps1" } else { "unix.sh" }
   let script = root + (if windows { "/install.ps1" } else { "/install.sh" })
@@ -295,7 +311,7 @@ async fn ToolchainManager::install(
   if code != 0 {
     raise RuntimeError::ToolchainUnavailable("MoonBit download: " + output)
   }
-  self.publish("initializing", "installing MoonBit into private directory")
+  self.set_status("initializing", "installing MoonBit into private directory")
   let env : Map[String, String] = {
     "MOON_HOME": stage,
     "MOONBIT_INSTALL_VERSION": MBTX_TOOLCHAIN_VERSION,
@@ -363,7 +379,7 @@ async fn ToolchainManager::provision(
   if !tc_fs_exists(moonx) && tc_fs_exists(moon) {
     tc_fs_copy_executable(moon, moonx)
   }
-  self.publish("verifying", "checking MoonBit compiler and runner")
+  self.set_status("verifying", "checking MoonBit compiler and runner")
   guard self.managed_candidate(stage) is Some(_tc) else {
     raise RuntimeError::ToolchainUnavailable(
       "downloaded MoonBit failed pinned version or runner verification",

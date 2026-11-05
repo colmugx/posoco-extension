@@ -6,7 +6,6 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
-  "posoco/devkit",
 }
 
 // Values
