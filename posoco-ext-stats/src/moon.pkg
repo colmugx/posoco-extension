@@ -8,11 +8,11 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "moonbitlang/async",
+  "posoco/kit-events" @kit_events,
 } for "wbtest"
 
 options(
   targets: {
-    "stats_wbtest.mbt": [ "native" ],
     "cache_reporting_wbtest.mbt": [ "native" ],
   },
 )
