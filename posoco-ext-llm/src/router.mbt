@@ -588,9 +588,9 @@ pub fn RouterModelPort::replace_provider_slots(
       self.publish_model_selection()
     }
   }
-  // The decision selection rides the same pending rule: an id that the
-  // replacement no longer provides stays selected (decision off) instead of
-  // silently moving to another decision backend.
+  // The decision selection rides the same pending rule: an id the replacement
+  // drops stays selected (decision off) instead of silently moving to another
+  // decision backend.
   self.publish_decision_selection()
   // Last, and only once the active id is guaranteed valid again: the model
   // segment render reads the active slot.

@@ -4,11 +4,10 @@
 /// The bar knows nothing about agents, turns, or tokens. Peer extensions
 /// own every segment: they publish `register` / `update` / `unregister`
 /// ops as `@kit_events.StatusChanged` on the session's
-/// `@posoco.EventSystem` (see `extension/docs/events-migration.md`), and the
-/// bar
-/// keeps one registry entry per segment and projects the whole registry into
-/// a single `UiSlot::Status` render intent (key `"statusbar"`) through the
-/// composed UI. The host decides where (and whether) to mount it.
+/// `@posoco.EventSystem`, and the bar keeps one registry entry per segment and
+/// projects the whole registry into a single `UiSlot::Status` render intent
+/// (key `"statusbar"`) through the composed UI. The host decides where (and
+/// whether) to mount it.
 ///
 /// Ownership: the first source to register-or-update a segment owns it;
 /// operations from any other source are ignored (no state change, no

@@ -1,6 +1,6 @@
 ///|
-/// Pure rate-limit domain model. No Posoco, event bus, task or Fuwaroid
-/// types belong here; the runtime is only a serialized owner of this state.
+/// Pure rate-limit domain model. No Posoco, `@events`, task or Fuwaroid types
+/// belong here; the runtime is only a serialized owner of this state.
 priv struct RecoveryPolicy {
   margin_ms : Int64
   max_attempts : Int32

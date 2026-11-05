@@ -242,7 +242,7 @@ async test "io[native]: foreign event traffic is ignored" {
     events=channel.store,
   )
   // A different publisher: the identity rides the envelope, so the store's
-  // publisher filter (the typed replacement for `BusEvent.source`) rejects it.
+  // publisher filter rejects it.
   publish_selection_from(channel.system, owner="other_ext", slot="a/b")
   // A different event from the expected publisher is not a selection.
   match

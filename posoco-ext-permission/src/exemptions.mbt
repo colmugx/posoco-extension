@@ -10,11 +10,9 @@
 /// reporting extension's id, and entries accumulate — there is no
 /// revocation.
 ///
-/// The report arrives as the closed `@kit_events.ToolExemptions` payload
-/// (legacy topic `"tool_exemptions"`, legacy Json `{"tools": [string, ...]}`)
-/// and the reporter's identity is the capability namespace the envelope
-/// carries (`Extension(id)`) — the typed replacement for the legacy
-/// `BusEvent.source`. Core (`Posoco`) notifications hold no exemption
+/// The report arrives as the closed `@kit_events.ToolExemptions` payload, and
+/// the reporter's identity is the capability namespace the envelope carries
+/// (`Extension(id)`). Core (`Posoco`) notifications hold no exemption
 /// authority, so they are ignored.
 fn PermissionPolicy::record_exemptions(
   self : PermissionPolicy,

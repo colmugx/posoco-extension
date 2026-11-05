@@ -174,6 +174,8 @@ pub fn snapshot_turn_event(event : @types.TurnEvent) -> @types.TurnEvent {
       ToolCallRejected(call=snapshot_tool_call(call), reason~)
     ToolCallAbandoned(call~, reason~) =>
       ToolCallAbandoned(call=snapshot_tool_call(call), reason~)
+    MessageApplied(..) => event
+    MessageUndelivered(..) => event
     ModelResponseReceived(message~, usage~) =>
       ModelResponseReceived(message=snapshot_message(message), usage~)
     SessionRedirect(from~, to~, messages_before~, messages_after~) =>

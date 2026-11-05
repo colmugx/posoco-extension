@@ -39,14 +39,13 @@ pub fn BunrakuRuntime::BunrakuRuntime(
 
 ///|
 /// Announce that `tools` carry their own governance and must bypass an
-/// approval gate's checks (legacy topic `"tool_exemptions"`).
+/// approval gate's checks.
 ///
 /// The payload is the closed `@kit_events.ToolExemptions` record, published
-/// through an owner-bound capability: the envelope carries
-/// `Extension("posoco_ext_bunraku")` instead of a `BusEvent.source` field.
-/// Publication happens at construction — the host builds this runtime after
-/// the gate has subscribed — and a missing or closed system is a silent
-/// no-op, never an error path.
+/// through an owner-bound capability, so the envelope carries
+/// `Extension("posoco_ext_bunraku")`. Publication happens at construction — the
+/// host builds this runtime after the gate has subscribed — and a missing or
+/// closed system is a silent no-op, never an error path.
 fn publish_tool_exemptions(tools : Array[String]) -> Unit {
   match @devkit.events_system_default() {
     Some(system) =>

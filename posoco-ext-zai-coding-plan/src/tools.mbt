@@ -42,9 +42,8 @@ fn zai_slot_model(slot_id : String) -> String {
 
 ///|
 /// Extract the selected slot from one protocol envelope, ignoring every other
-/// event. The publisher filter that used to read `BusEvent.source` is the
-/// envelope namespace: only the router (`owner="posoco_ext_llm"`) may steer
-/// this companion's tool plane.
+/// event. The filter is the envelope namespace: only the router
+/// (`owner="posoco_ext_llm"`) may steer this companion's tool plane.
 fn zai_selection_slot(envelope : @posoco.EventEnvelope) -> String? {
   if @kit_events.publisher_id(envelope) != Some("posoco_ext_llm") {
     return None

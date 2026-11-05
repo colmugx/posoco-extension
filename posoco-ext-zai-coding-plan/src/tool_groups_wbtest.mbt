@@ -1,6 +1,6 @@
 ///|
 /// Declared provider tool groups: policy, endpoint derivation, and the
-/// status-bar projection. Pure functions only — no connection, no bus.
+/// status-bar projection. Pure functions only — no connection, no events.
 test "declares the three official coding-plan servers for a coding model" {
   let groups = zai_coding_plan_declared_groups(
     model="glm-5.3-flash",

@@ -2,35 +2,30 @@
 /// `posoco-kit-events` — the closed cross-extension event protocol on top of
 /// posoco's open `@events.Event`.
 ///
-/// Before this package, extensions published Json payloads on string topics
-/// through the devkit event bus (`"status"`, `"tool_exemptions"`,
-/// `"model_selection"`, `"decision_selection"`, `"provider"`,
-/// `"profiles.activated"`). Each of those payloads is now a closed ADT plus an
-/// `@events.Event` constructor defined **here**: publishers publish typed
-/// values, subscribers pattern match exhaustively, and no Json codec, downcast
-/// or runtime registry sits in between.
+/// Every cross-extension fact — the status bar, tool exemptions, model and
+/// decision selection, the active provider, profile activation — is a closed
+/// ADT plus an `@events.Event` constructor defined **here**: publishers
+/// publish typed values, subscribers pattern match exhaustively, and no Json
+/// codec, downcast or runtime registry sits in between.
 ///
-/// Rules kept from the migration plan (`extension/docs/events-migration.md`):
-/// payload fields mirror the legacy Json keys one for one — nothing added,
-/// renamed or dropped; payloads are immutable data (posoco delivers a
-/// community event as published, it is not deep copied); and every constructor
-/// is declared in this defining package, so consumers must qualify it
-/// (`@kit_events.StatusChanged`, never `@posoco.StatusChanged`).
+/// Rules: each payload carries its fields explicitly, one field per fact
+/// (nothing implicit or derived); payloads are immutable data (posoco delivers
+/// a community event as published, it is not deep copied); and every
+/// constructor is declared in this defining package, so consumers must qualify
+/// it (`@kit_events.StatusChanged`, never `@posoco.StatusChanged`).
 ///
 /// Publishers keep their identity in the capability they hold, not in a
 /// payload field: `system.publisher(owner="posoco_ext_llm")` binds every
-/// publication to `Extension("posoco_ext_llm")`. Subscribers that used to
-/// filter on `BusEvent.source` filter on `publisher_id(envelope)` instead.
+/// publication to `Extension("posoco_ext_llm")`. Subscribers select on
+/// `publisher_id(envelope)`.
 
 ///|
-/// One status-bar operation, mirroring the legacy `"status"` topic payload
-/// byte for byte.
+/// One status-bar operation, with the payload fields the status bridge reads.
 ///
-/// Legacy Json (published by `@devkit.publish_status_*`):
-/// - register: `{"op":"register","segment":s,"priority":p}` plus `label`,
-///   `value` and `color` only when present;
-/// - update: `{"op":"update","segment":s,"value":v}`;
-/// - unregister: `{"op":"unregister","segment":s}`.
+/// `Register` introduces a segment (or refreshes the one already registered
+/// under `segment`) and carries its `label`, `priority` and the optional
+/// `value` and `color`; `Update` replaces the value of an existing segment;
+/// `Unregister` removes it.
 ///
 /// `color` is a semantic role from `@devkit.status_color_roles()`, never a raw
 /// color value; `priority` orders segments on the bar (ascending, left to
@@ -56,10 +51,10 @@ pub extend StatusOp with Eq::{not_equal, equal}
 pub extend StatusOp with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Legacy topic `"tool_exemptions"`: the exact tool names (no patterns) that
-/// carry their own governance, published by the plan extension (and bunraku's
-/// `run_code` transport) so a subscribed approval gate lets them bypass its
-/// checks. Legacy Json: `{"tools": [string, ...]}`.
+/// The exact tool names (no patterns) that carry their own governance,
+/// published by the plan extension (and bunraku's `run_code` transport) so a
+/// subscribed approval gate lets them bypass its checks. `tools` holds the
+/// names verbatim; an empty array exempts nothing.
 #derive(Eq, Debug)
 pub(all) struct ToolExemptionsPayload {
   tools : Array[String]
@@ -72,12 +67,11 @@ pub extend ToolExemptionsPayload with Eq::{not_equal, equal}
 pub extend ToolExemptionsPayload with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Legacy topic `"model_selection"`: one machine-readable selection fact per
-/// change, published by the ext-llm router. `slot_id` is the active router
-/// slot id; a `None` `effort` means the slot default (legacy `null`). The
-/// vocabulary matches the persisted `ActiveModelSelection`, so the fs-session
-/// store records it into session metadata and a resume restores it.
-/// Legacy Json: `{"slot_id": string, "effort": string | null}`.
+/// One machine-readable selection fact per change, published by the ext-llm
+/// router. `slot_id` is the active router slot id; a `None` `effort` means the
+/// slot default, the same encoding the persisted `ActiveModelSelection` uses.
+/// The vocabulary matches that persisted form, so the fs-session store records
+/// the fact into session metadata and a resume restores it.
 #derive(Eq, Debug)
 pub(all) struct ModelSelectionPayload {
   slot_id : String
@@ -91,12 +85,11 @@ pub extend ModelSelectionPayload with Eq::{not_equal, equal}
 pub extend ModelSelectionPayload with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Legacy topic `"decision_selection"`: the router's decision-capability
-/// state, published on every selection change and at composition. `slot_id`
-/// is the selected `kind = Decision` slot (`""` = nothing selected);
-/// `available` states whether the capability can serve calls right now, and
-/// `reason` explains an off state (`None` = legacy `null`, on). Legacy Json:
-/// `{"slot_id": string, "available": bool, "reason": string | null}`.
+/// The router's decision-capability state, published on every selection change
+/// and at composition. `slot_id` is the selected `kind = Decision` slot (`""`
+/// = nothing selected); `available` states whether the capability can serve
+/// calls right now, and `reason` explains an off state (`None` means on, with
+/// no explanation attached).
 #derive(Eq, Debug)
 pub(all) struct DecisionSelectionPayload {
   slot_id : String
@@ -113,10 +106,9 @@ pub extend DecisionSelectionPayload with @moonbitlang/core/debug.Debug::{
 }
 
 ///|
-/// Legacy topic `"provider"`: the provider the router announced as active, at
-/// composition and on every switch, idempotently. Provider-scoped publishers
-/// (the Codex quota windows) show or hide their segments on it. Legacy Json:
-/// `{"provider_id": string}`.
+/// The provider the router announced as active, at composition and on every
+/// switch, idempotently. `provider_id` is the provider id; provider-scoped
+/// publishers (the Codex quota windows) show or hide their segments on it.
 #derive(Eq, Debug)
 pub(all) struct ProviderStatusPayload {
   provider_id : String
@@ -129,9 +121,8 @@ pub extend ProviderStatusPayload with Eq::{not_equal, equal}
 pub extend ProviderStatusPayload with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Legacy topic `"profiles.activated"`: one profile was activated. `id` is
-/// the profile id and `members` its member extension ids. Legacy Json:
-/// `{"id": string, "members": [string, ...]}`.
+/// One profile was activated. `id` is the profile id and `members` its member
+/// extension ids.
 #derive(Eq, Debug)
 pub(all) struct ProfilesActivatedPayload {
   id : String
@@ -147,8 +138,8 @@ pub extend ProfilesActivatedPayload with @moonbitlang/core/debug.Debug::{
 }
 
 ///|
-/// The cross-extension protocol: one constructor per legacy topic, each
-/// carrying its closed payload. Matching on `@events.Event` needs a wildcard
+/// The cross-extension protocol: one constructor per cross-extension fact,
+/// each carrying its closed payload. Matching on `@events.Event` needs a wildcard
 /// branch (the type is open); the payload ADTs stay exhaustive.
 pub(all) extenum @events.Event += {
   StatusChanged(StatusOp)
@@ -161,8 +152,7 @@ pub(all) extenum @events.Event += {
 
 ///|
 /// The publishing extension id carried by `envelope`, or `None` for core
-/// (`Posoco`) notifications. This is the typed replacement for the legacy
-/// `BusEvent.source` filter: a capability bound to
+/// (`Posoco`) notifications: a capability bound to
 /// `system.publisher(owner="posoco_ext_llm")` stamps every event it publishes
 /// with `Extension("posoco_ext_llm")`.
 pub fn publisher_id(envelope : @events.EventEnvelope) -> String? {

@@ -93,9 +93,31 @@ async fn dist_problems(dist : String) -> Array[String] {
 ///|
 async fn build_frontend(web : String) -> Unit {
   println(
-    "board-web dist is out of date; building the frontend (npm run build in \{web})",
+    "board-web dist is out of date; building the frontend (bun run build in \{web})",
   )
-  @shell.Cmd("npm", ["run", "build"], cwd=web).run()
+  @shell.Cmd("bun", ["run", "build"], cwd=web).run()
+}
+
+///|
+/// `true` when the prebuilt `dist` cannot stand in for the current sources:
+/// a required asset is missing, or a frontend source is newer than the
+/// contract reference `dist/index.js`.
+async fn dist_is_stale(web : String, dist : String) -> Bool {
+  if dist_problems(dist).length() > 0 {
+    return true
+  }
+  let dist_stamp = @fs.mtime(dist + "/index.js")
+  for source in frontend_sources {
+    match newest_mtime(web + "/" + source) {
+      Some(stamp) =>
+        if stamp.0 > dist_stamp.0 ||
+          (stamp.0 == dist_stamp.0 && stamp.1 > dist_stamp.1) {
+          return true
+        }
+      None => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -104,15 +126,16 @@ async fn build_frontend(web : String) -> Unit {
 /// The frontend is the single source of browser assets, so this build never
 /// compiles MoonBit or copies `public/` itself. Two environments are supported:
 ///
-/// - `node_modules` present: rebuild unconditionally, so the embedded bytes
-///   always match the checked-in sources.
+/// - `node_modules` present: rebuild only when the `dist` is missing or older
+///   than the frontend sources, so the embedded bytes still always match the
+///   checked-in sources without paying a Vite build on every invocation.
 /// - `node_modules` absent (release tarball, CI artifact, native-only box):
 ///   consume a prebuilt `dist`, but refuse to embed bytes older than the
 ///   sources they are supposed to represent.
 async fn ensure_dist(web : String) -> String {
   let dist = web + "/dist"
   let has_toolchain = @fs.exists(web + "/node_modules")
-  if has_toolchain {
+  if has_toolchain && dist_is_stale(web, dist) {
     build_frontend(web)
   }
   let problems = dist_problems(dist)
@@ -127,7 +150,7 @@ async fn ensure_dist(web : String) -> String {
     fail(
       "board-web has no prebuilt dist and no node_modules, so the browser assets cannot be produced:\n  - " +
       detail +
-      "\nRun `npm install && npm run build` in " +
+      "\nRun `bun install && bun run build` in " +
       web +
       " first.",
     )
@@ -144,7 +167,7 @@ async fn ensure_dist(web : String) -> String {
             fail(
               "board-web/dist is older than its source `" +
               source +
-              "` and node_modules is absent, so the embedded assets would be stale.\nRun `npm install && npm run build` in " +
+              "` and node_modules is absent, so the embedded assets would be stale.\nRun `bun i && bun run build` in " +
               web +
               ".",
             )

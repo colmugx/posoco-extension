@@ -524,8 +524,8 @@ fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int32? {
 /// feedback, and an existing reminder left over from such a turn is removed
 /// (rationale: docs/permission-injection-research.md). Inject when the
 /// transcript has none (first turn, or compaction dropped it), replace in
-/// place when the text is stale, remove when the mode no longer carries a
-/// reminder; steady-state turns touch nothing, so the hook is idempotent.
+/// place when the text is stale, remove when the mode carries no reminder;
+/// steady-state turns touch nothing, so the hook is idempotent.
 pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
   self : PermissionPolicy,
   messages : Array[@kernel.Message],
@@ -1233,7 +1233,7 @@ pub impl @posoco.Lifecycle for PermissionPolicy with fn on_shutdown(
 pub extend PermissionPolicy with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// MoonBit no longer implicitly promotes the sync trait methods of a
+/// MoonBit does not implicitly promote the sync trait methods of a
 /// `pub impl` as regular methods (warning implicit_impl_as_method). This
 /// trait-default method has no direct callers — the kernel consumes it via
 /// the trait — so declare the required explicit promotion and mark it

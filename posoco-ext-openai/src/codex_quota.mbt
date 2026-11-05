@@ -266,8 +266,8 @@ pub extend CodexQuotaTracker with @posoco/devkit.QuotaSource::{read}
 ///|
 /// Feed a `codex.rate_limits` WS event into the tracker. This is the
 /// WebSocket counterpart of the quota header capture: the event carries the
-/// same windows with `reset_at` as absolute unix seconds — the reset times
-/// the HTTP path used to read from response headers.
+/// same windows with `reset_at` as absolute unix seconds — the reset times the
+/// HTTP response headers also carry.
 fn codex_ws_capture_rate_limits(
   payload : String,
   tracker : CodexQuotaTracker,

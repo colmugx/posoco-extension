@@ -256,7 +256,7 @@ test "openai_compact_latest_retains_user_wrappers_mixed_images_not_assistant_too
 }
 
 ///|
-/// Wrapper text no longer special-cases retention in either direction: under
+/// Wrapper text special-cases retention in neither direction: under
 /// budget pressure a wrapper-shaped user truncates like any other message.
 test "openai_compact_latest_user_wrapper_truncates_under_budget" {
   guard @json.parse(

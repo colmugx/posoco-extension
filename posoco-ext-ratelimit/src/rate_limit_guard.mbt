@@ -17,8 +17,8 @@ pub struct RateLimitGuard {
 }
 
 ///|
-/// Compatibility-friendly constructor. poll_interval_ms is accepted so 0.3
-/// callers still compile, but event-driven scheduling no longer polls.
+/// Compatibility-friendly constructor. `poll_interval_ms` is accepted and
+/// ignored: event-driven scheduling never polls.
 ///
 /// The status channel is not a constructor argument: the guard declares
 /// `Capability::Events` and takes the owner-bound `@posoco.Events` capability
@@ -120,8 +120,8 @@ pub fn RateLimitGuard::start(
 }
 
 ///|
-/// Deprecated compatibility wrapper. It no longer spawns a polling monitor;
-/// it starts the event-driven runtime on the supplied host group.
+/// Compatibility wrapper. It starts the event-driven runtime on the supplied
+/// host group and spawns no polling monitor.
 pub fn RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
   group : @core_async.TaskGroup,
@@ -136,7 +136,7 @@ pub fn RateLimitGuard::spawn_monitor(
 }
 
 ///|
-/// Compatibility seam for hosts that previously drove poll() themselves.
+/// Compatibility seam for hosts that drive poll() themselves.
 /// Internal scheduling is event-driven; Poll only asks the actor to dispatch
 /// anything already due at the injected clock.
 pub async fn RateLimitGuard::poll(self : RateLimitGuard) -> Unit {

@@ -47,7 +47,7 @@ fn record(events : @events.Events, seen : Array[@events.EventEnvelope]) -> Unit 
 }
 
 ///|
-test "register op mirrors the legacy status payload" {
+test "register op payload fields survive the round trip" {
   let cap = FakeCapability::FakeCapability("posoco_ext_llm")
   let events = cap.events()
   let seen : Array[@events.EventEnvelope] = []

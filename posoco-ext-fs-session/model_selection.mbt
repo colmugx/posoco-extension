@@ -10,12 +10,12 @@
 /// Semantics: the metadata records the selection at the moment of the last
 /// persist — the model that produced the transcript's tail. A switch that is
 /// never followed by a persist is not recorded. Stores composed without an
-/// event channel never observe anything and never decorate, so legacy
-/// journals and plain-library uses are untouched.
+/// event channel never observe anything and never decorate, so journals
+/// written without a channel and plain-library uses are untouched.
 
 ///|
-/// V2 selection metadata is owner-qualified. The legacy `slot_id` value
-/// is never interpreted as a manager-neutral model id.
+/// V2 selection metadata is owner-qualified. A bare `slot_id` value is never
+/// interpreted as a manager-neutral model id.
 pub const MODEL_SELECTION_V2_METADATA_KEY : String = "posoco.model_selection_v2"
 
 ///|
@@ -101,7 +101,7 @@ pub fn session_selection_v2_from_metadata(
 
 ///|
 /// Owner-mismatched sessions must not select a same-named model from an
-/// unrelated manager. Legacy records are deliberately not part of this API.
+/// unrelated manager. Owner-less records are deliberately not part of this API.
 pub fn session_selection_v2_for_owner(
   metadata : Map[String, Json],
   owner : String,
@@ -278,9 +278,8 @@ pub const MODEL_SELECTION_PUBLISHER : String = "posoco_ext_llm"
 
 ///|
 /// Publisher filter for the observed events: only the ext-llm router's
-/// `@kit_events.ModelSelection` is recorded. The namespace of the envelope is
-/// the typed replacement for the legacy `BusEvent.source` field, and the
-/// closed payload replaces the `model_selection` topic.
+/// `@kit_events.ModelSelection` is recorded. The identity rides the namespace
+/// of the envelope, and the payload is the closed `ModelSelectionPayload`.
 fn is_model_selection_event(envelope : @posoco.EventEnvelope) -> Bool {
   @kit_events.publisher_id(envelope) == Some(MODEL_SELECTION_PUBLISHER)
 }
@@ -324,8 +323,8 @@ fn selection_from_payload(data : Json) -> (String, String?)? {
 
 ///|
 /// Read a recorded selection back out of session metadata. Absent or
-/// malformed payloads return `None` (legacy journals, stores without an
-/// event channel).
+/// malformed payloads return `None` (journals written with no recorded
+/// selection, stores without an event channel).
 pub fn model_selection_from_metadata(
   metadata : Map[String, Json],
 ) -> (String, String?)? {
@@ -337,8 +336,8 @@ pub fn model_selection_from_metadata(
 
 ///|
 /// Copy `metadata` and inject the recorded selection. A `None` selection (no
-/// channel, no event observed yet) returns the metadata untouched so legacy
-/// journals are never decorated by accident.
+/// channel, no event observed yet) returns the metadata untouched, so a
+/// journal is never decorated by accident.
 fn metadata_with_selection(
   metadata : Map[String, Json],
   selection : (String, String?)?,
@@ -399,8 +398,8 @@ pub fn rewrite_metadata_line(
 ///|
 /// Observe the ext-llm selection channel. Foreign publishers and foreign
 /// events are ignored; the payload is a closed `ModelSelectionPayload`, so
-/// there is no malformed-payload branch left — an empty slot id is the one
-/// value that is still discarded, exactly as the legacy decoder did.
+/// there is no malformed-payload branch — an empty slot id is the one value
+/// that is discarded.
 fn JsonlSessionStore::on_model_selection(
   self : JsonlSessionStore,
   envelope : @posoco.EventEnvelope,

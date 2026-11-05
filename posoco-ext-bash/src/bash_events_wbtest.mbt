@@ -1,8 +1,7 @@
 ///|
-/// Whitebox tests for the advisory session notices (`bash_events.mbt`): the
-/// legacy `bash.session.*` bus topics are now one typed
-/// `BashSessionNotice` on the `@events` channel, published through an
-/// owner-bound capability.
+/// Whitebox tests for the advisory session notices (`bash_events.mbt`): each
+/// `bash.session.*` lifecycle fact is a typed `BashSessionNotice` on the
+/// `@events` channel, published through an owner-bound capability.
 
 ///|
 fn notice_test_session() -> ShellSession {
@@ -36,14 +35,13 @@ test "session notices publish a typed BashSessionNotice on the events channel" {
   let session = notice_test_session()
   tools.emit_session(session, BASH_SESSION_FINISHED)
   assert_eq(envelopes.length(), 1)
-  // The publisher identity rides the capability: the typed replacement for
-  // the legacy `BusEvent.source` field.
+  // The publisher identity rides the capability, not the payload.
   assert_eq(envelopes[0].namespace_of(), @events.Extension("posoco_ext_bash"))
   match envelopes[0].event {
     BashSessionNotice(payload) => {
       assert_eq(payload.kind, BASH_SESSION_FINISHED)
       // The snapshot object is the one `ShellSession::snapshot` produces, so
-      // a host that read the legacy payload sees the same keys and values.
+      // a host reading it sees the documented keys and values.
       let snapshot = payload.snapshot
       guard snapshot is Json::Object(fields) else {
         fail("a session notice must carry an object snapshot")

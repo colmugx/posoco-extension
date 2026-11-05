@@ -115,7 +115,7 @@ pub impl @posoco.Observer for Stats with fn on_event(
     ModelRequestStarted => {
       // The exact per-step anchor: the kernel declared the next model
       // request (after pre-model hooks, before the port executes it), so
-      // ttft no longer contains tool-execution or inter-response time.
+      // ttft excludes tool-execution and inter-response time.
       self.round_started_ms = Some((self.clock)())
       self.reset_round()
     }

@@ -1280,7 +1280,7 @@ impl @posoco.ModelPort for ZenSummaryModelPort with fn compact(
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  abort("zen compact no longer forwards to the inner port")
+  abort("zen compact must not forward to the inner port")
 }
 
 ///|
@@ -2317,7 +2317,7 @@ test "zen_format_usd renders four decimals and guards bad input" {
 /// The tracker publishes under a test-only source id so the assertion counts
 /// its own operations even while other in-process tests publish their spend
 /// segments on the same channel: the publisher identity is the envelope's
-/// namespace, exactly as `BusEvent.source` used to carry it.
+/// namespace.
 async test "spend tracker accumulates, publishes, and reads back" {
   let source_id = "posoco_ext_opencode_zen_test_spend"
   let tracker = ZenSpendTracker::ZenSpendTracker(source=source_id)

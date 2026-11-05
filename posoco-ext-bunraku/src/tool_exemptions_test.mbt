@@ -1,9 +1,8 @@
 ///|
-/// The `tool_exemptions` announcement moved from a Json payload on the
-/// retired devkit topic to the closed `@kit_events.ToolExemptions` record on
-/// the `@events` channel. These tests pin the migrated contract: the same
-/// tool list, the publisher's identity on the envelope, and the same
-/// fire-and-forget silence when no channel exists.
+/// The `tool_exemptions` announcement is the closed `@kit_events.ToolExemptions`
+/// record on the `@events` channel. These tests pin the contract: the tool
+/// list, the publisher's identity on the envelope, and the fire-and-forget
+/// silence when no channel exists.
 
 ///|
 test "constructing the runtime publishes typed tool exemptions" {

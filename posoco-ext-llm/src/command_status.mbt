@@ -152,7 +152,7 @@ fn RouterModelPort::status_report(
       if entry.0 == "balance" {
         lines.push("balance: \{entry.1}")
       } else {
-        // Bus window values arrive already shaped as "N% left" from their
+        // Window values arrive already shaped as "N% left" from their
         // publisher; pass them through unchanged.
         lines.push("\{entry.0}: \{entry.1}")
       }

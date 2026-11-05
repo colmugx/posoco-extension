@@ -155,9 +155,9 @@ async fn Profiles::invoke_select_profiles(
 }
 
 ///|
-/// Manual activation must enter through the host's Agent turn path. Writing
-/// directly to a SessionPort no longer updates the Agent's authoritative
-/// in-process session snapshot. The sink submits this exact activation message
+/// Manual activation must enter through the host's Agent turn path: writing
+/// directly to a SessionPort leaves the Agent's authoritative in-process
+/// session snapshot untouched. The sink submits this exact activation message
 /// via an ordinary Agent turn (or equivalent host-owned input admission).
 async fn Profiles::manual_activate(
   self : Profiles,

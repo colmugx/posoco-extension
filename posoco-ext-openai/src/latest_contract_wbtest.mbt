@@ -278,7 +278,7 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
       Json::array(latest_fixture_tools().map(@responses.tool_to_responses_wire)),
     ),
   )
-  // Lifted base instructions no longer ride as an input item.
+  // Lifted base instructions do not ride as an input item.
   for item in chat_input {
     guard item is Json::Object(fields) else { fail("wire item") }
     assert_false(fields.get("role") == Some(Json::string("system")))

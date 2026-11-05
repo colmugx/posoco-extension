@@ -59,9 +59,9 @@ pub fn ZenSpendTracker::session_spend(
 /// Record a settled step and publish the session total on the status channel.
 ///
 /// The op travels as `@kit_events.StatusChanged(@kit_events.Register(..))`
-/// through a capability bound to `self.source`, so the segment keeps the
-/// product's identity the way `BusEvent.source` used to carry it. No-op when
-/// no event system is registered or the system is closed.
+/// through a capability bound to `self.source`, so the envelope's namespace
+/// keeps the product's identity. No-op when no event system is registered or
+/// the system is closed.
 pub fn ZenSpendTracker::record_and_publish(
   self : ZenSpendTracker,
   session_id : String,

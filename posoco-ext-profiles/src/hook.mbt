@@ -1,9 +1,9 @@
 ///|
 /// before_model injection: the activation point. Every pending
 /// activation — an `activate_profile` success whose header line is not yet
-/// in the transcript — gets exactly one UserMessage appended here. The bus
-/// event fires at this injection point too: the activation knowledge
-/// lives in the hook, not in the tool's execute.
+/// in the transcript — gets exactly one UserMessage appended here. The
+/// `ProfilesActivated` event fires at this injection point too: the activation
+/// knowledge lives in the hook, not in the tool's execute.
 
 ///|
 /// Append one activation message per pending id. Idempotence is entirely

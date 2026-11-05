@@ -1075,7 +1075,8 @@ async test "status invoke failure backs off without clearing old segments" {
     fail("chat must succeed despite the quota failure")
   }
   // The failed /status neither retracted the warm balance segment nor
-  // published anything new: the bus still carries exactly that one register.
+  // published anything new: the channel still carries exactly that one
+  // register.
   assert_eq(router_decoded_status_ops(capture.events), [
     @kit_events.StatusOp::Register(
       segment="balance",
@@ -1217,8 +1218,8 @@ test "router manifest leaves the decision capability to the active decision slot
   let slot = router_test_slot("slot", "test", "model", [])
   let router = RouterModelPort(slots=[slot])
   let manifest = router.manifest()
-  // The router no longer claims or borrows a composed decision port: the
-  // capability resolves from the /decision selection, so a missing or
+  // The router claims or borrows no composed decision port: the capability
+  // resolves from the /decision selection, so a missing or
   // unconfigured judge turns decision off instead of sharing another
   // provider's backend.
   assert_true(manifest.requires.is_empty())
@@ -1446,7 +1447,7 @@ test "decision selection rides the pending rule through provider replacement" {
     None => fail("decision must read as off without a decision slot")
   }
   // Case 2: the refresh provides a chat-shaped slot under the same id; the
-  // capability stays off because the slot is no longer decision kind.
+  // capability stays off because the slot is not decision kind.
   let swap = [
     router_test_slot("one/a", "one", "model-a3", []),
     router_test_slot("one/judge", "one", "judge-chat", []),

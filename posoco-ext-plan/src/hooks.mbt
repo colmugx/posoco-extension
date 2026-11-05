@@ -301,7 +301,7 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_model(
 }
 
 ///|
-/// MoonBit no longer implicitly promotes the sync trait methods of a
+/// MoonBit does not implicitly promote the sync trait methods of a
 /// `pub impl` as regular methods (warning implicit_impl_as_method). This
 /// trait-default method has no direct callers — the kernel consumes it via
 /// the trait — so declare the required explicit promotion and mark it

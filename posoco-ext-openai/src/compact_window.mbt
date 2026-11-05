@@ -129,7 +129,7 @@ fn compact_projection_of(
 /// bodies. Messages before an anchor (e.g. legitimate host-prefixed system or
 /// context injection) and messages appended after the validated projection
 /// encode normally; the anchor's stored output items replay verbatim exactly
-/// once. A projection that no longer matches its stored output is an explicit
+/// once. A projection that does not match its stored output is an explicit
 /// failure — never a silent stale replay or a lossy fallback.
 fn openai_encode_window_items(
   messages : Array[@posoco.Message],

@@ -71,7 +71,7 @@ pub struct Profiles {
 /// before calling; the deferred set and attribution table come from the
 /// same composition pass. `events~` is the host-minted owner-bound
 /// publication capability (`system.publisher(owner~)`) that carries the
-/// activation notice; see `extension/docs/events-migration.md`.
+/// activation notice.
 pub fn Profiles::build(
   manifests~ : Array[ProfileManifest],
   defer_set~ : Array[String],

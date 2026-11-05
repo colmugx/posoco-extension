@@ -682,9 +682,8 @@ fn ShellTools::read_session(
 /// the payload's `kind` (`BASH_SESSION_FINISHED` / `BASH_SESSION_STALL`).
 ///
 /// The capability is minted per publication and bound to this extension's id,
-/// so the envelope carries `Extension("posoco_ext_bash")` — the typed
-/// replacement for the legacy `BusEvent.source`. A missing or closed system
-/// is a silent no-op: notification is never an error path.
+/// so the envelope carries `Extension("posoco_ext_bash")`. A missing or
+/// closed system is a silent no-op: notification is never an error path.
 fn ShellTools::emit_session(
   _self : ShellTools,
   session : ShellSession,

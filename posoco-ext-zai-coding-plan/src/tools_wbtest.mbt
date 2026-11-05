@@ -398,8 +398,8 @@ test "the selection feed reads only the router's ModelSelection" {
     zai_selection_slot(selection_envelope("zai-coding-plan/glm-5.3-flash")),
     Some("zai-coding-plan/glm-5.3-flash"),
   )
-  // The publisher filter survives the migration: another owner's selection
-  // (a second provider router) never steers this companion.
+  // Another owner's selection (a second provider router) never steers this
+  // companion.
   assert_eq(
     zai_selection_slot(
       @posoco.EventEnvelope::EventEnvelope(
@@ -446,8 +446,7 @@ async test "a router selection drives the tool plane through the typed feed" {
       recorder.values.join(" | "),
       content="0/3 Official MCP | 3/3 Official MCP",
     )
-    // Leaving this provider withdraws softly, exactly as an untyped topic
-    // switch used to.
+    // Leaving this provider withdraws softly.
     tools.on_selection(selection_envelope("deepseek/deepseek-flash"))
     @async.with_timeout(2000, () => await_switch(() => tools.state is Inactive))
     inspect(record.withdraws.join(","), content="Soft")

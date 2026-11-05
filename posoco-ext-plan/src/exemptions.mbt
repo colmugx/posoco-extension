@@ -12,11 +12,9 @@
 /// Publish one exemption report: `tools` are the exact tool names (no
 /// patterns) that subscribing gates let bypass.
 ///
-/// The report is the closed `@kit_events.ToolExemptions` payload (legacy
-/// topic `"tool_exemptions"`, legacy Json `{"tools": [string, ...]}`) and
-/// rides the capability the host minted for this extension, so subscribers
-/// see it stamped with `Extension("posoco_ext_plan")` — the typed
-/// replacement for the legacy `BusEvent.source`.
+/// The report is the closed `@kit_events.ToolExemptions` payload and rides the
+/// capability the host minted for this extension, so subscribers see it
+/// stamped with `Extension("posoco_ext_plan")`.
 fn publish_tool_exemptions(
   events : @posoco.Events,
   tools~ : Array[String],
