@@ -3,8 +3,9 @@ name = "colmugx/posoco-ext-opencode-zen"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.24.0",
+  "colmugx/posoco@0.24.1",
   "posoco/devkit@0.4.1",
+  "posoco/kit-events@0.1.0",
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "colmugx/posoco-kit-deepseek@0.1.0",
   "colmugx/posoco-kit-messages@0.1.0",

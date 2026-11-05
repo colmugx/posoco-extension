@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-openai"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.24.0",
+  "colmugx/posoco@0.24.1",
   "posoco/ext-llm@0.2.0",
   "posoco/ext-oauth@0.1.0",
   "moonbitlang/async@0.22.7",
@@ -11,6 +11,7 @@ import {
   "posoco/devkit@0.4.1",
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
+  "posoco/kit-events@0.1.0",
   "colmugx/posoco-kit-responses@0.1.0",
   "moonbit-community/flate@0.3.0",
 }
