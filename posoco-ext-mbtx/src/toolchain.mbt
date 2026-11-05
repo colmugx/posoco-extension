@@ -47,7 +47,11 @@ fn mbtx_trimmed_home(value : String?) -> String? {
   match value {
     Some(path) => {
       let trimmed = path.trim().to_owned()
-      if trimmed == "" { None } else { Some(trimmed) }
+      if trimmed == "" {
+        None
+      } else {
+        Some(trimmed)
+      }
     }
     None => None
   }

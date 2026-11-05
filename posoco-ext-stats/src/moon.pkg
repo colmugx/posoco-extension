@@ -12,7 +12,5 @@ import {
 } for "wbtest"
 
 options(
-  targets: {
-    "cache_reporting_wbtest.mbt": [ "native" ],
-  },
+  targets: { "cache_reporting_wbtest.mbt": [ "native" ] },
 )
