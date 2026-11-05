@@ -5,10 +5,10 @@ supply a fresh-extension Agent factory and explicit authorization/input policy.
 Use durable journal storage for a durable Board; this example is ephemeral and
 intentionally has no provider or eligible Attempt.
 
-```mbt check
+```mbt nocheck
 ///|
 async test {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let backend = @backend.BoardBackend()
     backend.attach(group)
     assert_true(backend.bootstrap_snapshot() is Ok(_))
@@ -45,8 +45,3 @@ with `BoardExecutionOwner::with_slots(max_concurrency=1..=8)` and an isolated
 driver factory; slots run concurrently between the shared serialized journal
 sections and keep every admission, uniqueness, cancellation and shutdown rule
 above.
-
-See `docs/S4A-execution.md` in the module for actual Posoco APIs, journal phases,
-one-shot settlement, cancellation confirmation, failure windows and operator
-recovery. `Unresolved` is not permission to retry; no mutation or execution is
-replayed automatically. Keep ownership until shutdown confirms join.

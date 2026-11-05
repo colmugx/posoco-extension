@@ -46,4 +46,4 @@ let bash = ShellTools()
 
 The host's shutdown lifecycle cancels live workers. Session IDs are in-memory and are not restored across restarts.
 
-Event notification (optional): pass a shared `@devkit.EventBus` to `ShellTools(bus=Some(bus))` and subscribe to `bash.session.started`, `bash.session.stall`, and `bash.session.finished`. Stall notifications are advisory; they do not kill a command automatically.
+Event notification (optional): subscribe to `@posoco_ext_bash.BashSessionNotice` on the process default `EventSystem` and select on the payload's `kind` — `BASH_SESSION_STARTED`, `BASH_SESSION_STALL`, or `BASH_SESSION_FINISHED`; the envelope carries `Extension("posoco_ext_bash")` as the publisher identity. Stall notifications are advisory; they do not kill a command automatically.

@@ -34,20 +34,15 @@ record constructors, not domain transitions or committed-state restoration.
 validate these records. The committed `BoardState` remains encapsulated;
 coordinator restoration/integration is not part of S3B1.
 
-## Snapshot schemas v1 and v2
+## Snapshot schema
 
-S4E1 writes `board.json` as schema v2: exactly `schema_version: 2`, `revision`,
+exactly `schema_version: 2`, `revision`,
 `tasks`, `attempts`, and required `expansions`. Each expansion stores its proposal
 identity, workflow/parent lineage, complete ordered local-reference/task mapping,
 SHA256 content digest and creation time in the same replacement as its graph.
-Restore rejects missing/ambiguous identities, duplicate mappings and missing
-parent/generated Tasks. Schema-v1 snapshots remain readable with empty history;
-a v1 snapshot containing `expansions` is rejected, not silently downgraded.
-See [S4E1](../../docs/S4E1-dynamic-expansion.md) for reconciliation and rollback.
 
-A legacy v1 object contains exactly `schema_version: 1`, `revision`, `tasks`, and
-`attempts`. Tasks contain all ten domain fields; attempts contain
-all nine. All fields, including nullable fields, are required. Enum values are
+Tasks contain every domain field and attempts contain all nine. All fields,
+including nullable fields, are required. Enum values are
 explicit case-sensitive strings, not Debug representations. Every revision
 and timestamp is a canonical **nonnegative decimal string**, from `"0"` through
 `"9223372036854775807"`, preserving Int64 precision on JS. Nullable timestamps

@@ -75,10 +75,16 @@ moon -C posoco-ext-board-native --target-dir _build/assets-builder run tools/emb
 moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- _build/browser-assets-dist --check
 ```
 
-The builder compiles the existing browser entry directly with Moon, copies public
-resources, and embeds the result. It needs neither Warren nor Node/Bun. Nested
-compiler and generator invocations use separate build directories rather than
-the caller's workspace build lock.
+The builder embeds `posoco-ext-board-web/dist` verbatim — it no longer compiles
+the browser entry or copies public resources itself. Vite owns that build, and
+the artifact names (`index.html`, `index.js`, `board.css`) are the contract
+pinned in `posoco-ext-board-web/vite.config.ts`. With `node_modules` present the
+builder runs `bun run build` only when the `dist` is missing or older than the
+frontend sources, so the embedded bytes always match the sources without a Vite
+build on every invocation; without a toolchain it consumes a prebuilt `dist` and
+fails loudly when that dist is older than the sources it represents. Nested
+generator invocations use a separate build directory rather than the caller's
+workspace build lock.
 
 Generated resources are build products, not Git source. The module's `.gitignore`
 excludes `src/web_assets.generated.mbt`; `.moonignore` includes it in release
@@ -94,17 +100,6 @@ output; `--check` is read-only and fails on stale or missing output. Optional
 positional arguments select input/output paths relative to the native module.
 Required HTML, JS and CSS must be nonempty. MoonBack serves assets from memory,
 without a runtime filesystem directory, base64 decoding or temporary files.
-
-Generator regression checks (including compiled byte round trips):
-
-```bash
-moon -C posoco-ext-board-native run tools/embed-assets/check_generator.mbtx --target native --output-json
-moon -C posoco-ext-board-native --target-dir _build/assets-build-regression-driver run tools/embed-assets/check_build.mbtx --target native --output-json
-```
-
-The build regression uses a temporary source-only workspace and checks missing
-output generation, CSS invalidation, freshness, archive inclusion and cache
-exclusion. It does not modify working frontend sources.
 
 The embedded dashboard includes manual attempt lifecycle and one-shot review
 decision controls. Review decisions are eligible only for Running Review attempts

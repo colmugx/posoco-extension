@@ -28,7 +28,7 @@ impl @orchestration.BoardExecutionInputResolver for WorkflowNoInput with fn reso
 
 ///|
 async test "explicit empty workflow and control lifetime" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let board = @backend.BoardBackend()
     board.attach(group)
     assert_true(board.bootstrap_snapshot() is Ok(_))

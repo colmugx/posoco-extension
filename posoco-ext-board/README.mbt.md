@@ -168,7 +168,7 @@ let agent = @posoco.Agent(
   config,
 )
 
-@async.with_task_group(group => {
+@core_async.with_task_group(async fn(group) {
   board.attach(group)
 
   // Run the host/agent loop here. Invoking /board now starts the listener
@@ -194,7 +194,7 @@ let backend = @backend.BoardBackend(
   store=@store.MemoryBoardStore(),
   now_ms=() => 1234L,
 )
-@async.with_task_group(group => {
+@core_async.with_task_group(async fn(group) {
   backend.attach(group)
   // Consume handle_command, bootstrap_snapshot and subscriptions here.
   backend.shutdown()
@@ -245,7 +245,7 @@ Workflows are disabled until `enabled=true`, every step is a separate trusted
 UI approval, and no command takes executable JSON arguments.
 
 ```mbt nocheck
-@async.with_task_group(group => {
+@core_async.with_task_group(async fn(group) {
   let workflows = @board.BoardWorkflows(
     directory="private/board-data",
     agents=my_workflow_agent_factory, // fresh Agent composition per run
@@ -258,12 +258,6 @@ UI approval, and no command takes executable JSON arguments.
   // backend; a false shutdown result retains the lock.
 })
 ```
-
-A stale `execution.lock` after a crash is never removed automatically: prove
-the old owner is dead, delete the lock, and never edit journal records to force
-progress. File stores run on native and on Node-compatible JS (synchronous
-`node:fs`), with fail-closed fsync/replace-rename durability on both; see
-[`docs/S4F-workflow-extension.md`](docs/S4F-workflow-extension.md).
 
 ## Commands
 

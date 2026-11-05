@@ -1,45 +1,51 @@
 # posoco-ext-board-web
 
-A Rabbita standalone browser shell for the Board wire contract. The shell is
-read-only until it holds an authoritative snapshot; it then gains the v1
-mutation surface: a New task editor, Edit cards, per-card Move controls,
-dependency editing, manual attempt queue/start/finish controls and Review
-decision recording in the task inspector. Agent execution and drag-and-drop
-remain out of scope.
+A Rabbita browser shell for the Board wire contract. The shell is read-only
+until it holds an authoritative snapshot; it then gains the V2 mutation
+surface: a New task editor, Edit cards, per-card Move controls, dependency
+editing, role plans, Review decisions and the Board inbox. Drag-and-drop
+remains out of scope.
 
-- **Rabbita 0.16.4** owns rendering, named WebSocket commands, and delayed commands.
-- **Board client** owns the authoritative replica; no second task/attempt projection lives in the UI model.
-- **Warren 0.4.4** is a development/build tool, not a runtime dependency.
-- **async 0.22.4** remains unchanged.
 
 ## Build
 
-From the extension workspace:
+This module is a Vite project: `@rabbita/vite` compiles `cmd/browser` with Moon
+and hands the result to Vite, and `@tailwindcss/vite` builds `styles/app.css`.
 
 ```bash
-moon install moonbit-community/warren@0.4.4
-warren -C posoco-ext-board-web build --browser-entry cmd/browser --server-entry ""
+bun install
+bun run build      # -> dist/index.html, dist/index.js, dist/board.css
 ```
 
-This browser-only command produces `dist/index.html`, `dist/index.js`, and `dist/board.css`. Build output is ignored, not committed. No server entry is included.
+The artifact names are pinned in `vite.config.ts` because they are the contract
+with both hosts. Build output is ignored, not committed.
 
-For a scaffold preview:
+For a live-reload preview:
 
 ```bash
-warren -C posoco-ext-board-web dev --browser-entry cmd/browser --server-entry ""
+bun run dev
 ```
 
 Without a Board instance token the shell stays Offline. A live connection requires serving these assets from a Board-capable host on the same origin with `/?token=<instance-token>`. The preview is not a cross-origin proxy or an alternate Board backend.
 
+`styles/app.css` deliberately loads only Tailwind's theme and utility layers,
+skipping preflight: the design system in `public/board.css` still owns the reset,
+and `public/board.css` is imported into `layer(components)` so utilities can
+override migrated components instead of fighting them.
+
 ### Embedded-asset regen workflow
 
-The native host's resource builder compiles this browser entry directly with Moon
-and copies public resources; it does not invoke Warren or require Node/Bun:
+The native host embeds `dist/` verbatim — it neither compiles MoonBit nor
+stitches `public/` any more:
 
 ```bash
-moon -C posoco-ext-board-native --target-dir _build/assets-builder run tools/embed-assets/build.mbtx --target native --output-json
+moon -C posoco-ext-board-native check src --target native
 moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- _build/browser-assets-dist --check
 ```
+
+When `node_modules` is present the embed step rebuilds this frontend first, so
+`dist/` can never be older than the sources. Without a toolchain it consumes a
+prebuilt `dist/` and fails loudly if that dist predates its sources.
 
 Do not commit `dist/` or `web_assets.generated.mbt`. Native development builds
 generate the embedded module; release archives carry it for downstream consumers.
@@ -63,7 +69,7 @@ Submission requires the connection to be Online, the replica to hold an authorit
 
 The single pending record stores correlation only: command id, mutation kind and expected revision. The command payload is never retained, so nothing can be replayed or resent; a reconnect socket sends only Hello. Every send failure callback correlates both the connection generation and the command id, so a late callback can never clear a newer pending command.
 
-Command results never project replica state. An accepted correlated result clears the pending record, closes the matching editor and reports success. Any reported `current_revision` other than the replica's own revision — including on accepted results — marks the baseline stale: the replica is emptied and the existing bounded reconnect fetches a fresh snapshot. Rejections keep the draft, never roll back and never retry: a `revision_conflict` (or a stale reported revision) forces the same snapshot resync, `durability_uncertain` retains the event state only when the reported revision still matches, and `persistence_failed` at the same revision keeps the baseline. Disconnects and send failures with a command in flight clear the pending record, empty the replica, keep drafts and reuse the reconnect scheduler; ordinary disconnects preserve the baseline for replay.
+Command results never project replica state. An accepted correlated result clears the pending record, closes the matching editor and reports success. Any reported `current_revision` other than the replica's own revision — including on accepted results — marks the board stale: the last good snapshot stays readable under a stale veil, mutations gate on the veil, and the baseline-aware Hello asks the server to replay the missed contiguous frames; the first applied frame clears the veil. Rejections keep the draft, never roll back and never retry: a `revision_conflict` (or a stale reported revision) raises the same veil without blanking the board, `durability_uncertain` retains the event state only when the reported revision still matches, and `persistence_failed` at the same revision keeps the baseline. Disconnects and send failures with a command in flight still discard the baseline — the replica is emptied, the pending record dropped, drafts kept and the bounded reconnect refetches a fresh snapshot; ordinary disconnects preserve the baseline for replay. A stage move additionally renders optimistically at its target stage until the pending command settles, and an accepted move whose reverse step the flow allows offers an Undo action on its notice.
 
 A disconnected edit draft whose task disappears from a later authoritative snapshot closes with a notice. Drafts are never closed merely because reconciliation emptied the baseline: without a snapshot the board is unknown, and the draft survives until authoritative state returns.
 
@@ -195,8 +201,9 @@ replacement snapshot whose target task or attempt vanished closes the draft
 with a safe notice. Rejections map stable codes to fixed phrasing —
 `invalid_review_transition` reads "The board does not allow this review
 decision from the attempt's current state." — keep the draft, and never
-retry; revision conflicts and stale reported revisions force the same
-Hello-only snapshot resync as every other mutation.
+retry; revision conflicts and stale reported revisions raise the stale veil
+over the retained board while the replay settles, exactly as every other
+mutation.
 
 Finishing a Running Review attempt that still has a pending decision shows a
 warning that a decision cannot be recorded after the attempt finishes, but
@@ -208,6 +215,14 @@ described above.
 ## View
 
 Seven lanes cover Created, Refining, Ready, Running, Review, Done, and Suspended, labelled and referenced by ID for assistive tech. Cards show title, priority, ID, dependency/attempt counts, description preview, running/latest attempt status, and the v1 Edit/Move controls, in the deterministic created order described above. The card's attempt summary is never a naked status word: a running attempt reads `Attempt: Running (manual)` (not the task's stage or an Agent run), any other state reads `Latest attempt: <status>` chosen by the same deterministic created order with the ID tie-break, and a task without attempts reads `No attempts`. The header shows connection status, Board revision, stream sequence, the task count (visible of total while filtered), the filter bar, and the New task entry. Loading and empty are distinct: until an authoritative snapshot arrives — and again after any invalidation, which discards every record — the board shows `Waiting for Board state`; only an authoritative empty board shows `No Board tasks yet`, so stale cards never survive a resync.
+
+Window-level keyboard shortcuts ride a Rabbita keydown subscription: `N`
+opens the composer, `/` focuses search, `J`/`K` move the selection through
+the visible flow order without wrapping, and `Enter` opens the selected
+task's sheet after focusing its card title, so the close-time focus return
+lands back on the card. Shortcuts stand down while a dialog is open, while
+focus sits in a text entry control, and during IME composition; dialogs own
+their native Esc and focus trap.
 
 The view uses semantic HTML and a small Board-owned stylesheet. Card Edit/Move
 clicks stop propagation before emitting their action, so they do not also switch

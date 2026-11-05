@@ -30,7 +30,7 @@ impl @orchestration.BoardExecutionInputResolver for NoExecutionInput with fn res
 
 ///|
 async test "headless orchestration composition does not start execution" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let board = @backend.BoardBackend()
     board.attach(group)
     assert_true(board.bootstrap_snapshot() is Ok(_))
