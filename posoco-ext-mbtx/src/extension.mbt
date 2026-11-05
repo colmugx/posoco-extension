@@ -1,7 +1,7 @@
 ///|
-/// Composable MBTX extension: the toolchain and status reporting belong to
-/// the extension rather than to the embedding product. Guest execution stays
-/// async via Runtime.run until a scoped Posoco Runtime bridge is connected.
+/// Composable MBTX extension: toolchain readiness is queried through a
+/// read-only command, never broadcast as a status/UI event. Guest execution
+/// stays async via Runtime.run until a scoped Posoco Runtime bridge is connected.
 pub struct MbtxExtension {
   runtime : Runtime
 }
