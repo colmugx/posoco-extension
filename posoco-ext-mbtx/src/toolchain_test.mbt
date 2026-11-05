@@ -46,7 +46,11 @@ async test "installed moon and moonx execute normal mbtx scripts with normal imp
         script_source,
         { "value": 42 },
         invocation_id="script",
-      )
+      ) catch {
+        @posoco-ext-mbtx.RuntimeError::GuestFailure(message) =>
+          fail("MBTX guest failed under " + launcher.to_repr().to_string() + ": " + message)
+        error => raise error
+      }
       assert_eq(
         result.outcome,
         @protocol.Success(content="script", structured=Some({ "value": 42 })),
