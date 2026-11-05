@@ -1,0 +1,9 @@
+import {
+  "colmugx/posoco/events",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "colmugx/posoco/events",
+  "colmugx/posoco/types",
+} for "wbtest"

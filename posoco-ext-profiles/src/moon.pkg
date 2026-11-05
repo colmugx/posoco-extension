@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco",
-  "posoco/devkit",
+  "posoco/kit-events" @kit_events,
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -9,6 +9,7 @@ import {
   "moonbitlang/async",
   "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
+  "posoco/kit-events" @kit_events,
 } for "wbtest"
 
 warnings = "-unused_package"

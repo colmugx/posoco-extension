@@ -3,6 +3,7 @@ import {
   "posoco/devkit",
   "colmugx/posoco-kit-rate-limit" @ratelimit,
   "posoco/kit-chat-completions" @chatkit,
+  "posoco/kit-events" @kit_events,
   "colmugx/posoco-kit-responses" @responses,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,

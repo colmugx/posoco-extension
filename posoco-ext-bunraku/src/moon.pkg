@@ -6,11 +6,13 @@ import {
   "colmugx/posoco-ext-mbtx/protocol",
   "moonbitlang/core/debug",
   "posoco/devkit",
+  "posoco/kit-events" @kit_events,
 }
 
 import {
   "moonbitlang/async",
   "posoco/devkit/testkit" @tk,
+  "posoco/kit-events" @kit_events,
 } for "test"
 
 supported_targets = "native + js"

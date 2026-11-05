@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-ext-board/internal/storage" @node_fs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -10,6 +11,7 @@ import {
 
 import {
   "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+  "moonbitlang/core/async" @core_async,
 } for "wbtest"
 
 supported_targets = "+native +js"
@@ -17,6 +19,7 @@ supported_targets = "+native +js"
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
   "native-stub": [ "truncate_stub.c" ],
   targets: {
     "file.native.mbt": [ "native" ],

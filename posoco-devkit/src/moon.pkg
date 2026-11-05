@@ -1,4 +1,6 @@
 import {
+  "colmugx/posoco",
+  "posoco/kit-events" @kit_events,
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/x/path",
@@ -6,6 +8,8 @@ import {
 
 import {
   "moonbitlang/async",
+  "colmugx/posoco",
+  "colmugx/posoco/events",
 } for "wbtest"
 
 options(

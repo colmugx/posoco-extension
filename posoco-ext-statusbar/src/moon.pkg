@@ -1,11 +1,13 @@
 import {
   "colmugx/posoco",
+  "posoco/kit-events" @kit_events,
   "posoco/devkit",
   "moonbitlang/core/debug",
 }
 
 import {
   "moonbitlang/async",
+  "colmugx/posoco/events",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 

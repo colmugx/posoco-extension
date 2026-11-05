@@ -4,8 +4,12 @@ import {
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/runtime",
   "colmugx/posoco-ext-board/service",
-  "moonbitlang/async",
+  "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
 }
 
 supported_targets = "+native +js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

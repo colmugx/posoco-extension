@@ -17,21 +17,25 @@ import {
   "colmugx/posoco-ext-board/workflow",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
 }
 
 import {
   "colmugx/posoco/kernel",
   "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+  "moonbitlang/core/async" @core_async,
 } for "test"
 
 import {
   "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+  "moonbitlang/core/async" @core_async,
 } for "wbtest"
 
 supported_targets = "+native+js"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
   targets: {
     "directory.native.mbt": [ "native" ],
     "directory.js.mbt": [ "js" ],

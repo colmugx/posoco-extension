@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "posoco/devkit",
+  "posoco/kit-events" @kit_events,
   "colmugx/posoco-kit-rate-limit" @ratelimit,
   "colmugx/posoco-kit-deepseek" @ds,
   "colmugx/posoco-ext-opencode-zen/compatible",

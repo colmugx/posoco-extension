@@ -11,6 +11,15 @@ import {
 
 import {
   "colmugx/posoco-ext-board/store",
+  "moonbitlang/core/async" @core_async,
 } for "test"
 
+import {
+  "moonbitlang/core/async" @core_async,
+} for "wbtest"
+
 supported_targets = "+native+js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

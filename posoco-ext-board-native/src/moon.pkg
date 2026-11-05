@@ -17,6 +17,7 @@ import {
 import {
   "moonbitlang/async/aqueue",
   "moonbitlang/async/socket",
+  "moonbitlang/core/async" @core_async,
   "moonbitlang/core/json",
   "colmugx/posoco-ext-board/domain",
 } for "wbtest"
@@ -25,6 +26,7 @@ supported_targets = "native"
 
 options(
   "native-stub": [ "random_stub.c" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
 )
 
 rule(

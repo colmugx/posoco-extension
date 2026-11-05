@@ -5,6 +5,14 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
   "moonbitlang/async/stdio" @system_stdio,
+  "moonbitlang/core/async" @core_async,
 }
 
 supported_targets = "native + wasm"
+
+// The registry loop is a fuwaroid actor: fuwaroid 0.4 spawns on posoco's
+// `moonbitlang/core/async` stack, so the invocation scope is a core task group.
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

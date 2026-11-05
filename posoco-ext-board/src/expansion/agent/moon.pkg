@@ -9,6 +9,11 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/domain",
+  "moonbitlang/core/async" @core_async,
 } for "test"
 
 supported_targets = "+native+js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
