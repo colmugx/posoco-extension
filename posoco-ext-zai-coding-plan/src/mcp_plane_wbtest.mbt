@@ -43,3 +43,30 @@ test "names without a usable separator are not ours" {
   inspect(zai_mcp_route("web_search_prime__") is None, content="true")
   inspect(zai_mcp_route("") is None, content="true")
 }
+
+///|
+test "tool descriptions extend the server text with priority guidance" {
+  let enriched = zai_mcp_tool_description(
+    "web_reader", "Fetch and Convert URL to Large Model Friendly Input.",
+  )
+  inspect(
+    enriched.contains("Fetch and Convert URL to Large Model Friendly Input."),
+    content="true",
+  )
+  inspect(enriched.contains("GLM Coding Plan priority tool"), content="true")
+  inspect(enriched.contains("rate-limited"), content="true")
+}
+
+///|
+test "an empty server description lands as guidance alone" {
+  inspect(
+    zai_mcp_tool_description("zread", ""),
+    content=zai_coding_plan_tool_guidance("zread").unwrap(),
+  )
+}
+
+///|
+test "a group without guidance keeps the server description untouched" {
+  inspect(zai_mcp_tool_description("soon", "raw"), content="raw")
+  inspect(zai_mcp_tool_description("soon", ""), content="")
+}

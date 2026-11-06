@@ -167,6 +167,19 @@ fn zai_mcp_failure(group : String, reason : String) -> String {
 }
 
 ///|
+/// Model-facing description for one namespaced tool: the server's own
+/// description extended with the group's priority guidance, so tool selection
+/// prefers the plan's official tools while the plane is published and knows to
+/// fall back on a rate limit or a scope miss. A group without guidance keeps
+/// the server text untouched; an empty server text lands as guidance alone.
+fn zai_mcp_tool_description(group : String, raw : String) -> String {
+  match zai_coding_plan_tool_guidance(group) {
+    Some(guidance) => if raw == "" { guidance } else { raw + "\n\n" + guidance }
+    None => raw
+  }
+}
+
+///|
 /// Connect every declared group and capture its tools. Groups connect
 /// sequentially: three servers is small enough that determinism (and an
 /// ordered failure list) beats parallel start-up, and a slow server must not
@@ -223,7 +236,10 @@ async fn HttpZaiMcp::open(
               name=@posoco.ToolName::unchecked(
                 zai_mcp_namespaced_tool(group.group, tool.name),
               ),
-              description=tool.description.unwrap_or(""),
+              description=zai_mcp_tool_description(
+                group.group,
+                tool.description.unwrap_or(""),
+              ),
               input_schema=tool.input_schema,
               owner=@posoco.OwnerId::unchecked(zai_coding_plan_tools_owner()),
               policy=@posoco.ExecutionPolicy::Parallel,

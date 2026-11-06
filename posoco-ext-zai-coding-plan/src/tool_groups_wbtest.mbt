@@ -89,6 +89,23 @@ test "a host with a port is used verbatim" {
 }
 
 ///|
+test "every declared group carries selection guidance, unknown groups do not" {
+  for group in zai_coding_plan_mcp_group_names() {
+    inspect(zai_coding_plan_tool_guidance(group) is Some(_), content="true")
+  }
+  inspect(zai_coding_plan_tool_guidance("soon") is None, content="true")
+}
+
+///|
+test "guidance names the fallback conditions: failure and out-of-scope" {
+  for group in zai_coding_plan_mcp_group_names() {
+    let guidance = zai_coding_plan_tool_guidance(group).unwrap()
+    inspect(guidance.contains("rate-limited"), content="true")
+    inspect(guidance.contains("fall back to other tools"), content="true")
+  }
+}
+
+///|
 test "inactive and withdrawing hide the segment" {
   inspect(ZaiToolsState::Inactive.segment_value() is None, content="true")
   inspect(

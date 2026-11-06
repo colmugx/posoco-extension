@@ -39,6 +39,31 @@ fn zai_coding_plan_mcp_group_title(group : String) -> String {
 }
 
 ///|
+/// Model-facing selection guidance per provider-owned server id: the need
+/// each group covers, the instruction to reach for it first, and the two
+/// conditions that license a fallback (the tool failing — e.g. rate-limited —
+/// or the need clearly missing its scope). Because the guidance travels inside
+/// the published tool descriptions, it follows the plane exactly: present
+/// while this provider is active, gone once the group is withdrawn.
+pub fn zai_coding_plan_tool_guidance(group : String) -> String? {
+  match group {
+    "web_search_prime" =>
+      Some(
+        "GLM Coding Plan priority tool: when the need is a web search or looking up external information, use this tool first and prefer it over other search tools; only if it fails (for example rate-limited) or the need is clearly outside web search, fall back to other tools.",
+      )
+    "web_reader" =>
+      Some(
+        "GLM Coding Plan priority tool: when a known URL or online page must be fetched and read, use this tool first and prefer it over other fetch/read tools; only if it fails (for example rate-limited) or the page cannot be fetched, fall back to other tools.",
+      )
+    "zread" =>
+      Some(
+        "GLM Coding Plan priority tools: when exploring a GitHub repository (structure, docs, issues, commits, source files), use these zread tools first and prefer them over generic fetch/search tools; only if they fail (for example rate-limited) or the repository cannot be resolved, fall back to other tools.",
+      )
+    _ => None
+  }
+}
+
+///|
 /// One declared remote MCP server.
 ///
 /// `group` is the provider-owned server id (also the tool namespace prefix the

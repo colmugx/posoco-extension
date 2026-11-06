@@ -38,6 +38,8 @@ pub fn zai_coding_plan_provider_id() -> String
 
 pub fn zai_coding_plan_quota_url(String) -> String
 
+pub fn zai_coding_plan_tool_guidance(String) -> String?
+
 pub fn zai_coding_plan_tools_owner() -> String
 
 pub fn zai_mcp_namespaced_tool(String, String) -> String
