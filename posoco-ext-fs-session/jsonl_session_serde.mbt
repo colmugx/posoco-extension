@@ -162,6 +162,7 @@ fn message_to_json(msg : @posoco.Message) -> Json {
         @posoco.FinishReason::Other(s) =>
           base["finish_reason"] = Json::string(s)
       }
+      base["finish_reason_v2"] = finish_json_v2(finish_reason)
       Json::object(base)
     }
     @posoco.Message::ToolMessage(call_id~, tool_name~, outcome~) => {
@@ -192,6 +193,7 @@ fn message_to_json(msg : @posoco.Message) -> Json {
       if outcome.is_failure() {
         base["is_error"] = Json::boolean(true)
       }
+      base["outcome_v2"] = outcome_json_v2(outcome)
       Json::object(base)
     }
   }
@@ -305,9 +307,14 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                   }
                   _ => None
                 }
-                let finish_reason = finish_reason_from_json(
-                  map.get("finish_reason"),
-                )
+                let finish_reason = match map.get("finish_reason_v2") {
+                  Some(raw) =>
+                    match finish_from_json_v2(raw) {
+                      Some(reason) => reason
+                      None => return None
+                    }
+                  None => finish_reason_from_json(map.get("finish_reason"))
+                }
                 Some(
                   @posoco.Message::AssistantMessage(
                     content~,
@@ -364,6 +371,14 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                         attachments~,
                       )
                     }
+                }
+                let outcome = match map.get("outcome_v2") {
+                  Some(raw) =>
+                    match outcome_from_json_v2(raw) {
+                      Some(parsed) => parsed
+                      None => return None
+                    }
+                  None => outcome
                 }
                 Some(
                   @posoco.Message::ToolMessage(
