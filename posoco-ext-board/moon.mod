@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-board"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.24.1",
+  "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-askquestion@0.1.0",
   "colmugx/fuwaroid@0.4.0",
   "moonbitlang/async@0.22.7",

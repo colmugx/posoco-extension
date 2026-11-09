@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-bunraku"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.24.1",
+  "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-mbtx@0.1.0",
   "posoco/devkit@0.4.1",
   "posoco/kit-events@0.1.0",
