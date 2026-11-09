@@ -199,6 +199,9 @@ pub fn snapshot_turn_event(event : @types.TurnEvent) -> @types.TurnEvent {
     UserRequestStarted(kind~, prompt~) =>
       UserRequestStarted(kind~, prompt=safe_error_label(prompt))
     UserRequestFinished(kind~, outcome~) => UserRequestFinished(kind~, outcome~)
+
+    // FIXME: TurnCancelled
+    t => t
   }
 }
 

@@ -304,6 +304,88 @@ fn store_contains_user_text(
 // ---------------------------------------------------------------------------
 
 ///|
+/// Content of a tool outcome, success or tool-reported error ("" otherwise).
+fn outcome_content(outcome : @posoco.ToolOutcome) -> String {
+  match outcome {
+    @posoco.ToolOutcome::Success(content~, ..) => content
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => content
+    _ => ""
+  }
+}
+
+///|
+/// String value of one `structured` field on a tool outcome; "" when the
+/// outcome carries no structured payload or no such string field.
+fn outcome_field(outcome : @posoco.ToolOutcome, key : String) -> String {
+  match outcome {
+    @posoco.ToolOutcome::Success(structured~, ..) =>
+      match structured {
+        Some(data) => json_string_field(data, key)
+        None => ""
+      }
+    _ => ""
+  }
+}
+
+///|
+/// `stop_subagent` call for the tool-context adapter.
+fn stop_call(child_session : String) -> @posoco.ToolCall {
+  {
+    call_id: @posoco.CallId::unchecked("stop-test"),
+    name: @posoco.ToolName::unchecked("stop_subagent"),
+    arguments: args_object([("child_session", Json::string(child_session))]),
+  }
+}
+
+///|
+fn any_input_contains(inputs : Array[String], needle : String) -> Bool {
+  for input in inputs {
+    if input.contains(needle) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// `background` is the default: omitted → background, explicit `true` →
+/// background, explicit `false` → the blocking foreground run. The type
+/// check is unchanged (a non-boolean is still an argument error).
+test "parse_spawn_args_defaults_to_background_and_honors_explicit_false" {
+  let omitted = parse_spawn_args(args_object([("task", Json::string("t"))]))
+  assert_true(omitted.background)
+  let explicit_true = parse_spawn_args(
+    args_object([
+      ("task", Json::string("t")),
+      ("background", Json::boolean(true)),
+    ]),
+  )
+  assert_true(explicit_true.background)
+  let explicit_false = parse_spawn_args(
+    args_object([
+      ("task", Json::string("t")),
+      ("background", Json::boolean(false)),
+    ]),
+  )
+  assert_false(explicit_false.background)
+  try {
+    ignore(
+      parse_spawn_args(
+        args_object([
+          ("task", Json::string("t")),
+          ("background", Json::string("yes")),
+        ]),
+      ),
+    )
+    fail("expected a background type error")
+  } catch {
+    SpawnArgError::Invalid(message) =>
+      assert_true(message.contains("'background' must be a boolean"))
+    _ => fail("expected a SpawnArgError")
+  }
+}
+
+///|
 async test "inheritance_reads_live_parent_selection_at_each_spawn" {
   let composer = FakeComposer::FakeComposer(response_text="ok")
   let active_slot = Ref("parent/a")
@@ -315,7 +397,14 @@ async test "inheritance_reads_live_parent_selection_at_each_spawn" {
 
   let first = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("first"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("first")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   assert_eq(composer.specs.length(), 1)
@@ -327,7 +416,14 @@ async test "inheritance_reads_live_parent_selection_at_each_spawn" {
 
   let second = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("second"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("second")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(second is @posoco.ToolOutcome::Success(_))
   assert_eq(composer.specs.length(), 2)
@@ -340,7 +436,7 @@ test "list_tools_declares_agent_schema_and_description" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
   let defs = @posoco.ToolProvider::list_tools(tools)
-  assert_eq(defs.length(), 2)
+  assert_eq(defs.length(), 3)
   let def = defs[0]
   assert_eq(def.name.to_string(), "subagent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
@@ -350,9 +446,13 @@ test "list_tools_declares_agent_schema_and_description" {
   assert_true(def.description.contains("NEVER copy task content"))
   assert_true(def.description.contains("default 30 minutes"))
   assert_true(def.description.contains("waiting_reply"))
-  assert_true(def.description.contains("background=true"))
+  assert_true(
+    def.description.contains("By default the child runs in the background"),
+  )
+  assert_true(def.description.contains("background=false"))
   assert_true(def.description.contains("acceptance receipt"))
   assert_true(def.description.contains("follow-up turn"))
+  assert_true(def.description.contains("stop_subagent"))
   match def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
@@ -369,6 +469,15 @@ test "list_tools_declares_agent_schema_and_description" {
       assert_true(properties.contains("timeout_ms"))
       assert_true(properties.contains("background"))
       assert_true(properties.contains("resume"))
+      guard properties.get("background") is Some(Json::Object(background)) else {
+        fail("background must be an object schema")
+      }
+      guard background.get("description") is Some(Json::String(background_desc)) else {
+        fail("background must carry a description")
+      }
+      // Background is the default: the schema must say so, not the old opt-in.
+      assert_true(background_desc.contains("default true"))
+      assert_false(background_desc.contains("default false"))
     }
     _ => fail("schema must be a JSON object")
   }
@@ -386,6 +495,27 @@ test "list_tools_declares_agent_schema_and_description" {
       assert_eq(required[0], Json::string("question_id"))
     }
     _ => fail("answer schema must be a JSON object")
+  }
+  let stop_def = defs[2]
+  assert_eq(stop_def.name.to_string(), "stop_subagent")
+  assert_true(stop_def.policy is @posoco.ExecutionPolicy::Sequential)
+  assert_true(stop_def.description.contains("requests the cancellation"))
+  assert_true(stop_def.description.contains("background=false"))
+  match stop_def.input_schema {
+    Json::Object(fields) => {
+      let required = match fields.get("required") {
+        Some(Json::Array(items)) => items
+        _ => fail("stop schema must declare a required array")
+      }
+      assert_eq(required.length(), 1)
+      assert_eq(required[0], Json::string("child_session"))
+      let properties = match fields.get("properties") {
+        Some(Json::Object(props)) => props
+        _ => fail("stop schema must declare properties")
+      }
+      assert_true(properties.contains("child_session"))
+    }
+    _ => fail("stop schema must be a JSON object")
   }
 }
 
@@ -503,6 +633,9 @@ fn seed_undelivered(
   tools.registry[child_session] = BackgroundRecord::BackgroundRecord(
     kind="coder",
   )
+  // Mirror the spawn-acceptance bookkeeping: the receipt also becomes the
+  // record's run identity, so its envelope is the one that may transition it.
+  tools.bind_run(child_session, task_id)
   tools.unobserved[task_id] = child_session
 }
 
@@ -611,6 +744,117 @@ test "observe_deliveries_acks_each_task_id_exactly_once" {
     outcome_envelope(task_id="task_2", detail="failed: exploded"),
   ])
   assert_eq(delivered.length(), 2)
+}
+
+// ---------------------------------------------------------------------------
+// Run identity at the delivery point: a terminal only transitions the run it
+// names. `stop` + `resume` leaves the replaced run's envelope in flight, and it
+// still reclaims that run's handle without touching its successor.
+// ---------------------------------------------------------------------------
+
+///|
+/// Stand-in `TaskHandle` for whitebox bookkeeping tests: only the receipt
+/// identity and the cancellation callback matter to the live-run registry.
+fn fake_handle(cancelled : Array[String]) -> @posoco.TaskHandle {
+  @posoco.TaskHandle::from_callbacks(
+    receipt={
+      id: "task_1",
+      session_id: "parent",
+      mode: @posoco.TaskMode::Background,
+      label: "subagent-1",
+      extension_id: "posoco_ext_subagent",
+    },
+    wait=async fn(_receipt) {
+      @async.pause()
+      abort("fake handle: wait is never called")
+    },
+    cancel=fn(receipt) { cancelled.push(receipt.id) },
+  )
+}
+
+///|
+/// Boolean value of one field in a `Custom` event's JSON payload; a missing
+/// field or non-boolean value projects to `false`.
+fn json_bool_field(data : Json, key : String) -> Bool {
+  match data {
+    Json::Object(fields) =>
+      match fields.get(key) {
+        Some(Json::True) => true
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
+test "terminal_of_a_superseded_run_is_delivered_once_without_polluting" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    question=Some(broker),
+  )
+  let events : Array[@kit.SubagentEvent] = []
+  tools.subscribe(fn(event) { events.push(event) })
+  seed_undelivered(tools, task_id="task_old", child_session="subagent-1")
+  tools.unobserved["task_new"] = "subagent-1"
+  tools.bind_run("subagent-1", "task_new")
+  let cancelled : Array[String] = []
+  tools.track_live("subagent-1", "task_new", fake_handle(cancelled))
+  // The resumed run parked its own question before the replaced run's
+  // `cancelled` envelope arrives.
+  let info = broker.register(
+    "subagent-1",
+    "child-call",
+    @posoco.UiRequest::Input(prompt="new?", default=None),
+  )
+  assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+  tools.observe_deliveries([
+    outcome_envelope(task_id="task_old", detail="cancelled: replaced by resume"),
+  ])
+  // Delivered exactly once, as its own run's terminal ...
+  let terminals = custom_payloads(events, want="background_terminal")
+  assert_eq(terminals.length(), 1)
+  assert_eq(json_string_field(terminals[0], "task_id"), "task_old")
+  assert_eq(json_string_field(terminals[0], "state"), "cancelled")
+  assert_true(json_bool_field(terminals[0], "superseded"))
+  assert_eq(custom_payloads(events, want="background_delivered").length(), 1)
+  // ... and the current run keeps its state, its question, and its handle.
+  assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+  assert_true(broker.lookup(info.id) is QuestionLookup::Open(_))
+  assert_eq(broker.take_queued().length(), 1)
+  assert_true(cancelled.is_empty())
+  match tools.live.get("subagent-1") {
+    Some(entry) => assert_eq(entry.task_id, "task_new")
+    None => fail("the current run must keep its handle")
+  }
+}
+
+///|
+test "repeat_terminal_of_a_finished_run_still_reclaims_its_handle" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let events : Array[@kit.SubagentEvent] = []
+  tools.subscribe(fn(event) { events.push(event) })
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  // An interactive run records its terminal in-wave (`finish`), long before
+  // the delivery channel hands over the same run's envelope.
+  match tools.registry.get("subagent-1") {
+    Some(record) => record.state = Done("completed", "in-wave finish")
+    None => fail("expected the seeded record")
+  }
+  let cancelled : Array[String] = []
+  tools.bind_run("subagent-1", "task_1")
+  tools.track_live("subagent-1", "task_1", fake_handle(cancelled))
+  tools.observe_deliveries([
+    outcome_envelope(task_id="task_1", detail="in-wave finish"),
+  ])
+  // The repeat is an idempotent no-op for the state and the authoritative
+  // event, but it reclaims the finished run's handle.
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+  assert_eq(custom_payloads(events, want="background_terminal").length(), 0)
+  assert_eq(custom_payloads(events, want="background_delivered").length(), 1)
+  assert_true(tools.live.get("subagent-1") is None)
 }
 
 // ---------------------------------------------------------------------------

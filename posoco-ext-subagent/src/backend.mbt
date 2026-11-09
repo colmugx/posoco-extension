@@ -164,9 +164,12 @@ fn parse_spawn_args(arguments : Json) -> SpawnArgs raise SpawnArgError {
     },
     resume_id: opt_string(fields, "resume"),
     timeout_ms,
+    // Background is the default: a spawn hands control back to the parent
+    // model immediately and the child's terminal arrives as a follow-up
+    // turn. Only an explicit `false` asks for the blocking foreground run.
     background: match opt_bool(fields, "background") {
       Some(value) => value
-      None => false
+      None => true
     },
   }
 }
@@ -263,10 +266,11 @@ fn SubagentTools::finish(
 }
 
 ///|
-/// Run one spawn: parse args, refuse background
-/// calls that lack the composed task capability or a known parent session
-/// before the budget gate (a refused call consumes no budget slot), validate
-/// `resume` against the child registry, then the budget gate, argument
+/// Run one spawn: parse args (background is the default; only an explicit
+/// `false` selects the blocking foreground run), refuse background calls that
+/// lack the composed task capability or a known parent session before the
+/// budget gate (a refused call consumes no budget slot), validate `resume`
+/// against the child registry, then the budget gate, argument
 /// slicing, child composition through the injected port, and either the
 /// background receipt (the child runs as an Agent-owned background task; its
 /// terminal arrives as a follow-up turn in the parent session) or a single
@@ -507,6 +511,16 @@ async fn SubagentTools::spawn(
         None => ""
       }
   }
+  // A resume replaces the previous run's record; keep it so every refusal and
+  // a failed submit restore it instead of leaving a ghost (a child that never
+  // ran, or the old run's terminal state silently lost).
+  let previous_record = self.registry.get(spec.session_id)
+  let restore_record = fn() {
+    match previous_record {
+      Some(previous) => self.registry[spec.session_id] = previous
+      None => self.registry.remove(spec.session_id)
+    }
+  }
   self.registry[spec.session_id] = BackgroundRecord::BackgroundRecord(
     kind=spec.kind_name,
     session=spawn_session,
@@ -522,7 +536,7 @@ async fn SubagentTools::spawn(
           Some(tasks) => tasks
           None => {
             self.global_slots.release()
-            self.registry.remove(spec.session_id)
+            restore_record()
             return @posoco.ToolOutcome::ToolReportedError(
               content="interactive children require the composed task capability — compose the agent with the posoco_ext_subagent manifest (requires Tasks) and run the host under Agent::run_scoped",
               structured=None,
@@ -535,7 +549,7 @@ async fn SubagentTools::spawn(
       None =>
         if spawn_session == "" {
           self.global_slots.release()
-          self.registry.remove(spec.session_id)
+          restore_record()
           return @posoco.ToolOutcome::ToolReportedError(
             content="interactive children require a known parent session — no scoped turn event has been observed yet, so the child's question and result would have nowhere to go",
             structured=None,
@@ -548,13 +562,24 @@ async fn SubagentTools::spawn(
       @posoco.Content::Text(spec.task),
     ])
     // The child owns its lifetime through its own run_scoped; the background
-    // runner does no registry or event bookkeeping —
-    // cancellation mid-run cannot guarantee it. Timeout and cancellation
-    // belong to core (TaskSpec.timeout_ms).
+    // runner does no registry or event bookkeeping beyond the live-handle
+    // reclamation — cancellation mid-run cannot guarantee the rest. Timeout
+    // and cancellation belong to core (TaskSpec.timeout_ms).
+    // `task_id_for_runner` is bound below, after the receipt exists; the
+    // runner reads it at exit time, so `stop_subagent` can reclaim the
+    // handle by identity instead of by child session alone.
+    let mut task_id_for_runner = ""
+    let mut runner_exited = false
     let runner : async () -> @posoco.Message = async fn() {
       // Ownership of the acquired global slot transfers to the background
       // task after submit succeeds. Release exactly once on every task exit.
-      errdefer self.global_slots.release()
+      // The handle reclamation rides the same edge (a cancelled run never
+      // reaches the return statement below).
+      errdefer {
+        runner_exited = true
+        self.global_slots.release()
+        self.mark_run_exited(spec.session_id, task_id_for_runner)
+      }
       let result : @posoco.TurnResult = child.run_scoped(async fn(agent) {
         if spec.resuming {
           agent.resume_turn(spec.session_id)
@@ -594,6 +619,8 @@ async fn SubagentTools::spawn(
       // without a pending cancellation it is a no-op yield.
       @async.pause()
       self.global_slots.release()
+      runner_exited = true
+      self.mark_run_exited(spec.session_id, task_id_for_runner)
       self.emit_exit(
         kind=spec.kind_name,
         child_session=spec.session_id,
@@ -615,6 +642,18 @@ async fn SubagentTools::spawn(
         self.unobserved[receipt.id] = spec.session_id
         // Slot ownership transfers to the child's runner at submit.
         slot_transferred = true
+        // Stop support: keep the cancellation handle per child session. Both
+        // statements are synchronous, so a runner that already exited either
+        // set the flag above (this record is then marked exited immediately)
+        // or has yet to run its own identity-guarded reclamation.
+        task_id_for_runner = receipt.id
+        self.track_live(spec.session_id, receipt.id, handle)
+        // The record now owns this receipt: only an envelope naming it may
+        // transition the child session's state or close its questions.
+        self.bind_run(spec.session_id, receipt.id)
+        if runner_exited {
+          self.mark_run_exited(spec.session_id, receipt.id)
+        }
         if !args.background {
           // Interactive foreground: hand control back on the first question
           // instead of returning an acceptance receipt.
@@ -644,6 +683,10 @@ async fn SubagentTools::spawn(
       }
       Err(error) => {
         self.global_slots.release()
+        // A refused submit admitted no work: the record registered above is a
+        // ghost (or a resume that clobbered the previous run's state), so it
+        // is rolled back before the refusal reaches the model.
+        restore_record()
         let reason = match error {
           @posoco.TaskSubmitError::Unavailable =>
             "the task scope is not active — run the host under Agent::run_scoped"
@@ -728,6 +771,13 @@ pub impl @posoco.ToolProvider for SubagentTools with fn execute(
       arguments: ctx.arguments,
     })
   }
+  if name == "stop_subagent" {
+    return self.stop({
+      call_id: ctx.call_id,
+      name: ctx.name,
+      arguments: ctx.arguments,
+    })
+  }
   if name != "subagent" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_subagent: unknown tool '\{name}'",
@@ -791,8 +841,17 @@ async fn SubagentTools::race_interactive(
     }
     Some(outcome) => outcome
   }
+  // The race is over either way: release its waiter so the next question of
+  // this child session (e.g. a background resume) queues for injection instead
+  // of vanishing into a cell nobody waits on. The asked path already consumed
+  // the waiter at registration; this is then a no-op.
+  self.question.disarm(armed)
   match raced {
     InteractiveOutcome::Terminal(outcome) => {
+      // The run is over before its envelope: reclaim the handle now, or a
+      // finished interactive child would stay "stoppable" until that repeat
+      // delivery lands.
+      self.forget_live(spec.session_id, task_id=handle.receipt().id)
       let state : @kit.TerminalState = match outcome.status {
         @posoco.TaskStatus::Completed(..) => @kit.TerminalState::Completed
         @posoco.TaskStatus::Failed(reason~) =>
@@ -1103,5 +1162,197 @@ fn SubagentTools::answer(
         ),
       )
     }
+  }
+}
+
+///|
+/// Parsed `stop_subagent` arguments: the child session id the spawn receipt
+/// advertised (no separate identity system).
+priv struct StopArgs {
+  child_session : String
+}
+
+///|
+fn parse_stop_args(arguments : Json) -> StopArgs raise SpawnArgError {
+  let fields = match arguments {
+    Json::Object(fields) => fields
+    _ =>
+      raise SpawnArgError::Invalid(
+        "stop_subagent: arguments must be a JSON object",
+      )
+  }
+  let child_session = match fields.get("child_session") {
+    Some(Json::String(value)) =>
+      if value.trim().is_empty() {
+        raise SpawnArgError::Invalid(
+          "stop_subagent: 'child_session' must be a non-empty string",
+        )
+      } else {
+        value
+      }
+    Some(_) =>
+      raise SpawnArgError::Invalid(
+        "stop_subagent: 'child_session' must be a string",
+      )
+    None =>
+      raise SpawnArgError::Invalid(
+        "stop_subagent: missing required 'child_session' argument",
+      )
+  }
+  { child_session, }
+}
+
+///|
+/// Success receipt of one `stop_subagent` call: the status word plus the
+/// child identity, so the model can correlate it with the spawn receipt.
+fn stop_receipt(
+  child_session~ : String,
+  kind~ : String,
+  task_id~ : String,
+  status~ : String,
+  note~ : String,
+) -> @posoco.ToolOutcome {
+  let task_line = if task_id == "" { "" } else { "task_id: \{task_id}\n" }
+  @posoco.ToolOutcome::Success(
+    content="status: \{status}\nchild_session: \{child_session}\nkind: \{kind}\n\{task_line}\{note}",
+    structured=Some(
+      Json::object({
+        "status": Json::string(status),
+        "child_session": Json::string(child_session),
+        "kind": Json::string(kind),
+        "task_id": if task_id == "" {
+          Json::null()
+        } else {
+          Json::string(task_id)
+        },
+      }),
+    ),
+  )
+}
+
+///|
+/// The `stop_subagent` tool: request cancellation of one child this parent
+/// spawned, without disturbing the parent's own turn or any sibling run.
+///
+/// The call is a *request*, never a terminal claim: the child stops at its
+/// next cancellation point and its authoritative `background_terminal`
+/// (state `cancelled`) still travels the existing delivery channel exactly
+/// once. Parked questions of the run are closed here — before the child's
+/// coroutine unwinds — so a stopped child can never be answered afterwards and
+/// no queued envelope survives to be injected on a later turn.
+///
+/// Every case that cannot be cancelled reports the real state instead of a
+/// fake success: an unknown id (with the known child sessions), a child of
+/// another parent session, a blocking foreground run (`background=false`,
+/// which has no separate handle), a run that already exited while its terminal
+/// is still undelivered, and a repeated stop.
+fn SubagentTools::stop(
+  self : SubagentTools,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolOutcome {
+  let args = parse_stop_args(call.arguments) catch {
+    SpawnArgError::Invalid(message) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content=message,
+        structured=None,
+      )
+  }
+  let record = match self.registry.get(args.child_session) {
+    Some(record) => record
+    None => {
+      let known : Array[String] = []
+      for known_id, _record in self.registry {
+        known.push(known_id)
+      }
+      let known_list = if known.is_empty() {
+        "(none spawned yet)"
+      } else {
+        known.join(", ")
+      }
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="unknown child_session '\{args.child_session}' — known child sessions: \{known_list}",
+        structured=None,
+      )
+    }
+  }
+  // Ownership boundary: a child belongs to the parent session that spawned it
+  // — its terminal and its questions are addressed there — so a stop arriving
+  // from another session is refused before anything is cancelled or claimed.
+  // Unknown attribution on either side (a foreground spawn from a host that
+  // had not observed a scoped turn yet) is not treated as a mismatch.
+  match self.session {
+    Some(current) =>
+      if record.session != "" && record.session != current {
+        return @posoco.ToolOutcome::ToolReportedError(
+          content="subagent '\{args.child_session}' was spawned by parent session '\{record.session}' — this call belongs to session '\{current}', so stopping it here is refused: its terminal and questions are delivered to the spawning session",
+          structured=None,
+        )
+      }
+    None => ()
+  }
+  let kind = record.kind
+  let state_word = record_state_word(record.state)
+  match self.live.get(args.child_session) {
+    None =>
+      if record.state is Done(_, _) {
+        // Terminal already recorded: idempotent, truthful no-op.
+        stop_receipt(
+          child_session=args.child_session,
+          kind~,
+          task_id="",
+          status="already_finished",
+          note="the child already finished (state: \{state_word}) — nothing to stop",
+        )
+      } else {
+        // Only a blocking foreground run without an asking face reaches here:
+        // it lives inside its spawning tool call and never had a task handle
+        // (an interactive `background=false` child is still an Agent-owned
+        // task and does have one).
+        @posoco.ToolOutcome::ToolReportedError(
+          content="subagent '\{args.child_session}' has no stoppable handle: it is a blocking foreground run (background=false) that lives inside its spawning tool call, so it cannot be stopped on its own — wait for its result or interrupt the parent turn",
+          structured=None,
+        )
+      }
+    Some(entry) =>
+      if entry.exited {
+        stop_receipt(
+          child_session=args.child_session,
+          kind~,
+          task_id=entry.task_id,
+          status="already_finished",
+          note="the child already exited (last known state: \{state_word}); its terminal arrives as a follow-up turn — nothing to stop",
+        )
+      } else if entry.cancel_requested {
+        stop_receipt(
+          child_session=args.child_session,
+          kind~,
+          task_id=entry.task_id,
+          status="cancellation_already_requested",
+          note="a cancellation is already pending for this run; the child is still shutting down and its terminal arrives as a follow-up turn",
+        )
+      } else {
+        // First-wins: mark before cancelling so a concurrent second stop can
+        // never issue a second cancellation for the same run.
+        entry.cancel_requested = true
+        entry.handle.cancel()
+        // Close the run's questions with the existing rejection sweep:
+        // pending asks become `Cancelled` (a late answer is refused with that
+        // reason) and un-injected queue entries are dropped, so nothing of
+        // this run can surface after the stop.
+        self.question.reject_child(args.child_session)
+        // A parked question is no longer being waited for; the child is
+        // dying, and the terminal below overwrites this state. Until then the
+        // projection must not claim the parent still owes an answer.
+        if record.state is WaitingReply(_) {
+          record.state = Running
+        }
+        stop_receipt(
+          child_session=args.child_session,
+          kind~,
+          task_id=entry.task_id,
+          status="cancellation_requested",
+          note="the child stops at its next cancellation point; its parked questions were closed and can no longer be answered, and its authoritative terminal (cancelled) arrives as a follow-up turn",
+        )
+      }
   }
 }

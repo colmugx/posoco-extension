@@ -68,8 +68,12 @@ priv struct PendingQuestion {
 /// One-shot signal the spawning `subagent` tool races on: completed exactly
 /// when the child registers its first question while the tool call is still
 /// live. `complete`'s first-wins result decides raced-vs-queued at
-/// registration, so no shadow info field is needed.
+/// registration, so no shadow info field is needed. The per-arm `id` lets the
+/// race release exactly the waiter it armed: a finished or cancelled race must
+/// never withdraw a newer arm of the same child session.
 priv struct ArmedWaiter {
+  child_session : String
+  id : String
   cell : @fuwaroid.OneShot[QuestionInfo]
 }
 
@@ -82,8 +86,11 @@ priv struct ArmedWaiter {
 pub struct QuestionBroker {
   priv answer_timeout_ms : Int64
   priv mut counter : Int32
+  /// Separate from `counter`: a question id stays what the receipt advertised
+  /// even though arming a race mints its own identity.
+  priv mut arm_counter : Int32
   priv pending : Map[String, PendingQuestion]
-  priv armed : Map[String, ArmedWaiter]
+  priv mut armed : Map[String, ArmedWaiter]
   priv mut queued : Array[QuestionInfo]
   priv queued_hooks : Array[(QuestionInfo) -> Unit]
 }
@@ -95,6 +102,7 @@ pub fn QuestionBroker::QuestionBroker(
   {
     answer_timeout_ms,
     counter: 0,
+    arm_counter: 0,
     pending: Map::from_array([]),
     armed: Map::from_array([]),
     queued: [],
@@ -182,9 +190,31 @@ fn QuestionBroker::arm(
   self : QuestionBroker,
   child_session : String,
 ) -> ArmedWaiter {
-  let waiter : ArmedWaiter = { cell: @fuwaroid.OneShot::OneShot(), }
+  self.arm_counter = self.arm_counter + 1
+  let waiter : ArmedWaiter = {
+    child_session,
+    id: "armed-\{self.arm_counter}",
+    cell: @fuwaroid.OneShot::OneShot(),
+  }
   self.armed[child_session] = waiter
   waiter
+}
+
+///|
+/// Release one race waiter once the race is over (terminal, or a cancelled
+/// wave). Identity-guarded: only the waiter that is still armed for that child
+/// session is removed. A leftover waiter is not harmless — it would hand the
+/// next question of the same child session to a cell nobody waits on, so the
+/// ask would neither return in-wave nor queue for injection, and the parent
+/// would never see it.
+fn QuestionBroker::disarm(self : QuestionBroker, waiter : ArmedWaiter) -> Unit {
+  match self.armed.get(waiter.child_session) {
+    Some(current) =>
+      if current.id == waiter.id {
+        self.armed.remove(waiter.child_session)
+      }
+    None => ()
+  }
 }
 
 ///|
@@ -348,6 +378,9 @@ fn QuestionBroker::reject_all(self : QuestionBroker) -> Unit {
     }
   }
   self.queued = []
+  // No race survives shutdown either: a waiter left armed would swallow a
+  // question registered after it (the accepts-to-a-dead-cell case).
+  self.armed = Map::from_array([])
 }
 
 ///|

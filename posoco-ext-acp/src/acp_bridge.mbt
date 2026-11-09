@@ -504,23 +504,14 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | CompactStarted(..)
     | CompactFinished(..)
     | OperationFinalized(..)
-    // 0.18.0 turn events: the bridge projects its own protocol surface;
-    // user-request lifecycle needs no ACP-side projection.
     | UserRequestStarted(..)
     | UserRequestFinished(..)
-    // 0.22.0: the request-declaration anchor carries no ACP counterpart;
-    // per-step timing is a host concern.
     | ModelRequestStarted
-    // 0.23.0: tool child declaration and catalog changes carry no ACP
-    // counterpart; the bridge projects its own protocol surface.
     | ToolChildDeclared(..)
     | ToolCatalogChanged(..)
-    // 0.24.0: queued-message delivery receipts settle the host's own
-    // submission bubble; the message body reaches the client through session
-    // content, so there is no ACP update to send. An undelivered message is
-    // reported by the client's own prompt lifecycle, not projected here.
     | MessageApplied(..)
-    | MessageUndelivered(..) => ()
+    | MessageUndelivered(..)
+    | TurnCancelled => ()
   }
 }
 

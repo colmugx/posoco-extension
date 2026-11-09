@@ -33,6 +33,12 @@ priv struct BackgroundRecord {
   /// Parent session that spawned this child: a queued question wakes the
   /// spawning session, never whichever session happens to run last.
   session : String
+  /// Terminal identity of the record's current run: the receipt id of the
+  /// Agent-owned task whose outcome envelope will name it, or `""` for a
+  /// blocking foreground run (which carries no envelope identity). The
+  /// delivery point compares it against the envelope's task id, because a
+  /// `stop` + `resume` leaves the replaced run's envelope in flight.
+  mut run_id : String
   mut state : BackgroundRecordState
 }
 
@@ -41,7 +47,91 @@ fn BackgroundRecord::BackgroundRecord(
   kind~ : String,
   session~ : String = "",
 ) -> BackgroundRecord {
-  { kind, session, state: Running, }
+  { kind, session, run_id: "", state: Running, }
+}
+
+///|
+/// Bind the terminal identity of the record's current run: the receipt id of
+/// the Agent-owned task the delivery channel will name. Called synchronously
+/// right after a successful submit, before any envelope of that run can be
+/// observed at `before_model`.
+fn SubagentTools::bind_run(
+  self : SubagentTools,
+  child_session : String,
+  task_id : String,
+) -> Unit {
+  match self.registry.get(child_session) {
+    Some(record) => record.run_id = task_id
+    None => ()
+  }
+}
+
+///|
+/// One live Agent-owned child run (background or interactive) and the local
+/// bookkeeping that keeps `stop_subagent` honest. `task_id` is the receipt
+/// identity: a resumed child session replaces this record, and the previous
+/// run's exit must not clobber the new one. `exited` marks a run whose task
+/// already ended although its terminal has not been delivered yet — such a
+/// run is no longer cancellable, and reporting it as one would be a lie.
+/// `cancel_requested` is first-wins so a repeated stop reports the request it
+/// already made instead of pretending a second one.
+priv struct LiveChild {
+  task_id : String
+  handle : @posoco.TaskHandle
+  mut cancel_requested : Bool
+  mut exited : Bool
+}
+
+///|
+/// Retain the cancellation handle of one submitted run under its child
+/// session (a resume of the same session replaces the previous run here).
+fn SubagentTools::track_live(
+  self : SubagentTools,
+  child_session : String,
+  task_id : String,
+  handle : @posoco.TaskHandle,
+) -> Unit {
+  self.live[child_session] = {
+    task_id,
+    handle,
+    cancel_requested: false,
+    exited: false,
+  }
+}
+
+///|
+/// Reclaim one run at true task exit (declaration point). Identity-guarded:
+/// a newer run of the same (resumed) child session keeps its own record.
+/// Best-effort only — the authoritative reclamation is the terminal below,
+/// because cancellation mid-run cannot guarantee this frame is reached.
+fn SubagentTools::mark_run_exited(
+  self : SubagentTools,
+  child_session : String,
+  task_id : String,
+) -> Unit {
+  match self.live.get(child_session) {
+    Some(entry) => if entry.task_id == task_id { entry.exited = true }
+    None => ()
+  }
+}
+
+///|
+/// Drop one run's record once its task is over (authoritative terminal
+/// delivered, or an interactive run's in-wave `finish`): a child whose run
+/// ended has nothing left to stop, and its envelope — if one still arrives —
+/// is an idempotent repeat.
+fn SubagentTools::forget_live(
+  self : SubagentTools,
+  child_session : String,
+  task_id~ : String,
+) -> Unit {
+  match self.live.get(child_session) {
+    Some(entry) =>
+      if entry.task_id == task_id {
+        self.live.remove(child_session)
+      }
+    None => ()
+  }
 }
 
 ///|
@@ -63,14 +153,20 @@ pub fn SubagentTools::background_children(
 ) -> Array[(String, String)] {
   let out : Array[(String, String)] = []
   for id, record in self.registry {
-    let word = match record.state {
-      Running => "running"
-      WaitingReply(_) => "waiting_reply"
-      Done(word, _) => word
-    }
-    out.push((id, word))
+    out.push((id, record_state_word(record.state)))
   }
   out
+}
+
+///|
+/// State word of one registry record, shared by the child snapshot above and
+/// the `stop_subagent` receipts.
+fn record_state_word(state : BackgroundRecordState) -> String {
+  match state {
+    Running => "running"
+    WaitingReply(_) => "waiting_reply"
+    Done(word, _) => word
+  }
 }
 
 ///|
@@ -418,7 +514,7 @@ fn SubagentTools::observe_deliveries(
       self.emit_delivered(task_id=id, child_session~)
       match parse_outcome_detail(text) {
         Some((state_word, summary)) =>
-          self.record_terminal(child_session, state_word, summary)
+          self.record_terminal(child_session, state_word, summary, task_id=id)
         None => ()
       }
     }
@@ -452,37 +548,84 @@ fn SubagentTools::emit_delivered(
 }
 
 ///|
-/// Registry update at the delivery point: only a record that exists and is
-/// not yet `Done` transitions (idempotent against re-delivery scans), the
-/// terminal event fires exactly once per child, and every parked question
-/// of the child is closed — a terminal child has no live asks.
+/// One `background_terminal` on the subscription channel. `task_id` names the
+/// exact run the terminal belongs to, and `superseded` marks the terminal of a
+/// run that a later `resume` already replaced: it is still delivered once, for
+/// its own run, but it never describes the current run of that child session.
+fn SubagentTools::emit_terminal(
+  self : SubagentTools,
+  child_session : String,
+  kind : String,
+  state_word : String,
+  summary : String,
+  task_id : String,
+  superseded~ : Bool,
+) -> Unit {
+  self.emit_custom(
+    child_session,
+    kind,
+    "background",
+    "background_terminal",
+    Json::object({
+      "child_session": Json::string(child_session),
+      "kind": Json::string(kind),
+      "state": Json::string(state_word),
+      "summary": Json::string(summary),
+      "task_id": Json::string(task_id),
+      "superseded": Json::boolean(superseded),
+    }),
+  )
+}
+
+///|
+/// Registry update at the delivery point: only the record's own run may
+/// transition it, and only while it is not yet `Done` (idempotent against
+/// re-delivery scans). The run's live handle is reclaimed on every delivery
+/// of that run — an interactive run records `Done` in-wave, long before its
+/// envelope arrives. A terminal that belongs to an already-replaced run is
+/// delivered as its own event but changes nothing of the current run: a
+/// `stop` + `resume` leaves the stopped run's envelope in flight, and it must
+/// not disarm the successor, close its parked questions, or rewrite its state.
 fn SubagentTools::record_terminal(
   self : SubagentTools,
   child_session : String,
   state_word : String,
   summary : String,
+  task_id~ : String,
 ) -> Unit {
   let record = match self.registry.get(child_session) {
     Some(record) => record
     None => return
   }
+  if record.run_id != task_id {
+    self.emit_terminal(
+      child_session,
+      record.kind,
+      state_word,
+      summary,
+      task_id,
+      superseded=true,
+    )
+    return
+  }
+  // The authoritative terminal ends this run's stoppability: `stop_subagent`
+  // now reports the real state word instead of a handle nobody can cancel.
+  // Identity-guarded — a resumed child session may already own a newer live
+  // run that this older envelope must not disarm.
+  self.forget_live(child_session, task_id~)
   match record.state {
     Done(_) => return
     Running | WaitingReply(_) => ()
   }
   self.question.drop_child(child_session)
   record.state = Done(state_word, summary)
-  self.emit_custom(
+  self.emit_terminal(
     child_session,
     record.kind,
-    "background",
-    "background_terminal",
-    Json::object({
-      "child_session": Json::string(child_session),
-      "kind": Json::string(record.kind),
-      "state": Json::string(state_word),
-      "summary": Json::string(summary),
-    }),
+    state_word,
+    summary,
+    task_id,
+    superseded=false,
   )
 }
 

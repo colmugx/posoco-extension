@@ -12,7 +12,12 @@ async test "agent_happy_path_returns_child_result_with_footer" {
   let outcome = @posoco.ToolProvider::execute(
     tools,
     test_ctx(
-      agent_call(args_object([("task", Json::string("write the tests"))])),
+      agent_call(
+        args_object([
+          ("task", Json::string("write the tests")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
     ),
   )
   match outcome {
@@ -124,7 +129,14 @@ async test "global_concurrency_caps_parallel_child_lifetimes" {
         group.spawn(async fn() {
           @posoco.ToolProvider::execute(
             tools,
-            test_ctx(agent_call(args_object([("task", Json::string(task))]))),
+            test_ctx(
+              agent_call(
+                args_object([
+                  ("task", Json::string(task)),
+                  ("background", Json::boolean(false)),
+                ]),
+              ),
+            ),
           )
         }),
       )
@@ -189,12 +201,18 @@ fn sibling_failure_wave() -> @posoco.ModelCallResult {
     {
       call_id: @posoco.CallId::unchecked("sibling-fail"),
       name: @posoco.ToolName::unchecked("subagent"),
-      arguments: args_object([("task", Json::string("explode"))]),
+      arguments: args_object([
+        ("task", Json::string("explode")),
+        ("background", Json::boolean(false)),
+      ]),
     },
     {
       call_id: @posoco.CallId::unchecked("sibling-ok"),
       name: @posoco.ToolName::unchecked("subagent"),
-      arguments: args_object([("task", Json::string("survive"))]),
+      arguments: args_object([
+        ("task", Json::string("survive")),
+        ("background", Json::boolean(false)),
+      ]),
     },
   ]
   @posoco.ModelCallResult::{
@@ -229,7 +247,14 @@ async test "spawn_budget_resets_at_each_parent_run" {
   for task in ["one", "two"] {
     let outcome = @posoco.ToolProvider::execute(
       tools,
-      test_ctx(agent_call(args_object([("task", Json::string(task))]))),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string(task)),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
     )
     assert_true(outcome is @posoco.ToolOutcome::Success(_))
   }
@@ -256,7 +281,14 @@ async test "spawn_budget_resets_at_each_parent_run" {
   assert_eq(tools.ledger.remaining(), 2)
   let next = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("three"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("three")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(next is @posoco.ToolOutcome::Success(_))
   assert_eq(tools.ledger.remaining(), 1)
@@ -271,13 +303,27 @@ async test "spawn_budget_exhaustion_refuses_explicitly" {
   )
   let first = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("first"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("first")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   match
     @posoco.ToolProvider::execute(
       tools,
-      test_ctx(agent_call(args_object([("task", Json::string("second"))]))),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("second")),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_eq(
@@ -347,6 +393,7 @@ async test "unknown_kind_lists_catalog_names" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("kind", Json::string("wizard")),
           ]),
         ),
@@ -373,6 +420,7 @@ async test "tools_argument_intersects_kind_whitelist_both_ways" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           (
             "tools",
             Json::array([
@@ -402,6 +450,7 @@ async test "empty_tool_intersection_errors_with_both_lists" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("kind", Json::string("explore")),
             ("tools", Json::array([Json::string("bash")])),
           ]),
@@ -432,6 +481,7 @@ async test "kind_binding_beats_config_default" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("porter")),
         ]),
       ),
@@ -457,6 +507,7 @@ async test "explicit_args_override_kind_binding" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("porter")),
           ("model", Json::string("zai/glm")),
           ("effort", Json::string("low")),
@@ -483,6 +534,7 @@ async test "default_model_applies_to_unbound_kinds" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("coder")),
         ]),
       ),
@@ -506,6 +558,7 @@ async test "unbound_kind_inherits_parent_when_no_default" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("coder")),
         ]),
       ),
@@ -526,6 +579,7 @@ async test "tools_absent_uses_kind_whitelist" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("explore")),
         ]),
       ),
@@ -548,6 +602,7 @@ async test "unbound_kind_face_inherits_default_as_none" {
   let model = BgParentModel::BgParentModel(
     agent_arguments=args_object([
       ("task", Json::string("t")),
+      ("background", Json::boolean(false)),
       ("kind", Json::string("loose")),
     ]),
     mid_sleep_ms=0,
@@ -568,6 +623,7 @@ async test "unbound_kind_face_inherits_default_as_none" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("loose")),
           ("tools", Json::array([Json::string("grep")])),
         ]),
@@ -589,6 +645,7 @@ async test "instructions_over_8192_chars_rejected" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("instructions", Json::string("x".repeat(8193))),
           ]),
         ),
@@ -613,6 +670,7 @@ async test "explicit_literal_model_falls_back_to_parent_effort" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("coder")),
           ("model", Json::string("zai/glm")),
         ]),
@@ -634,7 +692,14 @@ async test "composer_failure_maps_to_failed_terminal_state" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
       assert_true(content.contains("failed: no features left"))
@@ -676,7 +741,14 @@ async test "background_without_composed_capability_refused_and_does_not_consume_
   assert_eq(tools.ledger.acquired().length(), 0)
   let foreground = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("fg"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("fg")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(foreground is @posoco.ToolOutcome::Success(_))
 }
@@ -688,7 +760,14 @@ async test "skills_argument_maps_to_child_spec" {
   // absent and false → None
   let _ = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("t1"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t1")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   let _ = @posoco.ToolProvider::execute(
     tools,
@@ -696,6 +775,7 @@ async test "skills_argument_maps_to_child_spec" {
       agent_call(
         args_object([
           ("task", Json::string("t2")),
+          ("background", Json::boolean(false)),
           ("skills", Json::boolean(false)),
         ]),
       ),
@@ -708,6 +788,7 @@ async test "skills_argument_maps_to_child_spec" {
       agent_call(
         args_object([
           ("task", Json::string("t3")),
+          ("background", Json::boolean(false)),
           ("skills", Json::boolean(true)),
         ]),
       ),
@@ -720,6 +801,7 @@ async test "skills_argument_maps_to_child_spec" {
       agent_call(
         args_object([
           ("task", Json::string("t4")),
+          ("background", Json::boolean(false)),
           ("skills", Json::array([Json::string("alpha"), Json::string("beta")])),
         ]),
       ),
@@ -749,6 +831,7 @@ async test "resume_unknown_id_lists_known_children" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("resume", Json::string("ghost")),
           ]),
         ),
@@ -765,7 +848,14 @@ async test "resume_unknown_id_lists_known_children" {
   // unknown resume lists exactly that known set.
   let spawned = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(spawned is @posoco.ToolOutcome::Success(_))
   match
@@ -775,6 +865,7 @@ async test "resume_unknown_id_lists_known_children" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("resume", Json::string("ghost")),
           ]),
         ),
@@ -794,7 +885,14 @@ async test "resume_known_id_passes_session_id_through" {
   let tools = test_tools(composer=composer as &ChildComposer)
   let first = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("t1"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t1")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   let outcome = @posoco.ToolProvider::execute(
@@ -803,6 +901,7 @@ async test "resume_known_id_passes_session_id_through" {
       agent_call(
         args_object([
           ("task", Json::string("continue")),
+          ("background", Json::boolean(false)),
           ("resume", Json::string("subagent-1")),
         ]),
       ),
@@ -831,6 +930,7 @@ async test "timeout_ms_enforced_around_child_run" {
         agent_call(
           args_object([
             ("task", Json::string("t")),
+            ("background", Json::boolean(false)),
             ("timeout_ms", Json::number(100.0)),
           ]),
         ),
@@ -853,7 +953,14 @@ async test "bridge_observer_forwards_child_events_tagged" {
   ])
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
+        ]),
+      ),
+    ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
   let mut completed = 0
@@ -877,7 +984,12 @@ async test "unknown_tool_name_raises_unknown_tool" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
   // The name now rides the call itself, so the unknown name goes in the call.
-  let call = agent_call(args_object([("task", Json::string("t"))]))
+  let call = agent_call(
+    args_object([
+      ("task", Json::string("t")),
+      ("background", Json::boolean(false)),
+    ]),
+  )
   let stranger : @posoco.ToolCall = {
     call_id: call.call_id,
     name: @posoco.ToolName::unchecked("not_agent"),
@@ -1025,7 +1137,12 @@ async test "background_child_holds_global_slot_until_task_exit" {
         @posoco.ToolProvider::execute(
           tools,
           test_ctx(
-            agent_call(args_object([("task", Json::string("foreground-two"))])),
+            agent_call(
+              args_object([
+                ("task", Json::string("foreground-two")),
+                ("background", Json::boolean(false)),
+              ]),
+            ),
           ),
         )
       })
@@ -1614,6 +1731,9 @@ priv struct AskingComposer {
   ask_started : @async.Queue[Unit]?
   /// How many times the child asks before finishing.
   asks : Int32
+  /// Per-child override of `asks`, indexed by composition order (spawn and
+  /// resume alike): a test can make one run silent and its resume ask.
+  asks_per_run : Array[Int32]
   answers : Array[String]
   specs : Array[ChildSpec]
 }
@@ -1626,6 +1746,7 @@ fn AskingComposer::AskingComposer(
   ask_delay_ms~ : Int32 = 0,
   ask_started~ : @async.Queue[Unit]? = None,
   asks~ : Int32 = 1,
+  asks_per_run~ : Array[Int32] = [],
 ) -> AskingComposer {
   {
     channel,
@@ -1634,6 +1755,7 @@ fn AskingComposer::AskingComposer(
     ask_delay_ms,
     ask_started,
     asks,
+    asks_per_run,
     answers: [],
     specs: [],
   }
@@ -1655,8 +1777,12 @@ impl ChildComposer for AskingComposer with fn compose(
   }
   let exts : Array[&@posoco.Extension] = []
   if asks {
+    let ask_count = match self.asks_per_run.get(self.specs.length() - 1) {
+      Some(count) => count
+      None => self.asks
+    }
     let steps : Array[@tk.ScriptedModelStep] = []
-    for i in 0..<self.asks {
+    for i in 0..<ask_count {
       steps.push(
         @tk.ScriptedModelStep::Respond(
           @tk.tk_tool_call_response(
@@ -1812,6 +1938,7 @@ fn two_agent_wave(
       name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([
         ("task", Json::string(first_task)),
+        ("background", Json::boolean(false)),
         ("kind", Json::string("loose")),
       ]),
     },
@@ -1820,6 +1947,7 @@ fn two_agent_wave(
       name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([
         ("task", Json::string(second_task)),
+        ("background", Json::boolean(false)),
         ("kind", Json::string("loose")),
       ]),
     },
@@ -1856,6 +1984,7 @@ async test "interactive_child_roundtrip_input_question" {
         "spawn-1",
         args_object([
           ("task", Json::string("find the file")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("loose")),
         ]),
       ),
@@ -1919,6 +2048,7 @@ async test "interactive_child_select_validation_and_double_answer" {
         "spawn-1",
         args_object([
           ("task", Json::string("pick")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("loose")),
         ]),
       ),
@@ -2062,6 +2192,7 @@ async test "interactive_child_answer_deadline_times_out" {
         "spawn-1",
         args_object([
           ("task", Json::string("t")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("loose")),
         ]),
       ),
@@ -2139,6 +2270,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
             agent_call(
               args_object([
                 ("task", Json::string("will be cancelled")),
+                ("background", Json::boolean(false)),
                 ("kind", Json::string("loose")),
               ]),
             ),
@@ -2167,6 +2299,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
         agent_call(
           args_object([
             ("task", Json::string("asks then gets rejected")),
+            ("background", Json::boolean(false)),
             ("kind", Json::string("loose")),
           ]),
         ),
@@ -2195,6 +2328,7 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
         agent_call(
           args_object([
             ("task", Json::string("plain work")),
+            ("background", Json::boolean(false)),
             ("kind", Json::string("loose")),
             ("tools", Json::array([Json::string("grep")])),
           ]),
@@ -2385,6 +2519,7 @@ async test "interactive_child_second_question_flows_through_queue" {
         "spawn-1",
         args_object([
           ("task", Json::string("two questions")),
+          ("background", Json::boolean(false)),
           ("kind", Json::string("loose")),
         ]),
       ),
@@ -2433,4 +2568,974 @@ async test "interactive_child_second_question_flows_through_queue" {
     "subagent-1=first-answer", "subagent-1=second-answer",
   ])
   assert_eq(tools.background_children(), [("subagent-1", "completed")])
+}
+
+// ---------------------------------------------------------------------------
+// Background by default + `stop_subagent`: a spawn that omits `background`
+// is an Agent-owned background task (only an explicit `false` blocks), and
+// the parent can stop one child on its own without touching its turn, its
+// siblings, or the child's authoritative terminal (which still arrives
+// exactly once through the existing delivery channel).
+// ---------------------------------------------------------------------------
+
+///|
+/// One model response with two `subagent` calls that OMIT `background`: both
+/// children take the default (background) path.
+fn two_background_wave(
+  first_task : String,
+  second_task : String,
+) -> @posoco.ModelCallResult {
+  let calls : Array[@posoco.ToolCall] = [
+    {
+      call_id: @posoco.CallId::unchecked("bg-wave-a"),
+      name: @posoco.ToolName::unchecked("subagent"),
+      arguments: args_object([("task", Json::string(first_task))]),
+    },
+    {
+      call_id: @posoco.CallId::unchecked("bg-wave-b"),
+      name: @posoco.ToolName::unchecked("subagent"),
+      arguments: args_object([("task", Json::string(second_task))]),
+    },
+  ]
+  @posoco.ModelCallResult::{
+    completion: @posoco.Completion::Completion(
+      content=[],
+      tool_calls=calls,
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+      usage=None,
+    ),
+    processed_messages: [],
+  }
+}
+
+///|
+/// Scope used by the tests that drive the tool provider directly while still
+/// needing a parent session (background spawns address their result to it).
+fn direct_scope(session : String) -> @posoco.EventScope {
+  {
+    session_id: @posoco.SessionId::unchecked(session),
+    run_id: @posoco.RunId::unchecked("run-1"),
+    turn_id: @posoco.TurnId::unchecked("turn-1"),
+  }
+}
+
+///|
+async test "omitted_background_defaults_to_background_receipt_and_delivery" {
+  let composer = FakeComposer::FakeComposer(response_text="child did the thing")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      // No `background` argument at all: the default must be background.
+      @tk.tk_tool_call_response(
+        "subagent",
+        "spawn-default",
+        args_object([("task", Json::string("dig"))]),
+      ),
+      @tk.tk_stop_response("turn one done"),
+      @tk.tk_stop_response("turn two done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @tk.RecordingSessionPort::RecordingSessionPort()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@tk.tk_user_msg("go dig"), "parent_default_bg")
+    // The receipt came back in-wave, before the child's result existed.
+    assert_true(model.inputs[1].contains("background subagent accepted"))
+    assert_true(model.inputs[1].contains("child_session: subagent-1"))
+    assert_eq(model.states[1], [("subagent-1", "running")])
+    @async.sleep(300)
+    let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_default_bg")
+  })
+  // The child's terminal travelled the ordinary follow-up turn.
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+  assert_true(
+    store_contains_user_text(
+      store, "parent_default_bg", "[posoco-task-outcome id=",
+    ),
+  )
+  assert_true(any_input_contains(model.inputs, "child did the thing"))
+}
+
+///|
+async test "omitted_background_requires_the_composed_task_capability" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(
+        content.contains(
+          "background mode requires the composed task capability",
+        ),
+      )
+    _ => fail("expected the default background path to be refused")
+  }
+  // A refused call consumes no budget slot.
+  assert_eq(tools.ledger.acquired().length(), 0)
+}
+
+///|
+async test "stop_subagent_reports_argument_and_unknown_id_errors" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let missing = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx({
+      call_id: @posoco.CallId::unchecked("stop-missing"),
+      name: @posoco.ToolName::unchecked("stop_subagent"),
+      arguments: args_object([]),
+    }),
+  )
+  assert_true(
+    outcome_content(missing).contains("missing required 'child_session'"),
+  )
+  let empty = @posoco.ToolProvider::execute(tools, test_ctx(stop_call("  ")))
+  assert_true(
+    outcome_content(empty).contains(
+      "'child_session' must be a non-empty string",
+    ),
+  )
+  let wrong_type = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx({
+      call_id: @posoco.CallId::unchecked("stop-type"),
+      name: @posoco.ToolName::unchecked("stop_subagent"),
+      arguments: args_object([("child_session", Json::number(1.0))]),
+    }),
+  )
+  assert_true(outcome_content(wrong_type).contains("must be a string"))
+  // Unknown id on an empty registry: explicit, and it says what is known.
+  let unknown = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(stop_call("subagent-9")),
+  )
+  assert_true(
+    outcome_content(unknown).contains("unknown child_session 'subagent-9'"),
+  )
+  assert_true(outcome_content(unknown).contains("(none spawned yet)"))
+  // With one known child, the refusal lists it (owned children only).
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  let unknown_with_known = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(stop_call("subagent-9")),
+  )
+  assert_true(outcome_content(unknown_with_known).contains("subagent-1"))
+  assert_true(unknown_with_known is @posoco.ToolOutcome::ToolReportedError(_))
+}
+
+///|
+async test "stop_subagent_refuses_a_foreground_run_without_a_handle" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(composer=composer as &ChildComposer)
+  @async.with_task_group(async fn(group) {
+    let foreground = group.spawn(async fn() {
+      @posoco.ToolProvider::execute(
+        tools,
+        test_ctx(
+          agent_call(
+            args_object([
+              ("task", Json::string("blocking run")),
+              ("background", Json::boolean(false)),
+            ]),
+          ),
+        ),
+      )
+    })
+    ignore(probe.entered.get())
+    // The child is running, but it belongs to the spawning tool call: there
+    // is no separate handle, and the refusal must say so instead of
+    // pretending a cancellation was requested.
+    let stopped = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    match stopped {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+        assert_true(content.contains("no stoppable handle"))
+        assert_true(content.contains("background=false"))
+      }
+      _ => fail("expected the foreground run to be refused")
+    }
+    probe.release.put(())
+    assert_true(foreground.wait() is @posoco.ToolOutcome::Success(_))
+  })
+}
+
+///|
+/// The core stop contract: only the named child dies, siblings and the parent
+/// keep running, the slot of the stopped run is released, the authoritative
+/// terminal is `cancelled` and arrives exactly once, and a repeated stop
+/// reports the request it already made.
+async test "stop_subagent_cancels_only_the_named_child" {
+  let events : Array[@kit.SubagentEvent] = []
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_global_concurrency(2),
+    observers=[fn(event) { events.push(event) }],
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      two_background_wave("first worker", "second worker"),
+      @tk.tk_stop_response("turn one done"),
+      @tk.tk_tool_call_response(
+        "stop_subagent",
+        "stop-1",
+        args_object([("child_session", Json::string("subagent-1"))]),
+      ),
+      @tk.tk_stop_response("turn two done"),
+      @tk.tk_stop_response("turn three done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let parent = build_parent_agent(
+    tools,
+    model as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_stop")
+    // Both default-background children are live and inside their model call.
+    ignore(probe.entered.get())
+    ignore(probe.entered.get())
+    assert_eq(probe.peak, 2)
+    assert_eq(tools.background_children(), [
+      ("subagent-1", "running"),
+      ("subagent-2", "running"),
+    ])
+    let _ = agent.run_turn(@tk.tk_user_msg("stop the first"), "parent_stop")
+    // A second stop is idempotent: the request is reported, not re-issued.
+    let again = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    let again_text = outcome_content(again)
+    assert_false(again_text.contains("status: cancellation_requested"))
+    assert_true(
+      again_text.contains("status: cancellation_already_requested") ||
+      again_text.contains("status: already_finished"),
+    )
+    @async.sleep(300)
+    // The stopped run released its slot; the sibling still holds its own.
+    assert_true(tools.global_slots.try_acquire())
+    assert_false(tools.global_slots.try_acquire())
+    tools.global_slots.release()
+    // The terminal travels the ordinary delivery turn, for that child only.
+    let _ = agent.run_turn(@tk.tk_user_msg("next"), "parent_stop")
+    assert_eq(tools.background_children(), [
+      ("subagent-1", "cancelled"),
+      ("subagent-2", "running"),
+    ])
+  })
+  // The two children were requested, and no extra spawn happened.
+  assert_eq(composer.specs.length(), 2)
+  assert_true(any_input_contains(model.inputs, "cancellation_requested"))
+  assert_true(any_input_contains(model.inputs, "label=subagent-1: cancelled"))
+  // Exactly one authoritative terminal for the stopped child, and no terminal
+  // for the sibling that is still running when the scope ends.
+  let terminals = custom_payloads(events, want="background_terminal")
+  assert_eq(terminals.length(), 1)
+  assert_eq(json_string_field(terminals[0], "child_session"), "subagent-1")
+  assert_eq(json_string_field(terminals[0], "state"), "cancelled")
+  // Returning from the scope killed the survivor; its slot is back too.
+  assert_true(tools.global_slots.try_acquire())
+  tools.global_slots.release()
+}
+
+///|
+/// A stopped child's parked question is closed before the coroutine unwinds:
+/// the answer is refused with the cancellation reason, the queued envelope is
+/// dropped instead of being injected on a later turn, and the child observed a
+/// cancelled ask rather than an answer.
+async test "stop_subagent_closes_questions_and_blocks_late_answers" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="stop me?", default=None),
+    finish_text="never reached",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_stop_q")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    // No `background` argument: the default already runs it as a task.
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask then wait")),
+            ("kind", Json::string("loose")),
+          ]),
+        ),
+      ),
+    )
+    assert_true(spawned is @posoco.ToolOutcome::Success(_))
+    let task_id = outcome_field(spawned, "task_id")
+    assert_true(task_id != "")
+    @async.sleep(300)
+    // The child's ask queued itself (no live race carried it).
+    let injected = tools.inject_queued_questions([])
+    assert_eq(injected.length(), 1)
+    let injected_text = message_text(injected[0])
+    assert_true(injected_text.contains("[subagent-question"))
+    assert_true(injected_text.contains("question-1"))
+    assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+    let stopped = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(
+      outcome_content(stopped).contains("status: cancellation_requested"),
+    )
+    // Nothing of the run can be answered or injected any more.
+    assert_eq(tools.background_children(), [("subagent-1", "running")])
+    let late = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("too late")),
+        ]),
+      ),
+    )
+    match late {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+        assert_true(content.contains("cancelled"))
+      _ => fail("expected the stopped question to be refused")
+    }
+    assert_eq(tools.inject_queued_questions([]).length(), 0)
+    @async.sleep(300)
+    // The child saw its ask cancelled and died; the authoritative terminal is
+    // the ordinary delivered `cancelled` envelope, exactly once.
+    assert_eq(composer.answers, ["subagent-1=cancelled"])
+    tools.observe_deliveries([
+      outcome_envelope(task_id~, detail="cancelled: task cancelled"),
+    ])
+    assert_eq(tools.background_children(), [("subagent-1", "cancelled")])
+  })
+}
+
+///|
+/// Stop, then resume the same child session: the new run replaces the old
+/// record, arms a fresh question race, and the new question is answerable —
+/// the stopped run's questions and handles do not swallow it.
+async test "stop_then_resume_arms_a_fresh_run_and_question" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="again?", default=None),
+    finish_text="second run done",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_stop_resume")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask then wait")),
+            ("kind", Json::string("loose")),
+          ]),
+        ),
+      ),
+    )
+    let first_task_id = outcome_field(spawned, "task_id")
+    @async.sleep(300)
+    assert_eq(tools.inject_queued_questions([]).length(), 1)
+    let stopped = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(outcome_content(stopped).contains("cancellation_requested"))
+    @async.sleep(300)
+    // Foreground resume of the SAME child session: a fresh interactive race,
+    // so the first question of the new run comes back in-wave.
+    let resumed = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask again")),
+            ("kind", Json::string("loose")),
+            ("resume", Json::string("subagent-1")),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
+    )
+    let resumed_text = outcome_content(resumed)
+    assert_true(resumed_text.contains("waiting_reply"))
+    assert_true(resumed_text.contains("question-2"))
+    let answered = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("fresh answer")),
+        ]),
+      ),
+    )
+    assert_true(answered is @posoco.ToolOutcome::Success(_))
+    @async.sleep(300)
+    // The stopped run was cancelled, the resumed one was answered and ran on.
+    assert_eq(composer.answers, [
+      "subagent-1=cancelled", "subagent-1=fresh answer",
+    ])
+    // The retained handle belongs to the NEW run, with no stale cancel flag.
+    match tools.live.get("subagent-1") {
+      Some(entry) => {
+        assert_true(entry.task_id != first_task_id)
+        assert_false(entry.cancel_requested)
+      }
+      None => fail("expected the resumed run's handle to be retained")
+    }
+  })
+}
+
+///|
+/// Real state, never a fake success: a child that already exited (before or
+/// after its terminal was delivered) reports that instead of a cancellation.
+async test "stop_subagent_reports_finished_states_truthfully" {
+  let composer = FakeComposer::FakeComposer(response_text="finished fast")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_stop_finished")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(agent_call(args_object([("task", Json::string("quick"))]))),
+    )
+    assert_true(spawned is @posoco.ToolOutcome::Success(_))
+    let task_id = outcome_field(spawned, "task_id")
+    @async.sleep(300)
+    // Exited, terminal not delivered yet: not stoppable, and the receipt says
+    // so instead of claiming a cancellation.
+    let before_delivery = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(
+      outcome_content(before_delivery).contains("status: already_finished"),
+    )
+    assert_true(outcome_content(before_delivery).contains("already exited"))
+    // After delivery the terminal state is the truthful answer.
+    tools.observe_deliveries([
+      outcome_envelope(task_id~, detail="finished fast"),
+    ])
+    assert_eq(tools.background_children(), [("subagent-1", "completed")])
+    let after_delivery = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(
+      outcome_content(after_delivery).contains("status: already_finished"),
+    )
+    assert_true(outcome_content(after_delivery).contains("state: completed"))
+    // The handle is gone: nothing is left that could be cancelled.
+    assert_true(tools.live.get("subagent-1") is None)
+  })
+}
+
+///|
+/// Completion racing a stop: whichever side wins, the receipt must stay
+/// truthful (a stop only claims a request it actually issued) and the run can
+/// never be cancelled twice — the exit marker removes it from the stoppable
+/// set before the authoritative terminal is even delivered.
+async test "stop_racing_an_immediate_completion_never_double_requests" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_stop_race")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(agent_call(args_object([("task", Json::string("racy"))]))),
+    )
+    assert_true(spawned is @posoco.ToolOutcome::Success(_))
+    ignore(probe.entered.get())
+    // Release the child and stop it in the same synchronous window: the two
+    // orderings are both legitimate, so the assertions below only pin what
+    // must hold either way.
+    probe.release.put(())
+    let stop = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    let status = outcome_field(stop, "status")
+    assert_true(
+      status == "cancellation_requested" || status == "already_finished",
+    )
+    @async.sleep(300)
+    // The run left the stoppable set exactly once: no second request, ever.
+    let second = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_false(
+      outcome_content(second).contains("status: cancellation_requested"),
+    )
+    match tools.live.get("subagent-1") {
+      Some(entry) => assert_true(entry.exited)
+      None => ()
+    }
+  })
+}
+
+///|
+/// `resume` follows the same default as a fresh spawn: omitting `background`
+/// continues the existing child session as an Agent-owned background task.
+async test "resume_omitting_background_takes_the_background_default" {
+  let composer = FakeComposer::FakeComposer(response_text="resumed fine")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_resume_default")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    // A foreground run creates the resumable child session.
+    let first = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("first pass")),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
+    )
+    assert_true(first is @posoco.ToolOutcome::Success(_))
+    @async.sleep(50)
+    let resumed = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("second pass")),
+            ("resume", Json::string("subagent-1")),
+          ]),
+        ),
+      ),
+    )
+    assert_true(
+      outcome_content(resumed).contains("background subagent accepted"),
+    )
+    assert_eq(outcome_field(resumed, "child_session"), "subagent-1")
+    assert_true(outcome_field(resumed, "task_id") != "")
+    // One child session, two runs: the resumed one owns the live handle.
+    assert_eq(composer.specs.length(), 2)
+    assert_true(composer.specs[1].resuming)
+    assert_true(tools.live.get("subagent-1") is Some(_))
+  })
+}
+
+///|
+/// The run identity guard, end to end: stop a run, resume the same child
+/// session, let the new run ask, and only then deliver the stopped run's
+/// `cancelled` envelope. The old terminal is still delivered exactly once as
+/// its own run's terminal, but it must not disarm the new run, close its
+/// question, or rewrite its state.
+async test "superseded_terminal_never_pollutes_the_resumed_run" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="still there?", default=None),
+    finish_text="second run done",
+  )
+  let events : Array[@kit.SubagentEvent] = []
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+    observers=[fn(event) { events.push(event) }],
+  )
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_superseded")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask then wait")),
+            ("kind", Json::string("loose")),
+          ]),
+        ),
+      ),
+    )
+    let first_task_id = outcome_field(spawned, "task_id")
+    assert_true(first_task_id != "")
+    @async.sleep(300)
+    // Run one's ask queued itself (no live race carried it).
+    assert_eq(tools.inject_queued_questions([]).length(), 1)
+    let stopped = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(
+      outcome_content(stopped).contains("status: cancellation_requested"),
+    )
+    @async.sleep(300)
+    // Resume the same child session as the default background run.
+    let resumed = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask again")),
+            ("kind", Json::string("loose")),
+            ("resume", Json::string("subagent-1")),
+          ]),
+        ),
+      ),
+    )
+    let second_task_id = outcome_field(resumed, "task_id")
+    assert_true(second_task_id != "")
+    assert_true(second_task_id != first_task_id)
+    @async.sleep(300)
+    let injected = tools.inject_queued_questions([])
+    assert_eq(injected.length(), 1)
+    assert_true(message_text(injected[0]).contains("question-2"))
+    assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+    // Only now does the stopped run's envelope arrive.
+    tools.observe_deliveries([
+      outcome_envelope(
+        task_id=first_task_id,
+        detail="cancelled: cancelled by the parent",
+      ),
+    ])
+    // Delivered once, as its own run's terminal ...
+    let terminals = custom_payloads(events, want="background_terminal")
+    assert_eq(terminals.length(), 1)
+    assert_eq(json_string_field(terminals[0], "task_id"), first_task_id)
+    assert_eq(json_string_field(terminals[0], "state"), "cancelled")
+    assert_true(json_bool_field(terminals[0], "superseded"))
+    // ... and nothing of the resumed run was touched.
+    assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+    match tools.live.get("subagent-1") {
+      Some(entry) => {
+        assert_eq(entry.task_id, second_task_id)
+        assert_false(entry.cancel_requested)
+        assert_false(entry.exited)
+      }
+      None => fail("the resumed run must still own its handle")
+    }
+    // The new question was not closed with the old run's terminal.
+    let answered = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("still here")),
+        ]),
+      ),
+    )
+    assert_true(answered is @posoco.ToolOutcome::Success(_))
+    @async.sleep(300)
+    assert_eq(composer.answers, [
+      "subagent-1=cancelled", "subagent-1=still here",
+    ])
+    // The resumed run's own terminal still lands normally.
+    tools.observe_deliveries([
+      outcome_envelope(task_id=second_task_id, detail="second run done"),
+    ])
+    assert_eq(tools.background_children(), [("subagent-1", "completed")])
+    assert_true(tools.live.get("subagent-1") is None)
+    assert_eq(custom_payloads(events, want="background_terminal").length(), 2)
+  })
+}
+
+///|
+/// A refused submit admitted no work: the record registered before the
+/// hand-off is rolled back instead of leaving a ghost child — and a refused
+/// resume keeps the terminal state of the run it was continuing.
+async test "submit_failure_leaves_no_ghost_registry_record" {
+  let composer = FakeComposer::FakeComposer(response_text="never runs")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  tools.tasks = Some(
+    @posoco.Tasks::from_submit(submit=fn(
+      _spec : @posoco.TaskSpec,
+    ) -> Result[@posoco.TaskHandle, @posoco.TaskSubmitError] {
+      Err(@posoco.TaskSubmitError::QueueFull)
+    }),
+  )
+  @posoco.Observer::on_event(
+    tools,
+    Some(direct_scope("parent_ghost")),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  let refused = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(agent_call(args_object([("task", Json::string("quick"))]))),
+  )
+  assert_true(outcome_content(refused).contains("background subagent refused"))
+  assert_true(outcome_content(refused).contains("task queue is full"))
+  // No ghost: the child never existed, so nothing lists it ...
+  assert_eq(tools.background_children(), [])
+  assert_true(tools.live.get("subagent-1") is None)
+  // ... and a resume of that id is rejected instead of "accepted".
+  let resume_of_ghost = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("again")),
+          ("resume", Json::string("subagent-1")),
+        ]),
+      ),
+    ),
+  )
+  assert_true(
+    outcome_content(resume_of_ghost).contains("unknown resume id 'subagent-1'"),
+  )
+  // A refused resume keeps the previous run's recorded terminal.
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-2")
+  match tools.registry.get("subagent-2") {
+    Some(record) => record.state = Done("completed", "previous run")
+    None => fail("expected the seeded record")
+  }
+  let refused_resume = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("continue")),
+          ("resume", Json::string("subagent-2")),
+        ]),
+      ),
+    ),
+  )
+  assert_true(
+    outcome_content(refused_resume).contains("background subagent refused"),
+  )
+  assert_eq(tools.background_children(), [("subagent-2", "completed")])
+}
+
+///|
+/// An interactive foreground run that finishes without ever asking must
+/// release its race waiter: otherwise the resumed background run's question is
+/// handed to a cell nobody waits on — neither returned in-wave nor queued — and
+/// the parent never sees it.
+async test "foreground_finish_without_a_question_keeps_the_resume_question" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="resumed ask?", default=None),
+    finish_text="quiet run done",
+    asks_per_run=[0, 1],
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_quiet_first")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    // Run one: blocking foreground, interactive face, and it never asks.
+    let first = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("just work")),
+            ("kind", Json::string("loose")),
+            ("background", Json::boolean(false)),
+          ]),
+        ),
+      ),
+    )
+    assert_true(outcome_content(first).contains("child_session: subagent-1"))
+    assert_eq(tools.background_children(), [("subagent-1", "completed")])
+    // The finished run owns neither a race waiter nor a handle any more.
+    assert_true(broker.armed.get("subagent-1") is None)
+    assert_true(tools.live.get("subagent-1") is None)
+    // Its resume takes the background default and asks one question: that
+    // question must reach the injection queue of the parent.
+    let resumed = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("ask now")),
+            ("kind", Json::string("loose")),
+            ("resume", Json::string("subagent-1")),
+          ]),
+        ),
+      ),
+    )
+    assert_true(
+      outcome_content(resumed).contains("background subagent accepted"),
+    )
+    let task_id = outcome_field(resumed, "task_id")
+    @async.sleep(300)
+    let injected = tools.inject_queued_questions([])
+    assert_eq(injected.length(), 1)
+    assert_true(message_text(injected[0]).contains("question-1"))
+    assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
+    let answered = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("later answer")),
+        ]),
+      ),
+    )
+    assert_true(answered is @posoco.ToolOutcome::Success(_))
+    @async.sleep(300)
+    assert_eq(composer.answers, ["subagent-1=later answer"])
+    tools.observe_deliveries([
+      outcome_envelope(task_id~, detail="quiet run done"),
+    ])
+    assert_eq(tools.background_children(), [("subagent-1", "completed")])
+  })
+}
+
+///|
+/// Ownership boundary: a child belongs to the parent session that spawned it,
+/// so a stop arriving from another session is refused before anything is
+/// cancelled — and the same call from the spawning session is a real request.
+async test "stop_refuses_a_child_spawned_by_another_parent_session" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let parent = build_parent_agent(
+    tools,
+    @tk.ScriptedModel([]) as &@posoco.ModelPort,
+    @tk.RecordingSessionPort::RecordingSessionPort(),
+  )
+  let _ = parent.run_scoped(async fn(_agent) {
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_owner_a")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let spawned = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(agent_call(args_object([("task", Json::string("mine"))]))),
+    )
+    assert_true(spawned is @posoco.ToolOutcome::Success(_))
+    ignore(probe.entered.get())
+    // Another parent session may not stop this run.
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_owner_b")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let foreign = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    match foreign {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+        assert_true(content.contains("parent_owner_a"))
+        assert_true(content.contains("parent_owner_b"))
+      }
+      _ => fail("expected a cross-session stop to be refused")
+    }
+    // Nothing was cancelled, and nothing claims otherwise.
+    match tools.live.get("subagent-1") {
+      Some(entry) => assert_false(entry.cancel_requested)
+      None => fail("expected the run to still be live")
+    }
+    assert_eq(tools.background_children(), [("subagent-1", "running")])
+    // From the spawning session the same call is a real request.
+    @posoco.Observer::on_event(
+      tools,
+      Some(direct_scope("parent_owner_a")),
+      @posoco.TurnEvent::TurnStarted,
+    )
+    let own = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(stop_call("subagent-1")),
+    )
+    assert_true(outcome_content(own).contains("status: cancellation_requested"))
+    @async.sleep(100)
+  })
 }
