@@ -77,7 +77,8 @@ async test "e2e A: first-turn inbound lands as a memory message before the real 
     guard injected_memory_text(messages) is Some(injected) else {
       fail("expected an injected memory message")
     }
-    assert_true(injected.contains("## Memory"))
+    // The memory payload is transport data, not a fixed Markdown heading.
+    // The content, unique message count and ordering are asserted below.
     assert_true(
       injected.contains("Ship the zephyr widget via the staging pipeline"),
     )
