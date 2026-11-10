@@ -6,7 +6,9 @@ import {
 
 // async/fs backs the native journal twins; the js twins use @node_fs.
 #cfg(target = "native")
-import { "moonbitlang/async/fs" @fs }
+import {
+  "moonbitlang/async/fs",
+}
 
 #cfg(target = "js")
 import {

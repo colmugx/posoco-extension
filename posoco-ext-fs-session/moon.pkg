@@ -15,13 +15,14 @@ import {
 // node:fs envelope and x/fs instead.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs" @fs,
-  "moonbitlang/async/io" @io,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
   "moonbitlang/x/fs" @xfs,
 }
 
 // `async test` requires the root `moonbitlang/async` import but never names it
 // through the alias, so every target reports it unused.
+
 warnings = "-unused_package"
 
 options(

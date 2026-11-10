@@ -11,4 +11,5 @@ import {
 
 // `async test` requires the root `moonbitlang/async` import but never names it
 // through the alias, so it always reads as unused.
+
 warnings = "-unused_package"

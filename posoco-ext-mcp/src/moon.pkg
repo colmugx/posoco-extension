@@ -16,7 +16,9 @@ import {
 // async/fs backs the native config reader; the js twin reads through the
 // node:fs envelope.
 #cfg(not(target = "js"))
-import { "moonbitlang/async/fs" @fs }
+import {
+  "moonbitlang/async/fs",
+}
 
 supported_targets = "+native+js"
 

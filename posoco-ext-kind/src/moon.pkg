@@ -10,7 +10,9 @@ import {
 // async/fs backs the filesystem probe on native and wasm; the js twin uses
 // node:fs.
 #cfg(not(target = "js"))
-import { "moonbitlang/async/fs" @fs }
+import {
+  "moonbitlang/async/fs",
+}
 
 import {
   "moonbitlang/async",
@@ -18,6 +20,7 @@ import {
 
 // `async test` requires the root `moonbitlang/async` import but never names it
 // through the alias, so js/wasm checks report it unused.
+
 warnings = "-unused_package"
 
 options(

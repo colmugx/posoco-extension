@@ -21,16 +21,20 @@ import {
 // Native-only transports: async/fs (plus the wasm cache dump), the WebSocket
 // client and the gzip codec. The js WebSocket twin uses the Bun FFI.
 #cfg(not(target = "js"))
-import { "moonbitlang/async/fs" @fs }
+import {
+  "moonbitlang/async/fs",
+}
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/websocket" @websocket,
-  "moonbit-community/flate/gzip" @gzip,
+  "moonbitlang/async/websocket",
+  "moonbit-community/flate/gzip",
 }
 
 #cfg(target = "js")
-import { "moonbitlang/async/js_async" @js_async }
+import {
+  "moonbitlang/async/js_async",
+}
 
 warnings = "-unused_async-struct_never_constructed-unused_field"
 
@@ -75,6 +79,6 @@ import {
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/socket" @socket,
+  "moonbitlang/async/socket",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"

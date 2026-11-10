@@ -6,8 +6,8 @@ import {
 #cfg(not(target = "js"))
 import {
   "moonbitlang/async",
-  "moonbitlang/async/fs" @fs,
-  "moonbitlang/async/os_error" @os_error,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
 }
 
 import {
@@ -17,11 +17,12 @@ import {
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/types" @types,
+  "moonbitlang/async/types",
 } for "wbtest"
 
 // `async test` requires the root `moonbitlang/async` import and a test import
 // cannot be target-gated, so js checks report it unused.
+
 warnings = "-unused_package"
 
 options(
