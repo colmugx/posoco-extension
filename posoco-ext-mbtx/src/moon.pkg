@@ -2,13 +2,23 @@ import {
   "colmugx/posoco-ext-mbtx/protocol",
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/js_async",
-  "moonbitlang/async/process",
   "moonbitlang/core/env",
   "colmugx/posoco",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
+}
+
+// Per-backend process and filesystem: native shells out through @process and
+// async/fs, js uses the Bun FFI twins.
+#cfg(target = "native")
+import {
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+}
+
+#cfg(target = "js")
+import {
+  "moonbitlang/async/js_async",
 }
 
 options(
@@ -26,7 +36,3 @@ options(
 )
 
 supported_targets = "native + js"
-
-// Target-specific native/JS dependencies are intentionally unused on the other backend.
-
-warnings = "-unused_package"

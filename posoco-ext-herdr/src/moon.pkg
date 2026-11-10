@@ -1,5 +1,10 @@
 import {
   "colmugx/posoco",
+}
+
+// Environment and UTF-8 decoding back the native reporter only.
+#cfg(target = "native")
+import {
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
@@ -7,12 +12,6 @@ import {
 import {
   "moonbitlang/async",
 } for "wbtest"
-
-// @env and @utf8 are used by herdr_native.mbt only but must stay imported
-// package-wide; js and wasm legitimately see them as unused. The wbtest
-// import is for `async test` on the shutdown-release case.
-
-warnings = "-unused_package"
 
 options(
   "native-stub": [ "herdr_system_stub.c" ],

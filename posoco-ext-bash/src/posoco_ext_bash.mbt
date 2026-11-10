@@ -580,20 +580,6 @@ fn bash_empty_command_failure() -> @posoco.RuntimeError {
 }
 
 ///|
-/// Per-target import keepers: each backend compiles only one execute path,
-/// so the other backend's import would trip `unused_package`. `@process`
-/// backs the native runner, `@js_async` the bun runner.
-#cfg(target="js")
-let _process_import_keeper : Unit = ignore(@process.unimplemented)
-
-///|
-#cfg(not(target="js"))
-// The reference intentionally targets the native js_async stub, whose
-// unimplemented alert is noise for a value that is never evaluated.
-#warnings("-alert_unimplemented")
-let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)
-
-///|
 /// Session operations are independent of the cancelled foreground effect.
 /// A background session can outlive a tool call only if the host explicitly
 /// provided a task group. Detached sessions remain scoped to that host.

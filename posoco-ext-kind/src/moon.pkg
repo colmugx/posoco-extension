@@ -3,15 +3,21 @@ import {
   "colmugx/posoco-ext-permission" @permission,
   "posoco/devkit",
   "moonbit-community/yaml",
-  "moonbitlang/async/fs",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
+
+// async/fs backs the filesystem probe on native and wasm; the js twin uses
+// node:fs.
+#cfg(not(target = "js"))
+import { "moonbitlang/async/fs" @fs }
 
 import {
   "moonbitlang/async",
 } for "wbtest"
 
+// `async test` requires the root `moonbitlang/async` import but never names it
+// through the alias, so js/wasm checks report it unused.
 warnings = "-unused_package"
 
 options(

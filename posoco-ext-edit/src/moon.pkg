@@ -1,7 +1,17 @@
 import {
   "colmugx/posoco",
   "posoco/devkit",
+}
+
+// async/fs backs the native editor; the js twin uses node:fs and only needs
+// the JSON wire vocabulary.
+#cfg(not(target = "js"))
+import {
   "moonbitlang/async/fs",
+}
+
+#cfg(target = "js")
+import {
   "moonbitlang/core/json",
 }
 
@@ -13,8 +23,6 @@ import {
   "moonbitlang/async",
   "colmugx/posoco/kernel",
 } for "wbtest"
-
-warnings = "-unused_package"
 
 options(
   targets: {

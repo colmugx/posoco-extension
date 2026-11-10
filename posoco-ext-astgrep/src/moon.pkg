@@ -1,16 +1,33 @@
 import {
   "posoco/devkit",
   "colmugx/posoco",
-  "moonbitlang/async/process",
-  "moonbitlang/async/js_async",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
+// Per-backend process runner: native+wasm through @process, js through the
+// Bun FFI twin.
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/async/process",
+}
+
+#cfg(target = "js")
+import {
+  "moonbitlang/async/js_async",
+}
+
 import {
   "moonbitlang/async",
+} for "wbtest"
+
+#cfg(target = "native")
+import {
   "colmugx/posoco/kernel",
 } for "wbtest"
+
+// `moonbitlang/async` is imported for the native-only white-box async tests,
+// so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 

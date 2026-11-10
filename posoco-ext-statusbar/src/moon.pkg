@@ -7,12 +7,17 @@ import {
 
 import {
   "moonbitlang/async",
+} for "wbtest"
+
+// Both tests are native-only white-box files.
+#cfg(target = "native")
+import {
   "colmugx/posoco/events",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
-// The async runtime is required by native-gated async tests only; default
-// target checks don't compile those files and misreport the import as unused.
+// `async test` requires the root `moonbitlang/async` import, and a test import
+// cannot be target-gated, so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 

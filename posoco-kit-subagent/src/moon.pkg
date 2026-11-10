@@ -6,9 +6,3 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/debug",
 }
-
-import {
-  "moonbitlang/async",
-} for "wbtest"
-
-warnings = "-unused_package"

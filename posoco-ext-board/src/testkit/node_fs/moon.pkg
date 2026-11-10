@@ -1,6 +1,5 @@
-// Target-specific native async/fs import is intentionally unused by JS files.
-warnings = "-unused_package"
-
+// async/fs backs the native fixtures; the js twin uses node:fs.
+#cfg(target = "native")
 import {
   "moonbitlang/async/fs",
 }

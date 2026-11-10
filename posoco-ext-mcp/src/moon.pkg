@@ -9,7 +9,6 @@ import {
   "colmugx/fuwaroid",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/js_async",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/env",
   "moonbitlang/core/json",

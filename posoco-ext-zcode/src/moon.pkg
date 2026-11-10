@@ -1,15 +1,23 @@
 import {
   "colmugx/posoco",
   "moonbitlang/async",
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
-  "moonbitlang/async/js_async",
-  "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+
+// task.native.mbt is the only consumer of the native process/filesystem
+// stack; task.js.mbt uses the Bun FFI twin.
+#cfg(target = "native")
+import {
+  "moonbitlang/async/aqueue" @aqueue,
+  "moonbitlang/async/fs" @fs,
+  "moonbitlang/async/io" @io,
+  "moonbitlang/async/process" @process,
+}
+
+#cfg(target = "js")
+import { "moonbitlang/async/js_async" @js_async }
 
 import {
   "colmugx/posoco/kernel",
@@ -18,9 +26,8 @@ import {
 
 supported_targets = "+native +js"
 
-// @fs/@io/@process serve only task.native.mbt and @js_async only
-// task.js.mbt, so each target sees unused imports.
-
+// `@env` is only reached from white-box test files, whose imports never clear
+// the main-package unused check; js checks report it unused.
 warnings = "-unused_package"
 
 options(

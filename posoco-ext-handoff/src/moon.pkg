@@ -1,11 +1,13 @@
 import {
   "colmugx/posoco",
   "moonbitlang/core/debug",
-  "moonbitlang/core/json",
-  "moonbitlang/async/fs",
 }
 
-warnings = "-unused_package"
+// async/fs backs the native store; the js twin uses node:fs.
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/async/fs",
+}
 
 import {
   "moonbitlang/async",

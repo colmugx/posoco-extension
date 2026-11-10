@@ -8,7 +8,7 @@ import {
   "moonbitlang/core/debug",
 }
 
-warnings = "-unused_package-unused_value-unused_constructor"
+warnings = "-unused_value-unused_constructor"
 
 options(
   targets: {

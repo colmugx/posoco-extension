@@ -1,6 +1,3 @@
-// Target-specific native async/fs import is intentionally unused by JS files.
-warnings = "-unused_package"
-
 import {
   "colmugx/posoco",
   "colmugx/posoco-ext-board/backend",
@@ -16,9 +13,14 @@ import {
   "colmugx/posoco-ext-board/store",
   "colmugx/posoco-ext-board/workflow",
   "moonbitlang/async",
-  "moonbitlang/async/fs",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
+}
+
+// async/fs backs the native directory enumeration; the js twin uses node:fs.
+#cfg(target = "native")
+import {
+  "moonbitlang/async/fs",
 }
 
 import {

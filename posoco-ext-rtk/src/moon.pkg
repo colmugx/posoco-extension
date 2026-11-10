@@ -2,11 +2,24 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-ext-lazytools" @lazytools,
   "moonbitlang/async",
-  "moonbitlang/async/js_async",
+}
+
+// `async test` requires the root `moonbitlang/async` import but never names it
+// through the alias, so every target reports it unused.
+
+warnings = "-unused_package"
+
+// Per-backend process runner: native+wasm through @process, js through the
+// Bun FFI twin.
+#cfg(not(target = "js"))
+import {
   "moonbitlang/async/process",
 }
 
-warnings = "-unused_package"
+#cfg(target = "js")
+import {
+  "moonbitlang/async/js_async",
+}
 
 options(
   targets: {

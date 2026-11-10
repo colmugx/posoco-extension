@@ -10,21 +10,25 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/debug",
-  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
   "moonbitlang/core/string",
 }
 
+// UTF-8 decoding backs the native identity probe.
+#cfg(target = "native")
+import {
+  "moonbitlang/core/encoding/utf8",
+}
+
 import {
   "moonbitlang/async",
-  "moonbitlang/core/env",
 } for "wbtest"
 
-// @utf8 is used by identity.native.mbt only but must stay imported
-// package-wide; other targets legitimately see it as unused.
-
-warnings = "-unused_package"
+#cfg(target = "native")
+import {
+  "moonbitlang/core/env",
+} for "wbtest"
 
 options(
   "native-stub": [ "identity_stub.c" ],

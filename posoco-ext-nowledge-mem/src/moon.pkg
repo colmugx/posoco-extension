@@ -4,25 +4,30 @@ import {
   "colmugx/mcp/protocol/types",
   "posoco/devkit",
   "moonbitlang/async",
-  "moonbitlang/async/fs",
   "moonbitlang/async/http",
-  "moonbitlang/async/js_async",
   "moonbitlang/core/debug",
-  "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/string",
   "moonbitlang/x/crypto",
-  "moonbitlang/x/sys",
+}
+
+// The native runner is the only async/fs + environment user.
+#cfg(target = "native")
+import {
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
 }
 
 import {
   "moonbitlang/async",
+} for "wbtest"
+
+#cfg(target = "native")
+import {
   "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
-
-warnings = "-unused_package"
 
 // The extension ships native/js platform runners and native wbtests. It does
 // not support wasm, so the package declares native+js as its whole target set.

@@ -1,17 +1,34 @@
-warnings = "-unused_package"
-
 import {
   "colmugx/posoco",
   "posoco/devkit",
-  "moonbitlang/async/fs",
   "moonbitlang/core/encoding/utf8",
+}
+
+// async/fs backs the native walker; the js twin uses node:fs and only needs
+// the JSON wire vocabulary.
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/async/fs",
+}
+
+#cfg(target = "js")
+import {
   "moonbitlang/core/json",
 }
 
 import {
   "moonbitlang/async",
+} for "wbtest"
+
+#cfg(target = "native")
+import {
   "colmugx/posoco/kernel",
 } for "wbtest"
+
+// `moonbitlang/async` is imported for the native-only white-box async
+// tests above, so js/wasm checks report it unused.
+
+warnings = "-unused_package"
 
 options(
   targets: {

@@ -268,20 +268,6 @@ fn ps1_empty_command_failure() -> @posoco.RuntimeError {
 }
 
 ///|
-/// Per-target import keepers: each backend compiles only one execute path,
-/// so the other backend's import would trip `unused_package`. `@process`
-/// backs the native runner, `@js_async` the bun runner.
-#cfg(not(any(target="native", target="wasm")))
-let _process_import_keeper : Unit = ignore(@process.unimplemented)
-
-///|
-#cfg(not(target="js"))
-// The reference intentionally targets the native js_async stub, whose
-// unimplemented alert is noise for a value that is never evaluated.
-#warnings("-alert_unimplemented")
-let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)
-
-///|
 /// True when the current process runs on Windows. Target-split internally:
 /// js probes `process.platform`, native probes the `OS` environment variable.
 pub fn is_windows() -> Bool {
