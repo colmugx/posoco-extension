@@ -2,18 +2,12 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "colmugx/posoco-kit-rate-limit" @ratelimit,
-  "posoco/kit-chat-completions" @chatkit,
   "posoco/kit-events" @kit_events,
   "colmugx/posoco-kit-responses" @responses,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
   "moonbitlang/async",
-  "moonbitlang/async/fs",
   "moonbitlang/async/http",
-  "moonbitlang/async/io",
-  "moonbitlang/async/js_async",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/websocket",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
   "moonbitlang/core/random",
@@ -22,10 +16,23 @@ import {
   "moonbitlang/x/codec/base64",
   "moonbitlang/x/crypto",
   "moonbitlang/x/uuid",
-  "moonbit-community/flate/gzip",
 }
 
-warnings = "-unused_package-unused_async-struct_never_constructed-unused_field"
+// Native-only transports: async/fs (plus the wasm cache dump), the WebSocket
+// client and the gzip codec. The js WebSocket twin uses the Bun FFI.
+#cfg(not(target = "js"))
+import { "moonbitlang/async/fs" @fs }
+
+#cfg(target = "native")
+import {
+  "moonbitlang/async/websocket" @websocket,
+  "moonbit-community/flate/gzip" @gzip,
+}
+
+#cfg(target = "js")
+import { "moonbitlang/async/js_async" @js_async }
+
+warnings = "-unused_async-struct_never_constructed-unused_field"
 
 options(
   "native-stub": [ "identity_stub.c" ],
@@ -63,5 +70,11 @@ options(
 )
 
 import {
+  "posoco/kit-chat-completions" @chatkit,
+} for "wbtest"
+
+#cfg(target = "native")
+import {
+  "moonbitlang/async/socket" @socket,
   "posoco/devkit/testkit" @tk,
 } for "wbtest"

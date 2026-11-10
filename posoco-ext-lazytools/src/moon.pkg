@@ -1,12 +1,14 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco/kernel",
   "posoco/devkit",
 }
 
 import {
   "moonbitlang/async",
+  "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
+// `async test` requires the root `moonbitlang/async` import but never names it
+// through the alias, so it always reads as unused.
 warnings = "-unused_package"

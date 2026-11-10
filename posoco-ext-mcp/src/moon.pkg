@@ -8,18 +8,17 @@ import {
   "colmugx/mcp/protocol/types",
   "colmugx/fuwaroid",
   "moonbitlang/async",
-  "moonbitlang/async/fs",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 
+// async/fs backs the native config reader; the js twin reads through the
+// node:fs envelope.
+#cfg(not(target = "js"))
+import { "moonbitlang/async/fs" @fs }
+
 supported_targets = "+native+js"
-
-// js gates out the async/fs read path, so the import is unused on that
-// target; the warning cannot be suppressed per-target.
-
-warnings = "-unused_package"
 
 options(
   "allow-experimental-packages": [ "moonbitlang/core/async" ],

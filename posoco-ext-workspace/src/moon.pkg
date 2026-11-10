@@ -1,20 +1,28 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
   "moonbitlang/core/debug",
 }
 
-// @fs backs fs_port.native.mbt on native+wasm. On js it is unused (the js
-// twin uses node:fs FFI) but must stay imported; silence the noise.
-
-warnings = "-unused_package"
+// async/fs backs the native+wasm fs port; the js twin uses node:fs FFI.
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs" @fs,
+  "moonbitlang/async/os_error" @os_error,
+}
 
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/types",
 } for "wbtest"
+
+#cfg(target = "native")
+import {
+  "moonbitlang/async/types" @types,
+} for "wbtest"
+
+// `async test` requires the root `moonbitlang/async` import and a test import
+// cannot be target-gated, so js checks report it unused.
+warnings = "-unused_package"
 
 options(
   "native-stub": [ "fs_atomic_test_stub.c" ],

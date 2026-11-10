@@ -1,21 +1,38 @@
 import {
   "colmugx/posoco-ext-board/domain",
-  "colmugx/posoco-ext-board/internal/storage" @node_fs,
   "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
-  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
+// The native journal twins are the only async/fs, core-async and utf8 users;
+// the js twins go through @node_fs.
+#cfg(target = "native")
+import {
+  "moonbitlang/async/fs" @fs,
+  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/encoding/utf8" @utf8,
+}
+
+#cfg(target = "js")
+import {
+  "colmugx/posoco-ext-board/internal/storage" @node_fs,
+}
+
+#cfg(target = "native")
+import {
+  "moonbitlang/core/async" @core_async,
+} for "wbtest"
+
+#cfg(target = "js")
 import {
   "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
-  "moonbitlang/core/async" @core_async,
 } for "wbtest"
 
 supported_targets = "+native +js"
 
+// `async test` requires the root `moonbitlang/async` import but never names it
+// through the alias, and a test import cannot be target-gated.
 warnings = "-unused_package"
 
 options(

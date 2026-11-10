@@ -4,16 +4,24 @@ import {
   "posoco/devkit",
   "posoco/kit-events" @kit_events,
   "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/x/crypto",
+}
+
+// The native+wasm store owns the async fs stack; jsonl_session.js.mbt uses the
+// node:fs envelope and x/fs instead.
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/async/fs" @fs,
+  "moonbitlang/async/io" @io,
   "moonbitlang/x/fs" @xfs,
 }
 
+// `async test` requires the root `moonbitlang/async` import but never names it
+// through the alias, so every target reports it unused.
 warnings = "-unused_package"
 
 options(
