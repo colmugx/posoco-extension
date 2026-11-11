@@ -77,7 +77,11 @@ async test "e2e A: first-turn inbound lands as a memory message before the real 
     guard injected_memory_text(messages) is Some(injected) else {
       fail("expected an injected memory message")
     }
-    assert_true(injected.contains("## Memory"))
+    // Core prefixes the provider body with its canonical inbound lead.
+    assert_true(injected.has_prefix(@posoco.MEMORY_INBOUND_LEAD + "\n\n"))
+    assert_true(
+      injected.contains("<nmem-context type=\"memory\" trust=\"false\">"),
+    )
     assert_true(
       injected.contains("Ship the zephyr widget via the staging pipeline"),
     )
