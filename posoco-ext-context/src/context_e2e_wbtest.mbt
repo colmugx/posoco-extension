@@ -41,7 +41,8 @@ async test "e2e: context contributor injects configured envelope into model requ
           assert_true(t.contains("</posoco-context>"))
           assert_true(t.contains("Build with: make test"))
           assert_true(t.contains("Never commit on main."))
-          assert_true(t.contains("io:\n"))
+          // Core joins contributor bodies verbatim, without extension-id headers.
+          assert_eq(t, contributor.system_prompt())
         }
         _ => fail("system message should have text content")
       }
