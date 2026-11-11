@@ -19,7 +19,7 @@ fn quote_prompt_scalar(value : String) -> String {
   let visible = StringBuilder()
   for ch in value {
     let code = ch.to_int()
-    if code >= 128 && is_unsafe_control_code(code) {
+    if code >= 128 && is_unsafe_control(ch) {
       visible.write_string("<unicode-control:")
       visible.write_string(code.to_string())
       visible.write_char('>')

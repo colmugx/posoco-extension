@@ -17,6 +17,7 @@ description = "Agent Skills lifecycle extension for Posoco: discovery, progressi
 import {
   "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-workspace@0.1.0",
+  "posoco/devkit@0.4.2",
   "moonbit-community/yaml@0.0.5",
   "moonbitlang/async@0.22.7",
 }

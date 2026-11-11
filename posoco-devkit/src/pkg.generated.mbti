@@ -13,9 +13,15 @@ pub fn context_envelope(ns~ : String, kind~ : String, trust~ : Bool, source? : S
 
 pub fn default_ignore_patterns() -> Array[String]
 
+pub fn display_label(String, replacement? : Char) -> String
+
+pub fn display_strip(String) -> String
+
 pub fn events_system_default() -> @posoco.EventSystem?
 
 pub fn events_system_register(@posoco.EventSystem) -> Unit
+
+pub fn fold_case(StringView) -> String
 
 pub fn glob_match(String, String) -> Bool
 
@@ -24,6 +30,10 @@ pub fn has_hidden_segment(String) -> Bool
 pub fn home_dir() -> String?
 
 pub fn home_dir_from_env(windows~ : Bool, home~ : String?, userprofile~ : String?, homedrive~ : String?, homepath~ : String?) -> String?
+
+pub fn is_ascii(StringView) -> Bool
+
+pub fn is_control(Char) -> Bool
 
 pub fn is_status_color_role(String) -> Bool
 

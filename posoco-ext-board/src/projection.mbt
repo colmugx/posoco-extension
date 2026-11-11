@@ -1,23 +1,13 @@
 ///|
 /// Reject inputs over 16384 UTF-16 units before any copying or scanning.
-/// Within budget, strip unsafe controls, then redact entire credential-bearing
+/// Within budget, strip invisible controls, then redact entire credential-bearing
 /// lines before the 1024-character display cap. This is not a DLP scanner.
 fn board_display(text : String) -> String {
   // String::length is the constant-time UTF-16 length intrinsic on native/JS.
   if text.length() > 16384 {
     return "[truncated]"
   }
-  let safe = String::from_array(
-    text
-    .to_array()
-    .filter(ch => {
-      let code = ch.to_int()
-      !((code < 0x20 && code != 0x09 && code != 0x0A) ||
-      (code >= 0x7F && code <= 0x9F) ||
-      (code >= 0x202A && code <= 0x202E) ||
-      (code >= 0x2066 && code <= 0x2069))
-    }),
-  )
+  let safe = @devkit.display_strip(text)
   let lines : Array[String] = []
   for line in safe.split("\n") {
     let lower = line.to_owned().to_lower()

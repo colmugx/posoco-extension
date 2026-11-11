@@ -2359,3 +2359,25 @@ test "prompt: catalog keeps substantial description context for weak models" {
   ]).render_prompt_body(max_chars=8000)
   assert_true(prompt.contains("signed-release-with-provenance"))
 }
+
+///|
+async test "skill_search folds non-ASCII case in the index" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("istanbul", "Deploy to İstanbul staging.", "/skills/istanbul"),
+      descriptor("release", "Build release packages.", "/skills/release"),
+    ]),
+  )
+  // `String::to_lower` folds ASCII only, so the index folds through the Unicode
+  // simple case mapping: a description authored with a non-ASCII capital stays
+  // findable from an ASCII-only query.
+  match skills.search("istanbul") {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.has_prefix("istanbul: "))
+      assert_false(content.contains("release"))
+    }
+    _ => fail("expected search success")
+  }
+}

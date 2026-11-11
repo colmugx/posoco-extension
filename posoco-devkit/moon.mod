@@ -17,4 +17,5 @@ import {
   "moonbitlang/async@0.22.7",
   "moonbitlang/x@0.5.5",
   "posoco/kit-events@0.1.0",
+  "moonbit-community/unicode-data@0.7.1",
 }

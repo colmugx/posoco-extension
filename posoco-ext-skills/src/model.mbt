@@ -101,25 +101,17 @@ let hard_max_skill_location_chars = 32768
 let hard_max_resource_warning_chars = 512
 
 ///|
-fn is_unsafe_control_code(code : Int32) -> Bool {
-  code < 32 ||
-  code == 127 ||
-  (code >= 128 && code <= 159) ||
-  code == 0x00AD ||
-  code == 0x061C ||
-  code == 0x180E ||
-  (code >= 0x200B && code <= 0x200F) ||
-  (code >= 0x2028 && code <= 0x202E) ||
-  (code >= 0x2060 && code <= 0x2064) ||
-  (code >= 0x2066 && code <= 0x206F) ||
-  code == 0xFEFF ||
-  (code >= 0xFFF9 && code <= 0xFFFB)
+/// Scalars that must not appear in skill metadata: the Unicode Character
+/// Database classification (`Cc`, `Cf`, `Cs`, `Zl`, `Zp`) rather than a
+/// hand-maintained range list, so newly assigned format characters are covered.
+fn is_unsafe_control(ch : Char) -> Bool {
+  @devkit.is_control(ch)
 }
 
 ///|
 fn contains_unsafe_control(value : String) -> Bool {
   for ch in value {
-    if is_unsafe_control_code(ch.to_int()) {
+    if is_unsafe_control(ch) {
       return true
     }
   }

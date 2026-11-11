@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-ext-workspace" @workspace,
+  "posoco/devkit",
   "moonbit-community/yaml",
 }
 

@@ -61,7 +61,7 @@ fn push_token(
 /// runs yield overlapping 2-grams.
 fn tokenize(text : String) -> Array[String] {
   let chars : Array[Char] = []
-  for ch in text.to_lower() {
+  for ch in @devkit.fold_case(text) {
     chars.push(ch)
   }
   let tokens : Array[String] = []

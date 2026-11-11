@@ -760,3 +760,55 @@ async test "grep_regex_respects_glob_filter" {
     }
   }
 }
+
+///|
+async test "grep_literal_case_insensitive_folds_unicode_like_regex" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-fold")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/umlaut.txt", "Über alles\n", create_mode=CreateNew)
+    let literal = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("über")),
+          ("path", Json::string(dir)),
+          ("case_insensitive", Json::boolean(true)),
+        ]),
+      ),
+    )
+    let regex = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("über")),
+          ("path", Json::string(dir)),
+          ("regex", Json::boolean(true)),
+          ("case_insensitive", Json::boolean(true)),
+        ]),
+      ),
+    )
+    // Both engines fold through the Unicode simple case mapping, so `-i` no
+    // longer means "ASCII only" for one and "Unicode" for the other.
+    match literal {
+      Success(content~, ..) => {
+        let literal_content = content
+        match regex {
+          Success(content~, ..) => {
+            assert_true(literal_content.contains("1|Über alles"))
+            assert_eq(literal_content, content)
+          }
+          other =>
+            fail(
+              "expected the regex engine to match Über, got " +
+              other.to_string(),
+            )
+        }
+      }
+      other =>
+        fail(
+          "expected the literal engine to match Über, got " + other.to_string(),
+        )
+    }
+  }
+}

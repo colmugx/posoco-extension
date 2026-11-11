@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "posoco/kit-events" @kit_events,
+  "moonbit-community/unicode-data" @ucd,
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/x/path",

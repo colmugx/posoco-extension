@@ -84,8 +84,15 @@ fn grep_line_matcher(
     }
     fn(line) { re.match_(line) is Some(_) }
   } else if case_insensitive {
-    let needle = pattern.to_lower()
-    fn(line) { line.to_lower().contains(needle) }
+    // ASCII needles keep the allocation-free path: an ASCII fold cannot widen a
+    // match, so a non-ASCII line needs no folding to be compared.
+    if @devkit.is_ascii(pattern) {
+      let needle = pattern.to_lower()
+      fn(line) { line.to_lower().contains(needle) }
+    } else {
+      let needle = @devkit.fold_case(pattern)
+      fn(line) { @devkit.fold_case(line).contains(needle) }
+    }
   } else {
     fn(line) { line.contains(pattern) }
   }

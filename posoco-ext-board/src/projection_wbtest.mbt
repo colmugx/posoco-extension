@@ -445,6 +445,15 @@ test "board projection strips unsafe controls before redaction without damaging 
   for code in 0x2066..<0x206A {
     controls.push(code.unsafe_to_char())
   }
+  // The strip set comes from the Unicode Character Database now, so the ranges
+  // above are no longer the whole story: separators, soft hyphen, zero-width
+  // space and the tag characters are stripped too.
+  for
+    ch in [
+      '\u{00AD}', '\u{200B}', '\u{200E}', '\u{2028}', '\u{2029}', '\u{FEFF}', '\u{E0041}',
+    ] {
+    controls.push(ch)
+  }
   for control in controls {
     let text = control.to_string()
     assert_eq(board_display("left" + text + "right"), "leftright")
