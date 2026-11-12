@@ -3,13 +3,17 @@ import {
   "colmugx/acp",
   "posoco/devkit",
   "colmugx/posoco-ext-permission" @permission,
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
   "moonbitlang/core/debug",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue" ],
+)
