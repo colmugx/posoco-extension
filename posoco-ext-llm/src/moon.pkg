@@ -7,15 +7,15 @@ import {
   "posoco/ext-oauth" @oauth,
   "posoco/kit-chat-completions" @chatkit,
   "posoco/kit-events" @kit_events,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/core/debug",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // The white-box testkit is only exercised by native-only tests.
@@ -25,6 +25,7 @@ import {
 } for "wbtest"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
   targets: {
     // Production code compiles on every backend. Only the white-box tests are
     // native-only because they exercise async login/refresh paths.

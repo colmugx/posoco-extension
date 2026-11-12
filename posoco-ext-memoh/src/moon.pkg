@@ -7,8 +7,12 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
