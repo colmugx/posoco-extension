@@ -497,7 +497,7 @@ async test "native best effort cleanup never masks primary IO failure" {
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
   let data = root + "/.cetas/board/default"
-  let before = @fs.read_file(data + "/board.json")
+  let before = @fs.read_binary(data + "/board.json")
   // An externally installed directory prevents both opening and unlinking
   // the temp file. Cleanup is best effort and cannot replace the open error.
   @fs.mkdir(data + "/board.json.tmp")

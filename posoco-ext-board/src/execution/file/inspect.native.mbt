@@ -14,7 +14,7 @@ pub async fn FileBoardExecutionStore::inspect(
     if @fs.kind(path, follow_symlink=false) != Regular {
       return Err(@execution.StoreUnavailable)
     }
-    @execution.decode_execution_journal(@fs.read_file(path).text())
+    @execution.decode_execution_journal(@fs.read_text(path))
   } catch {
     _ => Err(@execution.StoreUnavailable)
   }
