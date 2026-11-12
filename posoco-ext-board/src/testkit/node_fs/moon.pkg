@@ -1,11 +1,12 @@
 // async/fs backs the native fixtures; the js twin uses node:fs.
 #cfg(target = "native")
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 supported_targets = "+native+js"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/fs" ],
   targets: { "fixtures.js.mbt": [ "js" ], "fixtures.native.mbt": [ "native" ] },
 )
