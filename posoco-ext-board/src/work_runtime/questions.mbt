@@ -10,7 +10,7 @@ pub(all) struct TicketQuestion {
   asked_by : String
   mut audience : String
   asked_at_ms : Int64
-  cond : @async.CondVar
+  cond : @async.Cond
   mut outcome : @posoco.UiResponse?
   mut status : String
   mut answer : String?
@@ -49,7 +49,7 @@ pub fn TicketQuestions::open(
     asked_by,
     audience,
     asked_at_ms: @async.now(),
-    cond: @async.CondVar::Cond(),
+    cond: @async.Cond::Cond(),
     outcome: None,
     status: "open",
     answer: None,
