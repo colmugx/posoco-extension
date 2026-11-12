@@ -196,7 +196,7 @@ test "ownership follows the slot's provider prefix" {
 /// Build a companion with a scripted plane and a recording handle, run
 /// `on_start`, and hand the pieces back for assertions.
 async fn start_case(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   connected~ : Int32,
 ) -> (ZaiCodingPlanTools, FakeContributions, SegmentRecorder) {
   let system = @posoco.EventSystem()

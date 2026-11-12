@@ -64,7 +64,7 @@ pub(all) struct ZaiCodingPlanTools {
   mut events : @posoco.Events?
   /// Host task group for background activation work; the extension never
   /// blocks a selection event handler.
-  group : @async.TaskGroup[Unit]
+  group : @async.TaskGroup
   /// Persisted selection at session start, so the first operation already sees
   /// the group when the session resumes on this provider.
   initial_slot_id : String
@@ -92,7 +92,7 @@ pub(all) struct ZaiCodingPlanTools {
 ///|
 pub fn ZaiCodingPlanTools::ZaiCodingPlanTools(
   config~ : @zai.ZaiConfig,
-  group~ : @async.TaskGroup[Unit],
+  group~ : @async.TaskGroup,
   initial_slot_id~ : String = "",
   open_plane? : async (String, Array[ZaiToolGroup]) -> Result[
     &ZaiMcpConnection,
