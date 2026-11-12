@@ -1,7 +1,7 @@
 import {
   "colmugx/posoco-ext-mbtx/protocol",
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
   "moonbitlang/core/env",
   "colmugx/posoco",
   "moonbitlang/core/json",
@@ -12,16 +12,17 @@ import {
 // async/fs, js uses the Bun FFI twins.
 #cfg(target = "native")
 import {
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
   targets: {
     "process.native.mbt": [ "native" ],
     "toolchain_platform.native.mbt": [ "native" ],

@@ -3,8 +3,8 @@ import {
   "colmugx/mcp/client",
   "colmugx/mcp/protocol/types",
   "posoco/devkit",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
@@ -15,12 +15,12 @@ import {
 // The native runner is the only async/fs + environment user.
 #cfg(target = "native")
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/env",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 #cfg(target = "native")
@@ -37,6 +37,7 @@ import {
 supported_targets = "+native +js"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/http" ],
   targets: {
     "runner.native.mbt": [ "native" ],
     "runner.js.mbt": [ "js" ],

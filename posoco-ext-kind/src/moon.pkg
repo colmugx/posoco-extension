@@ -11,19 +11,20 @@ import {
 // node:fs.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
-// `async test` requires the root `moonbitlang/async` import but never names it
+// `async test` requires the root `moonbitlang/core/async` import but never names it
 // through the alias, so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
   targets: {
     "kind_fs.js.mbt": [ "js" ],
     "kind_fs.native.mbt": [ "native", "wasm" ],
