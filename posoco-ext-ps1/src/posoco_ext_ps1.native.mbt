@@ -76,15 +76,16 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
   }
   let (reader, writer) = pipes
   let key = ctx.effect_id.to_int()
-  let attempted : Result[(Int32, String, Bool), Error] = Ok(
+  let outcome : Ref[(Int32, String, Bool)?] = Ref(None)
+  let attempted : Result[Unit, Error] = Ok(
     @async.with_task_group(async fn(group) {
       defer reader.close()
       let proc = @process.spawn(
         group,
         self.exe,
         ["-NoProfile", "-NonInteractive", "-Command", cmd],
-        stdout=writer,
-        stderr=writer,
+        stdout=@process.ProcessOutput::Shared(writer),
+        stderr=@process.ProcessOutput::Shared(writer),
         cwd?,
         cancel_handler=@process.graceful_cancel(timeout=ps1_cancel_grace_ms),
       )
@@ -95,14 +96,13 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
       self.in_flight.remove(key)
       let output = ps1_read_drained(reader)
       let mut decode_failed = false
-      let data : &@io.Data = output
-      let content = data.text() catch {
+      let content = @utf8.decode(output) catch {
         _ => {
           decode_failed = true
           ps1_decode_failure(exit_code)
         }
       }
-      (exit_code, content, decode_failed)
+      outcome.val = Some((exit_code, content, decode_failed))
     }),
   ) catch {
     error => Err(error)
@@ -114,7 +114,10 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
         "powershell: process failed: " + error.to_string(),
       )
     }
-    Ok((exit_code, content, decode_failed)) => {
+    Ok(_) => {
+      guard outcome.val is Some((exit_code, content, decode_failed)) else {
+        raise @posoco.RuntimeError::InvocationFailed("powershell: missing process outcome")
+      }
       let content = ps1_model_output(content, exit_code)
       let is_error = exit_code != 0 || decode_failed
       if is_error {
@@ -153,7 +156,7 @@ async fn ps1_read_drained(reader : @process.ReadFromProcess) -> Bytes {
       break
     }
     let got : Int32? = @async.with_timeout_opt(remaining.to_int(), async fn() {
-      reader.read(buf)
+      reader.read_into(buf)
     })
     match got {
       None => eof = true
