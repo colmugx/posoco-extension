@@ -31,5 +31,4 @@ import {
   "colmugx/posoco-kit-responses@0.1.0",
   "colmugx/posoco-kit-messages@0.1.0",
   "colmugx/posoco-kit-rate-limit@0.1.0",
-  "moonbitlang/async@0.22.7",
 }
