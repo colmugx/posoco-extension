@@ -10,5 +10,5 @@ pub async fn cleanup(directory : String) -> Unit {
 
 ///|
 pub async fn put(path : String, text : String) -> Unit {
-  @fs.write_file(path, text)
+  @fs.write_text(path, text)
 }
