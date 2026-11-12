@@ -8,7 +8,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
   "posoco/devkit",
   "posoco/ext-oauth",
