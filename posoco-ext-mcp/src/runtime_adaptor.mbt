@@ -74,7 +74,7 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
     // transport catches).
     @posoco.ToolProvider::execute(self.bridge, ctx) catch {
       error =>
-        if @async.is_being_cancelled() {
+        if @core_async.is_being_cancelled() {
           raise error
         } else {
           @kernel.RuntimeFailure(

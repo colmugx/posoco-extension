@@ -9,7 +9,7 @@ pub struct BoardRuntime {
   priv backend_ : @backend.BoardBackend
   server : &BoardWebServer
   opener : &BrowserOpener
-  priv gate : @async.Mutex
+  priv gate : @core_async.Mutex
   priv mut supervisor : @fuwaroid.Supervisor[Unit]?
   priv mut server_task : @fuwaroid.SupervisedTask[Unit]?
   priv mut server_status : BoardServerStatus
@@ -29,7 +29,7 @@ pub fn BoardRuntime::with_adapters(
     backend_: backend,
     server,
     opener,
-    gate: @async.Mutex::Mutex(),
+    gate: @core_async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
     server_status: Stopped,
@@ -134,7 +134,7 @@ pub async fn BoardRuntime::ensure_server(
 ) -> Result[BoardEndpoint, String] {
   self.gate.acquire()
   defer self.gate.release()
-  @async.protect_from_cancel(() => self.ensure_server_locked())
+  @core_async.protect_from_cancel(() => self.ensure_server_locked())
 }
 
 ///|
@@ -176,7 +176,7 @@ async fn BoardRuntime::close_server_locked(self : BoardRuntime) -> Unit {
 pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
   self.gate.acquire()
   defer self.gate.release()
-  @async.protect_from_cancel(() => self.close_server_locked())
+  @core_async.protect_from_cancel(() => self.close_server_locked())
 }
 
 ///|
@@ -187,7 +187,7 @@ pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
 /// cancelled caller cannot leave a half-open listener or an unjoined
 /// coordinator.
 pub async fn BoardRuntime::shutdown(self : BoardRuntime) -> Unit {
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     self.close_server()
     self.backend_.shutdown()
     match self.supervisor {

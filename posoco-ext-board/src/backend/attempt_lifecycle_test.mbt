@@ -21,7 +21,7 @@ async fn lifecycle_accept(
 
 ///|
 async test "typed manual lifecycle builders commit every kind and outcome through authoritative events" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     let clock = Ref(100L)
     let backend = @backend.BoardBackend(now_ms=() => clock.val)
     @core_async.with_task_group(group => {
@@ -142,7 +142,7 @@ async test "typed manual lifecycle builders commit every kind and outcome throug
 
 ///|
 async test "manual running attempt recovery is durable Interrupted and cannot be replayed as running" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     let store = @store.MemoryBoardStore()
     let replica = @client.BoardReplica::empty()
     let first = @backend.BoardBackend(store~, now_ms=() => 100L)

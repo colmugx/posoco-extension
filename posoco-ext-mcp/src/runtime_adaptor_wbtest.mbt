@@ -137,7 +137,7 @@ suberror HarnessTrigger
 /// the task group, which cancels the group body (the current task). The
 /// Cancelled raised at the body's suspension point is swallowed; the
 /// cancelled state is sticky, so everything after the catch runs with
-/// `@async.is_being_cancelled() == true`.
+/// `@core_async.is_being_cancelled() == true`.
 ///
 /// Known limitation: the MCP-handled branch of `McpRuntime::execute_tool`
 /// cannot reach a deterministic provider raise in this suite — the mcp SDK
@@ -153,13 +153,13 @@ async test "mcp_runtime_execute_tool_delegates_under_ambient_cancellation" {
   let outcome : Ref[@kernel.ToolOutcome?] = Ref(None)
   let cancelled_before_delegation = Ref(false)
   let triggered = try {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       group.spawn_bg(no_wait=true) <| () => { raise HarnessTrigger }
       // Suspension gate: the group's cancellation interrupts this sleep.
       // Async 0.22.3: cancellation is uncatchable, so absorb it with
       // handle_cancellation and observe the ambient cancellation by
       // continuing on the None path.
-      if @async.handle_cancellation(() => @async.sleep(5_000)) is None {
+      if @core_async.handle_cancellation(() => @core_async.sleep(5_000)) is None {
         cancelled_before_delegation.val = true
         outcome.val = Some(runtime.execute_tool(effect_for("read")))
       }

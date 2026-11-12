@@ -333,8 +333,8 @@ async fn MCPToolBridge::fetch_tools(
     }
   }
   if timeout_ms > 0 {
-    @async.with_timeout(timeout_ms, attempt) catch {
-      @async.TimeoutError => Err(ListToolsFailure::TimedOut(timeout_ms))
+    @core_async.with_timeout(timeout_ms, attempt) catch {
+      @core_async.TimeoutError => Err(ListToolsFailure::TimedOut(timeout_ms))
       error => raise error
     }
   } else {
@@ -370,8 +370,8 @@ async fn call_tool_attempt(
     }
   }
   if timeout_ms > 0 {
-    @async.with_timeout(timeout_ms, attempt) catch {
-      @async.TimeoutError => Err(MCPCallFailure::TimedOut(timeout_ms))
+    @core_async.with_timeout(timeout_ms, attempt) catch {
+      @core_async.TimeoutError => Err(MCPCallFailure::TimedOut(timeout_ms))
       error => raise error
     }
   } else {
@@ -550,7 +550,7 @@ pub(all) struct MCPToolBridge {
   /// Host-provided long-lived task group. Every connection creation —
   /// connect, reconnect, or probe — must hold one (stdio spawns its child
   /// process on it). `None` until `attach`.
-  mut group : @async.TaskGroup?
+  mut group : @core_async.TaskGroup?
   /// Host-provided lifetime task group on posoco's `moonbitlang/core/async`
   /// stack. Each connection's fuwaroid actor loop is spawned here (fuwaroid
   /// 0.4 spawns on core async), while the transport above keeps running on
@@ -663,7 +663,7 @@ pub async fn MCPToolBridge::discover(
 /// honestly instead.
 pub fn MCPToolBridge::attach(
   self : MCPToolBridge,
-  group : @async.TaskGroup,
+  group : @core_async.TaskGroup,
   lifetime? : @core_async.TaskGroup,
 ) -> Unit {
   self.group = Some(group)
@@ -744,7 +744,7 @@ async fn MCPToolBridge::sleep_backoff_or_close(
     } else {
       slice_ms
     }
-    @async.sleep(step)
+    @core_async.sleep(step)
     waited = waited + step
     if self.closing {
       return true
@@ -860,7 +860,7 @@ pub fn MCPToolBridge::failures(self : MCPToolBridge) -> Array[(String, String)] 
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup,
+  group : @core_async.TaskGroup,
 ) -> Result[Unit, String] {
   match self.connect_with_group(config, group) {
     Ok(_) => {
@@ -882,7 +882,7 @@ pub async fn MCPToolBridge::connect(
 async fn MCPToolBridge::open_client(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup,
+  group : @core_async.TaskGroup,
 ) -> Result[@client.MCPClient, String] {
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
@@ -939,8 +939,8 @@ async fn MCPToolBridge::open_client(
         }
       }
       if config.timeout_ms > 0 {
-        @async.with_timeout(config.timeout_ms, handshake) catch {
-          @async.TimeoutError =>
+        @core_async.with_timeout(config.timeout_ms, handshake) catch {
+          @core_async.TimeoutError =>
             Err(
               "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=timeout, timeout_ms=\{config.timeout_ms})",
             )
@@ -964,7 +964,7 @@ async fn MCPToolBridge::open_client(
 async fn MCPToolBridge::connect_with_group(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup,
+  group : @core_async.TaskGroup,
 ) -> Result[Unit, String] {
   let mut refill_slot = -1
   let mut refill_epoch = 0
@@ -1498,7 +1498,7 @@ async fn MCPToolBridge::reconnect_one(
     error => {
       // Host cancellation propagates untouched; anything else (closed or
       // stalled loop) is an honest admission failure of this reconnect.
-      if @async.is_being_cancelled() {
+      if @core_async.is_being_cancelled() {
         raise error
       }
       return Err(
@@ -1622,7 +1622,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       // unchanged: raise a dedicated marker instead of re-labeling it as a
       // transport/remote failure — the sticky cancel flag checked by the
       // runtime seam still carries the abort identity.
-      if @async.is_being_cancelled() {
+      if @core_async.is_being_cancelled() {
         raise @posoco.RuntimeError::InvocationFailed("MCP tool call cancelled")
       } else {
         raise mcp_call_failure(TransportFailure, original_name)
@@ -1682,7 +1682,7 @@ async fn conn_actor_acquire(
     timeout_ms~,
   ) catch {
     error => {
-      if @async.is_being_cancelled() {
+      if @core_async.is_being_cancelled() {
         raise error
       }
       return Err(MCPCallFailure::TransportFailure)
@@ -1851,7 +1851,7 @@ pub extend MCPToolBridge with @posoco.Lifecycle::{on_compose}
 /// in the cancelled state afterwards, so the host's teardown continues
 /// unimpeded once close returns.
 pub impl @posoco.Lifecycle for MCPToolBridge with fn on_shutdown(self) -> Unit {
-  let _ = @async.protect_from_cancel(() => self.close())
+  let _ = @core_async.protect_from_cancel(() => self.close())
 }
 
 ///|

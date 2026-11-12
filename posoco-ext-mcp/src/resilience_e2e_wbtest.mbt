@@ -89,10 +89,10 @@ async fn e2e_fixture_cwd(
 /// loop spawns on, and the `moonbitlang/async` I/O group the stdio MCP child
 /// processes live on.
 async fn e2e_with_groups(
-  body : async (@core_async.TaskGroup, @async.TaskGroup) -> Unit,
+  body : async (@core_async.TaskGroup, @core_async.TaskGroup) -> Unit,
 ) -> Unit {
   @core_async.with_task_group(async fn(lifetime) {
-    @async.with_task_group(async fn(group) { body(lifetime, group) })
+    @core_async.with_task_group(async fn(group) { body(lifetime, group) })
   })
 }
 
@@ -102,7 +102,7 @@ async fn e2e_with_groups(
 /// a real error, not a skip.
 async fn e2e_activate_bridge(
   lifetime : @core_async.TaskGroup,
-  group : @async.TaskGroup,
+  group : @core_async.TaskGroup,
   node : String,
   extra_entry : String,
   fixture_env : Array[(String, String)],
@@ -227,11 +227,11 @@ async fn e2e_timeout_scenario(node : String) -> Unit {
     }
     assert_true(names.contains("echo__sleep"))
     assert_true(names.contains("echo__exit"))
-    let t0 = @async.now()
+    let t0 = @core_async.now()
     let outcome = e2e_execute(bridge, "echo__sleep", [
       ("ms", Json::number(5000)),
     ])
-    let elapsed = @async.now() - t0
+    let elapsed = @core_async.now() - t0
     let message = match outcome {
       Err(message) => message
       Ok(content) => fail("sleep call should have timed out, got: " + content)
@@ -280,7 +280,7 @@ async fn e2e_exit_reconnect_scenario(node : String) -> Unit {
     }
     // The fixture exits 50ms after its reply; wait past that so the next call
     // deterministically hits a dead connection instead of racing the exit.
-    @async.sleep(600)
+    @core_async.sleep(600)
     match e2e_execute(bridge, "echo__echo", []) {
       Ok(content) => assert_true(content.has_prefix("echo:"))
       Err(message) =>
@@ -321,7 +321,7 @@ async fn e2e_no_reconnect_scenario(node : String) -> Unit {
       Ok(content) => assert_eq(content, "exiting")
       Err(message) => fail("exit call failed: " + message)
     }
-    @async.sleep(600)
+    @core_async.sleep(600)
     let outcome = e2e_execute(bridge, "echo__echo", [])
     let message = match outcome {
       Err(message) => message
@@ -371,15 +371,15 @@ async fn e2e_cancel_scenario(node : String, notification_log : String) -> Unit {
           probe.message = message
           // Read inside the raising task: the sticky cancel flag is the
           // cancellation identity that survives the trait boundary.
-          probe.cancelled_flag = @async.is_being_cancelled()
+          probe.cancelled_flag = @core_async.is_being_cancelled()
         }
       }
     })
-    @async.sleep(200)
+    @core_async.sleep(200)
     task.cancel()
     let mut waited = 0
     while !probe.settled && waited < 5_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     assert_true(probe.settled)
@@ -470,7 +470,7 @@ async fn e2e_probe_success_scenario(node : String) -> Unit {
     assert_true(bridge.pending.is_empty())
     let mut waited = 0
     while bridge.catalog_revision < 1 && waited < 5_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     assert_true(bridge.catalog_revision >= 1)
@@ -514,13 +514,13 @@ async fn e2e_probe_failure_isolation_scenario(node : String) -> Unit {
     let mut waited = 0
     while (bridge.catalog_revision < 1 || bridge.failures().length() < 1) &&
           waited < 5_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     let mut last_len = bridge.failures().length()
     let mut stable = 0
     while stable < 400 && waited < 10_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
       let len = bridge.failures().length()
       if len == last_len {
@@ -580,7 +580,7 @@ async fn e2e_probe_flaky_recovery_scenario(node : String) -> Unit {
     bridge.start_probes(backoff_ms=[400, 250, 250])
     let mut waited = 0
     while bridge.catalog_revision < 1 && waited < 10_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     // The retry bumped the revision and scrubbed the first failure in the
@@ -683,14 +683,14 @@ async fn e2e_neighbor_reconnect_scenario(node : String) -> Unit {
         e2e_execute(bridge, "slow__sleep", [("ms", Json::number(5000))]),
       )
     })
-    @async.sleep(100)
+    @core_async.sleep(100)
     match bridge.reconnect_server("echo") {
       Ok(_) => ()
       Err(message) => fail("neighbor reconnect failed: " + message)
     }
     let mut waited = 0
     while settled.is_empty() && waited < 8_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     assert_eq(settled.length(), 1)
@@ -763,7 +763,7 @@ async fn e2e_wait_reconnecting(bridge : MCPToolBridge) -> Bool {
     if e2e_conn_view(bridge).health is Reconnecting {
       return true
     }
-    @async.sleep(10)
+    @core_async.sleep(10)
     waited += 10
   }
   false
@@ -791,7 +791,7 @@ async fn e2e_dual_reconnect_scenario(node : String) -> Unit {
     }
     let mut waited = 0
     while results.is_empty() && waited < 8_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     assert_eq(results.length(), 1)
@@ -891,15 +891,15 @@ async fn e2e_cancel_pairing_scenario(node : String) -> Unit {
           probe.settled = true
           probe.raised = true
           probe.message = message
-          probe.cancelled_flag = @async.is_being_cancelled()
+          probe.cancelled_flag = @core_async.is_being_cancelled()
         }
       }
     })
-    @async.sleep(300)
+    @core_async.sleep(300)
     task.cancel()
     let mut waited = 0
     while !probe.settled && waited < 5_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       waited += 25
     }
     assert_true(probe.settled)
@@ -1084,7 +1084,7 @@ async fn e2e_close_inflight_scenario(node : String) -> Unit {
           }
         _ => fail("inspect did not answer a view")
       }
-      @async.sleep(5)
+      @core_async.sleep(5)
       waited += 5
     }
     assert_true(admitted)
@@ -1094,7 +1094,7 @@ async fn e2e_close_inflight_scenario(node : String) -> Unit {
     assert_true(bridge.connections.is_empty())
     let mut settled_wait = 0
     while settled.is_empty() && settled_wait < 6_000 {
-      @async.sleep(25)
+      @core_async.sleep(25)
       settled_wait += 25
     }
     assert_eq(settled.length(), 1)
