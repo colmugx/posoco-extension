@@ -1,10 +1,10 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-ext-lazytools" @lazytools,
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
-// `async test` requires the root `moonbitlang/async` import but never names it
+// `async test` requires the root `moonbitlang/core/async` import but never names it
 // through the alias, so every target reports it unused.
 
 warnings = "-unused_package"
@@ -13,15 +13,16 @@ warnings = "-unused_package"
 // Bun FFI twin.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
   targets: {
     "posoco_ext_rtk.native.mbt": [ "native", "wasm" ],
     "posoco_ext_rtk.js.mbt": [ "js" ],

@@ -2,8 +2,8 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-kit-provider" @provider,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
   "moonbitlang/core/debug",
 }
@@ -11,6 +11,7 @@ import {
 warnings = "-unused_value-unused_constructor"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
   targets: {
     "decision_native_js.mbt": [ "native", "wasm", "js" ],
     "decision_wasm_fallback.mbt": [ "wasm-gc" ],

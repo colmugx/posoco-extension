@@ -6,7 +6,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // Both tests are native-only white-box files.
@@ -16,12 +16,13 @@ import {
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
-// `async test` requires the root `moonbitlang/async` import, and a test import
+// `async test` requires the root `moonbitlang/core/async` import, and a test import
 // cannot be target-gated, so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
   targets: {
     "statusbar_wbtest.mbt": [ "native" ],
     "command_statusbar_wbtest.mbt": [ "native" ],
