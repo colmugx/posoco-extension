@@ -1,6 +1,6 @@
 ///|
 async fn openai_version_read_file(path : String) -> String {
-  @fs.read_file(path).text()
+  @fs.read_text(path)
 }
 
 ///|
@@ -12,7 +12,7 @@ async fn openai_version_write_atomic(
 ) -> Unit {
   @fs.mkdir(directory, recursive=true, allow_exist=true)
   let temporary = target + "." + nonce + ".tmp"
-  @fs.write_file(
+  @fs.write_text(
     temporary,
     payload,
     create_mode=@fs.CreateNew,
