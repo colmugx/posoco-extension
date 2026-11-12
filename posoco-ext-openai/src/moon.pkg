@@ -6,8 +6,8 @@ import {
   "colmugx/posoco-kit-responses" @responses,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
   "moonbitlang/core/random",
@@ -22,23 +22,24 @@ import {
 // client and the gzip codec. The js WebSocket twin uses the Bun FFI.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/websocket",
+  "moonbitlang/core/async/websocket",
   "moonbit-community/flate/gzip",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 warnings = "-unused_async-struct_never_constructed-unused_field"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/http", "moonbitlang/core/async/js_async", "moonbitlang/core/async/socket", "moonbitlang/core/async/websocket" ],
   "native-stub": [ "identity_stub.c" ],
   targets: {
     "identity.js.mbt": [ "js" ],
@@ -79,6 +80,6 @@ import {
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/socket",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"

@@ -2,29 +2,30 @@ import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "posoco/devkit",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 // Each backend compiles one execute path: native+wasm through @process and
 // async/io, js through the Bun FFI twin.
 #cfg(any(target = "native", target = "wasm"))
 import {
-  "moonbitlang/async/process",
-  "moonbitlang/async/io",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/io",
   "moonbitlang/core/env",
   "moonbitlang/core/buffer",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/io", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
   targets: {
     "posoco_ext_ps1.js.mbt": [ "js" ],
     "posoco_ext_ps1.native.mbt": [ "native", "wasm" ],

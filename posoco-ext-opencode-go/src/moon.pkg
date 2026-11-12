@@ -7,20 +7,21 @@ import {
   "colmugx/posoco-kit-rate-limit" @ratelimit,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_value-unused_constructor"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
   targets: {
     // HTTP-backed adaptors: native+wasm+js (moonbitlang/async/http is
     // unavailable on wasm-gc). Catalog/factory/protocol/limits/quota-parse

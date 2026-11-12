@@ -1,6 +1,6 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -10,10 +10,11 @@ import {
 // The loopback callback server is the only socket user and is native-only.
 #cfg(target = "native")
 import {
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/socket",
 }
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http", "moonbitlang/core/async/socket" ],
   "native-stub": [ "entropy_stub.c" ],
   targets: {
     "callback_server.native.mbt": [ "native" ],
