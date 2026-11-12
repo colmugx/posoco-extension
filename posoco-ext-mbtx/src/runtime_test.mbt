@@ -5,8 +5,8 @@ fn test_runtime() -> @posoco-ext-mbtx.Runtime {
 
 ///|
 /// The unpublished SDK is a normal workspace dependency, not copied sources.
-async fn[X] test_program(
-  group : @async.TaskGroup[X],
+async fn test_program(
+  group : @async.TaskGroup,
   source : String,
   compile~ : Bool = true,
 ) -> String {
@@ -20,11 +20,11 @@ async fn[X] test_program(
   )
   fixture_write(
     directory + "/guest/moon.mod",
-    "name = \"mbtx/test-guest\"\nversion = \"0.0.0\"\nimport { \"colmugx/posoco-ext-mbtx@0.1.0\", \"moonbitlang/async@0.22.7\" }\n",
+    "name = \"mbtx/test-guest\"\nversion = \"0.0.0\"\nimport { \"colmugx/posoco-ext-mbtx@0.1.0\", \"\" }\n",
   )
   fixture_write(
     directory + "/guest/moon.pkg",
-    "import { \"colmugx/posoco-ext-mbtx/sdk/stdio\" @mbtx, \"colmugx/posoco-ext-mbtx/sdk\", \"colmugx/posoco-ext-mbtx/protocol\", \"moonbitlang/async\" }\noptions(\"is-main\": true)\nsupported_targets = \"wasm\"\n",
+    "import { \"colmugx/posoco-ext-mbtx/sdk/stdio\" @mbtx, \"colmugx/posoco-ext-mbtx/sdk\", \"colmugx/posoco-ext-mbtx/protocol\", \"moonbitlang/core/async\" }\noptions(\"is-main\": true)\nsupported_targets = \"wasm\"\n",
   )
   fixture_write(
     directory + "/guest/main.mbt",

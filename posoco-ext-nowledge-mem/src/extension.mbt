@@ -179,7 +179,7 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_shutdown(
 /// loop on it (750ms poll — the debounce made structural). Call inside the
 /// host's `with_task_group` scope; the loop runs until `on_shutdown` stops
 /// the engine, so the group must stay open for the agent's lifetime.
-pub fn[G] NowledgeMem::attach(
+pub fn NowledgeMem::attach(
   self : NowledgeMem,
   group : @async.TaskGroup,
 ) -> Unit {
