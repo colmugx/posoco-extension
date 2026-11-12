@@ -387,7 +387,7 @@ async fn zcode_session_run(
 /// the wall-clock ceiling → teardown (stdin EOF → bounded wait; the task
 /// group reclaims a stubborn child via graceful TERM → hard KILL).
 async fn zcode_delegated(
-  group : @async.TaskGroup[ZcodeTaskResult],
+  group : @async.TaskGroup,
   cmd : (String, Array[String]),
   registry : Json,
   config~ : ZcodeConfig,
