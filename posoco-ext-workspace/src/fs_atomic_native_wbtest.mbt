@@ -115,10 +115,10 @@ async test "native atomic partial write failure closes handle cleans staging and
         text,
       ) {
         retained.push(file)
-        file.write("partial-")
+        file.write(@utf8.encode("partial-")[:])
         file.close()
         // A real write on a closed handle must fail before any rename.
-        file.write(text)
+        file.write(@utf8.encode(text)[:])
       })
       "unexpected success"
     } catch {
@@ -129,7 +129,7 @@ async test "native atomic partial write failure closes handle cleans staging and
     assert_eq(fs.read_file(path), "old-destination")
     assert_eq(@fs.readdir(base), ["credential"])
     let closed = try {
-      retained[0].write("not-written")
+      retained[0].write(@utf8.encode("not-written")[:])
       false
     } catch {
       _ => true
@@ -189,7 +189,7 @@ async test "native atomic cancellation after partial write closes handle and rem
             _text,
           ) {
             retained.push(file)
-            file.write("partial-secret-fixture")
+            file.write(@utf8.encode("partial-secret-fixture")[:])
             entered.put(())
             @async.sleep(10000)
           })
@@ -202,7 +202,7 @@ async test "native atomic cancellation after partial write closes handle and rem
     assert_eq(fs.read_file(path), "old-destination")
     assert_eq(@fs.readdir(base), ["credential"])
     let closed = try {
-      retained[0].write("not-written")
+      retained[0].write(@utf8.encode("not-written")[:])
       false
     } catch {
       _ => true
