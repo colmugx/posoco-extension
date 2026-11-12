@@ -12,7 +12,7 @@ async fn grep_file_kind(path : String) -> @fs.FileKind? {
 ///|
 /// Decoded text of `path`, or None when reading or decoding fails.
 async fn grep_file_text(path : String) -> String? {
-  let data = @fs.read_file(path) catch { _ => return None }
+  let data = @fs.read_binary(path) catch { _ => return None }
   Some(data.text() catch { _ => return None })
 }
 

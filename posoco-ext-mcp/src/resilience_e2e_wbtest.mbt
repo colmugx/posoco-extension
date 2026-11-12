@@ -72,7 +72,7 @@ async fn e2e_fixture_cwd(
     .map(fn(pair) { "\"\{pair.0}\":\"\{pair.1}\"" })
     .join(",")
   let content = "{\"mcpServers\":{\"echo\":{\"command\":\"\{node}\",\"args\":[\"\{script}\"],\"env\":{\{env_pairs}}\{extra_entry}}}}"
-  @fs.write_file(
+  @fs.write_text(
     root + "/.mcp.json",
     content,
     create_mode=@fs.CreateMode::CreateOrTruncate,
@@ -170,7 +170,7 @@ async fn e2e_execute(
 
 ///|
 async fn e2e_read_text(path : String) -> String? {
-  let data = @fs.read_file(path) catch { _ => return None }
+  let data = @fs.read_binary(path) catch { _ => return None }
   let text = data.text() catch { _ => return None }
   Some(text)
 }
@@ -440,7 +440,7 @@ async fn e2e_probe_fixture_cwd(node : String) -> String {
     _ => "test_fixtures/echo_server.mjs"
   }
   let content = "{\"mcpServers\":{\"echo\":{\"command\":\"\{node}\",\"args\":[\"\{script}\"],\"env\":{}},\"dead\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:1/mcp\",\"timeout_ms\":2000}}}"
-  @fs.write_file(
+  @fs.write_text(
     root + "/.mcp.json",
     content,
     create_mode=@fs.CreateMode::CreateOrTruncate,

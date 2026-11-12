@@ -48,7 +48,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn kind(
 
 ///|
 pub impl WorkspaceFs for NativeWorkspaceFs with fn read_file(_self, path) {
-  let data = @fs.read_file(path) catch { _ => raise fs_err("read_file") }
+  let data = @fs.read_binary(path) catch { _ => raise fs_err("read_file") }
   data.text() catch {
     _ => raise fs_err("decode")
   }
@@ -63,7 +63,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file(
   // `create_mode=CreateOrTruncate` is required: without it, @fs.write_file
   // opens in TruncateExisting mode and fails on a missing file. We want
   // CreateOrTruncate so write creates the file when absent (0o644 permission).
-  @fs.write_file(
+  @fs.write_text(
     path,
     content,
     create_mode=@fs.CreateMode::CreateOrTruncate,

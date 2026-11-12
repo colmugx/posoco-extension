@@ -78,7 +78,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
       raise Unsafe
     }
     let decoded = @execution.decode_execution_journal(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
     )
     if decoded is Err(_) {
       self.failed = true
