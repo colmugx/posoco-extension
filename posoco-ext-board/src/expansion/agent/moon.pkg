@@ -1,7 +1,7 @@
 import {
   "colmugx/posoco-ext-board/expansion",
   "colmugx/posoco-ext-board/execution",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 import {
