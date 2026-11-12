@@ -10,7 +10,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -99,7 +99,7 @@ pub fn AcpBridge::render(Self, @port.UiRender) -> Unit
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
 pub fn AcpBridge::session_id(Self) -> String?
 pub fn AcpBridge::set_context_window(Self, Int32?) -> Unit
-pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
+pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
 pub fn AcpBridge::take_failure(Self) -> String?
 pub fn AcpBridge::ui_descriptor(Self) -> @port.UiDescriptor
