@@ -10,7 +10,6 @@ import {
   "posoco/ext-oauth@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
   "posoco/kit-events@0.1.0",
-  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.mbt.md"
