@@ -48,7 +48,7 @@ pub async fn BoardExecutionHandle::wait(
 pub struct BoardExecutionOwner {
   priv backend : @backend.BoardBackend
   priv store : &BoardExecutionStore
-  priv mutex : @async.Mutex
+  priv mutex : @core_async.Mutex
   priv mut group : @core_async.TaskGroup?
   priv mut records_ : Array[BoardExecutionBinding]
   priv mut loaded : Bool
@@ -71,7 +71,7 @@ fn owner_with(
   {
     backend,
     store,
-    mutex: @async.Mutex::Mutex(),
+    mutex: @core_async.Mutex::Mutex(),
     group: None,
     records_: [],
     loaded: false,
@@ -165,7 +165,7 @@ pub async fn BoardExecutionOwner::attach(
   defer {
     self.busy = false
   }
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     let loaded = self.store.load() catch { _ => Err(StoreUnavailable) }
     let records = match loaded {
       Ok(records) => records
@@ -255,7 +255,7 @@ pub async fn BoardExecutionOwner::execute(
   }
   self.mutex.acquire()
   defer self.mutex.release()
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     if self.closed {
       return Err(Closed)
     }
@@ -394,7 +394,7 @@ async fn BoardExecutionOwner::start(
     return false
   }
   owned.gate_called = true
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     self.mutex.acquire()
     defer self.mutex.release()
     // Another slot may have poisoned or closed the owner while this driver
@@ -466,11 +466,11 @@ async fn BoardExecutionOwner::drive(
     Cancelled
   } else {
     match
-      @async.handle_cancellation(() => {
+      @core_async.handle_cancellation(() => {
         try {
           match request.timeout_ms {
             Some(timeout) =>
-              @async.with_timeout(timeout, () => {
+              @core_async.with_timeout(timeout, () => {
                 slot.adapter.run(request, scope => {
                   self.start(owned, scope, admission_guard)
                 })
@@ -481,7 +481,7 @@ async fn BoardExecutionOwner::drive(
               })
           }
         } catch {
-          @async.TimeoutError => TimedOut
+          @core_async.TimeoutError => TimedOut
           _ => Failed
         }
       }) {
@@ -489,7 +489,7 @@ async fn BoardExecutionOwner::drive(
       None => Cancelled
     }
   }
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     self.finish(owned, outcome)
     slot.execution = None
     slot.worker = None
@@ -606,7 +606,7 @@ pub async fn BoardExecutionOwner::shutdown(
   timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     let workers : Array[@core_async.Task[BoardExecutionBinding]] = []
     for slot in self.slots {
       match slot.worker {
@@ -633,7 +633,7 @@ pub async fn BoardExecutionOwner::shutdown(
     if workers.is_empty() {
       return true
     }
-    @async.with_timeout(timeout_ms, () => {
+    @core_async.with_timeout(timeout_ms, () => {
       for task in workers {
         ignore(task.wait())
       }
