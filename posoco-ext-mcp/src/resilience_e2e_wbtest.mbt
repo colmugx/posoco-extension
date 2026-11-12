@@ -89,7 +89,7 @@ async fn e2e_fixture_cwd(
 /// loop spawns on, and the `moonbitlang/async` I/O group the stdio MCP child
 /// processes live on.
 async fn e2e_with_groups(
-  body : async (@core_async.TaskGroup, @async.TaskGroup[Unit]) -> Unit,
+  body : async (@core_async.TaskGroup, @async.TaskGroup) -> Unit,
 ) -> Unit {
   @core_async.with_task_group(async fn(lifetime) {
     @async.with_task_group(async fn(group) { body(lifetime, group) })
@@ -102,7 +102,7 @@ async fn e2e_with_groups(
 /// a real error, not a skip.
 async fn e2e_activate_bridge(
   lifetime : @core_async.TaskGroup,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   node : String,
   extra_entry : String,
   fixture_env : Array[(String, String)],
