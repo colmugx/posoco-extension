@@ -257,7 +257,7 @@ pub async fn AcpBridge::flush(self : AcpBridge) -> Int32 noraise {
 /// connection). Updates arriving while no session is attached are dropped.
 pub fn[G] AcpBridge::spawn_pump(
   self : AcpBridge,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup,
 ) -> Unit {
   group.spawn_bg(() => {
     while true {
