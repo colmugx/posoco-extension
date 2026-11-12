@@ -31,7 +31,7 @@ impl KindFs for NativeKindFs with fn read_text(_self, path : String) -> String {
   let data = @fs.read_binary(path) catch {
     _ => raise kind_io_failure("read", path)
   }
-  @utf8.decode(data) catch {
+  data.text() catch {
     _ => raise kind_io_failure("read", path)
   }
 }
