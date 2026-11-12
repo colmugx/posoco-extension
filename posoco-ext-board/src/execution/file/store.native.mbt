@@ -111,7 +111,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn pers
       let file = @fs.create(tmp, allow_existing=false, permission=0o600)
       created.val = true
       defer file.close()
-      file.write(data)
+      file.write(@utf8.encode(data)[:])
       file.sync()
       if self.fail_at == Some(BeforeRename) {
         raise Unsafe
