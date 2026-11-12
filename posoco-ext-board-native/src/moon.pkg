@@ -4,10 +4,10 @@ import {
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/runtime",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/process",
-  "moonbitlang/async/websocket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/websocket",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/moonback",
@@ -15,8 +15,8 @@ import {
 }
 
 import {
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/aqueue",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/json",
   "colmugx/posoco-ext-board/domain",
@@ -26,7 +26,7 @@ supported_targets = "native"
 
 options(
   "native-stub": [ "random_stub.c" ],
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/http", "moonbitlang/core/async/process", "moonbitlang/core/async/socket", "moonbitlang/core/async/websocket" ],
 )
 
 rule(

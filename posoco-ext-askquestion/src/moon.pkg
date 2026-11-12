@@ -1,10 +1,14 @@
 import {
   "colmugx/posoco",
   "moonbitlang/core/debug",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 import {
   "colmugx/posoco/kernel",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

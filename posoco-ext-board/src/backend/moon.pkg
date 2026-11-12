@@ -3,7 +3,7 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/debug",
 }
@@ -13,12 +13,12 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/async" @core_async,
 } for "test"
 
 import {
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async/aqueue",
   "moonbitlang/core/async" @core_async,
 } for "wbtest"
 
@@ -28,5 +28,5 @@ import {
 supported_targets = "+native +js"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue" ],
 )

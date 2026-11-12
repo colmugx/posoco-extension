@@ -3,7 +3,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/events",
   "posoco/devkit",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -11,23 +11,23 @@ import {
 // js through the Bun FFI twin.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/encoding/utf8",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
 } for "wbtest"
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "colmugx/posoco/runtime",
   "moonbitlang/core/env",
   "posoco/devkit/testkit" @tk,
@@ -36,6 +36,7 @@ import {
 supported_targets = "+native +js +wasm"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],
     "posoco_ext_bash.native.mbt": [ "native", "wasm" ],
