@@ -320,7 +320,7 @@ async fn write_atomic(
       }
     }
   }
-  file.write(content) catch {
+  file.write(@utf8.encode(content)[:]) catch {
     err => raise EmbedError("cannot write \{tmp}: \{Repr(err)}")
   }
   file.close()
