@@ -1,8 +1,8 @@
 ///|
 priv struct Bridge {
   registry : @fuwaroid.Fuwaroid[RegistryCmd, RegistryQuery, RegistryReply]
-  writer : @async.Mutex
-  slots : @async.Semaphore
+  writer : @core_async.Mutex
+  slots : @core_async.Semaphore
   max_frame_bytes : Int32
 }
 
@@ -36,7 +36,7 @@ impl @sdk.ToolClient for Bridge with fn call(self, name, arguments) {
   // The shield keeps registration and cleanup adjacent: once the registry
   // admitted a request, the release below is always installed, so no
   // cancellation between the two can orphan a registration.
-  let admitted = @async.protect_from_cancel(() => self.query(Acquire))
+  let admitted = @core_async.protect_from_cancel(() => self.query(Acquire))
   match admitted {
     Admitted(id, waiter) => {
       defer (match self.registry.tell(Release(id~)) {
@@ -140,8 +140,8 @@ pub async fn serve(
     )
     let bridge = Bridge::{
       registry,
-      writer: @async.Mutex(),
-      slots: @async.Semaphore(max_pending),
+      writer: @core_async.Mutex(),
+      slots: @core_async.Semaphore(max_pending),
       max_frame_bytes,
     }
     let ctx = @sdk.Context(tools=bridge, allowed=tools, logs=bridge)

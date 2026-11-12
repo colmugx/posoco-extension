@@ -384,7 +384,7 @@ async test "native request arrays detached before first suspension" {
       assert_eq(store.persist(request, events), Ok(()))
     })
     while !started.val {
-      @async.sleep(1)
+      @core_async.sleep(1)
     }
     request.tasks[0].dependencies.clear()
     request.tasks[0].definition_of_done.clear()

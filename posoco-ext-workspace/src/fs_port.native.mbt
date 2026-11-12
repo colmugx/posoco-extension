@@ -92,7 +92,7 @@ async fn native_write_file_atomic(
   content : String,
   next_candidate~ : (String) -> String = atomic_write_candidate,
   write~ : async (@fs.File, String) -> Unit = async fn(file, text) {
-    file.write(text)
+    file.write(@utf8.encode(text)[:])
   },
 ) -> Unit raise WorkspaceFsError {
   let owned : Ref[(@fs.File, String)?] = Ref(None)
@@ -120,7 +120,7 @@ async fn native_write_file_atomic(
         create_mode=CreateNew,
         permission=0o600,
       ) catch {
-        @os_error.OSError(_) as err if err.is_EEXIST() => continue
+        @os_error.OsError(@os_error.Kind::AlreadyExists, ..) => continue
         _ => raise fs_err("write_file_atomic: staging create")
       }
       owned.val = Some((file, tmp))
