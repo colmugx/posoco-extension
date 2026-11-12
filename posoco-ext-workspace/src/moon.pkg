@@ -5,27 +5,28 @@ import {
 // async/fs backs the native+wasm fs port; the js twin uses node:fs FFI.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
 }
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 } for "wbtest"
 
 #cfg(target = "native")
 import {
-  "moonbitlang/async/types",
+  "moonbitlang/core/async/types",
 } for "wbtest"
 
-// `async test` requires the root `moonbitlang/async` import and a test import
+// `async test` requires the root `moonbitlang/core/async` import and a test import
 // cannot be target-gated, so js checks report it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/os_error", "moonbitlang/core/async/types" ],
   "native-stub": [ "fs_atomic_test_stub.c" ],
   targets: {
     "fs_atomic_native_wbtest.mbt": [ "native" ],

@@ -9,7 +9,7 @@ import {
 // node:fs and only needs the JSON wire vocabulary.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/base64",
 }
 
@@ -19,7 +19,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco-ext-workspace" @workspace,
 } for "wbtest"
 
@@ -28,12 +28,13 @@ import {
   "colmugx/posoco/kernel",
 } for "wbtest"
 
-// `moonbitlang/async` is imported for the native-only white-box async
+// `moonbitlang/core/async` is imported for the native-only white-box async
 // tests above, so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
   targets: {
     "posoco_ext_read.js.mbt": [ "js" ],
     "posoco_ext_read.native.mbt": [ "native", "wasm" ],
