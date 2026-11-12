@@ -49,7 +49,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn kind(
 ///|
 pub impl WorkspaceFs for NativeWorkspaceFs with fn read_file(_self, path) {
   let data = @fs.read_binary(path) catch { _ => raise fs_err("read_file") }
-  data.text() catch {
+  @utf8.decode(data) catch {
     _ => raise fs_err("decode")
   }
 }

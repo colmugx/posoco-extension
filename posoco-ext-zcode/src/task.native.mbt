@@ -278,7 +278,7 @@ fn zcode_permission_deny(params : Json?) -> (Json, String)? {
 async fn zcode_native_read_file_opt(path : String) -> String? {
   try {
     let raw = @fs.read_binary(path)
-    Some(raw.text())
+    Some(@utf8.decode(raw))
   } catch {
     _ => None
   }
@@ -335,7 +335,7 @@ async fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
   let raw = @fs.read_binary(path) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{e}")
   }
-  let text = raw.text() catch {
+  let text = @utf8.decode(raw) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot decode \{path}: \{e}")
   }
   let v2 = @json.parse(text) catch {
