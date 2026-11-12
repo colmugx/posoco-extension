@@ -8,6 +8,7 @@ import {
   "posoco/ext-oauth" @oauth,
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }

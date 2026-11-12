@@ -8,6 +8,7 @@ import {
 #cfg(target = "native")
 import {
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/encoding/utf8",
 }
 
 #cfg(target = "js")

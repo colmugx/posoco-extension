@@ -128,9 +128,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
     let (response, data) = @http.post_text(url, body, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    let text = data.read_all() catch { _ => { data.close(); return Failed(detail="response read failed") } }
-    data.close()
-    let text = @utf8.decode(text) catch { _ => return Failed(detail="response body could not be decoded") }
+    let text = data
     Answered(code=response.code, body=text)
   }) catch {
     failure =>
@@ -190,7 +188,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
   for key, value in headers {
     http_headers[@http.CaseInsensitiveString(key)] = value
   }
-  let client = @http.request_stream(@http.RequestMethod::Post, url, headers=http_headers) catch {
+  let client = @http.post(url, headers=http_headers) catch {
     err => raise MagpieGatewayError::Offline("stream open failed: \{err}")
   }
   client.write(@utf8.encode(body)[:]) catch {

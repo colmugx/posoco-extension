@@ -24,7 +24,7 @@ pub fn ExpansionHost::ExpansionHost(
   allocator~ : &ExpansionIdAllocator = NumberedExpansionAllocator(
     prefix="expanded-",
   ),
-  now_ms~ : () -> Int64 = @async.now,
+  now_ms~ : () -> Int64 = @core_async.now,
 ) -> ExpansionHost {
   {
     backend_: backend,
