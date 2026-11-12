@@ -51,7 +51,7 @@ impl @posoco.ModelPort for RealAgentProbe with fn chat(
   }
   ignore(self.entered.try_put(()) catch { _ => false })
   if self.block {
-    @async.sleep(60000)
+    @core_async.sleep(60000)
   }
   if self.fail {
     raise @posoco.ModelError::Transport("test failure")

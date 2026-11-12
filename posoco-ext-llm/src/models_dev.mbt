@@ -26,7 +26,9 @@ async fn fetch_metadata_url(url : String) -> Json {
   if response.code < 200 || response.code >= 300 {
     fail("metadata source HTTP status: \{response.code}")
   }
-  @json.parse(body.text())
+  let data = body.read_all()
+  body.close()
+  @json.parse(@utf8.decode(data))
 }
 
 ///|

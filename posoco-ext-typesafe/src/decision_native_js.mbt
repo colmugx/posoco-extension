@@ -74,18 +74,9 @@ pub impl @posoco.DecisionPort for TypesafeDecisionPort with fn evaluate(
       )
   }
   if response.code < 200 || response.code >= 300 {
-    raise jev_http_error(response.code, body_data.read_all().length())
+    raise jev_http_error(response.code, body_data.length())
   }
-  let raw = body_data.read_all() catch {
-    _ => raise @posoco.DecisionError::ResponseParse("TypeSafe Jev response read failed")
-  }
-  body_data.close()
-  let body_text = @utf8.decode(raw) catch {
-    _ =>
-      raise @posoco.DecisionError::ResponseParse(
-        "TypeSafe Jev response body is not valid UTF-8",
-      )
-  }
+  let body_text = body_data
   let payload : Json = @json.parse(body_text) catch {
     _ =>
       raise @posoco.DecisionError::ResponseParse(

@@ -22,8 +22,8 @@ impl @execution.BoardExecutionAdapter for SlowCleanupAdapter with fn run(
     start({ session_id: request.session_id, run_id: "run", turn_id: "turn", }),
   )
   self.entered.put(())
-  let completed = @async.handle_cancellation(() => @async.sleep(60000))
-  @async.protect_from_cancel(() => {
+  let completed = @core_async.handle_cancellation(() => @core_async.sleep(60000))
+  @core_async.protect_from_cancel(() => {
     self.cleaning.put(())
     self.release.get()
   })

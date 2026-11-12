@@ -12,6 +12,7 @@ import {
   "moonbitlang/core/async/process",
   "moonbitlang/core/async/io",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/buffer",
 }
 

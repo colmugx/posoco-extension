@@ -768,7 +768,7 @@ async test "grep_literal_case_insensitive_folds_unicode_like_regex" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/umlaut.txt", "Über alles\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/umlaut.txt", "Über alles\n", create_mode=CreateNew)
     let literal = GrepTools::GrepTools().execute(
       test_ctx(
         grep_call_fields([
