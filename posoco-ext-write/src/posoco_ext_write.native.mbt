@@ -18,7 +18,7 @@ impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
 /// Stamp for freshness tracking: `mtime` plus size from an open read handle
 /// (`@fs` exposes size only on `File`, not as a path-based stat).
 impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
-  let (mtime_s, mtime_ns) = @fs.mtime(path) catch {
+  let stamp = @fs.mtime(path) catch {
     error => raise write_failure("stat", path, error.to_string())
   }
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
@@ -31,7 +31,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s, mtime_ns, size, }
+  { mtime_s: stamp.sec(), mtime_ns: stamp.nsec(), size, }
 }
 
 ///|

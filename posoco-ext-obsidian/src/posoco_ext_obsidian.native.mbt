@@ -10,19 +10,19 @@ impl CliIo for NativeCliIo with fn run(
   cli_path : String,
   args : Array[String],
 ) -> CliResult raise @posoco.RuntimeError {
-  let (exit_code, output_data) = @process.collect_output_merged(cli_path, args) catch {
+  let result = @process.run(cli_path, args, stdout=Collect, stderr=Collect) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "could not spawn the Obsidian CLI (\{cli_path}); install Obsidian 1.12+ and register its CLI",
       )
   }
-  let output = output_data.text() catch {
+  let output = result.stdout_text() catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "Obsidian CLI produced non-UTF-8 output",
       )
   }
-  { exit_code, output, }
+  { exit_code: result.exit_code, output, }
 }
 
 ///|

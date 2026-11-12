@@ -454,13 +454,12 @@ async test "concurrent usage requests both decode" {
       Respond(code=200, body=page_body),
     ]),
   )
-  let (first, second) = @async.with_task_group(group => {
+  @async.with_task_group(group => {
     let first = group.spawn(() => client.usage_requests())
     let second = group.spawn(() => client.usage_requests())
-    (first, second)
+    inspect(first.wait().rows.length(), content="1")
+    inspect(second.wait().rows.length(), content="1")
   })
-  inspect(first.wait().rows.length(), content="1")
-  inspect(second.wait().rows.length(), content="1")
 }
 
 ///|
