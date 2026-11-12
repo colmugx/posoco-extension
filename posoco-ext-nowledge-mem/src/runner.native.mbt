@@ -34,7 +34,7 @@ pub impl NmemPlatform for PlatformFs with fn read_home_file(
     None => None
     Some(path) => {
       let data = @fs.read_binary(path) catch { _ => return None }
-      let text = data.text() catch { _ => return None }
+      let text = @utf8.decode(data) catch { _ => return None }
       Some(text)
     }
   }

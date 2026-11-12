@@ -22,7 +22,7 @@ pub impl HandoffStore for DefaultHandoffStore with fn read(_self, path) {
   let data = @fs.read_binary(path) catch {
     _ => return Err("handoff store read failed: " + path)
   }
-  let text = data.text() catch {
+  let text = @utf8.decode(data) catch {
     _ => return Err("handoff store decode failed: " + path)
   }
   Ok(text)
