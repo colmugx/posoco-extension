@@ -713,11 +713,12 @@ async fn SubagentTools::spawn(
   // aborts surface as their own classification.
   let mut timed_out = false
   let mut death : Error? = None
-  let outcome : @posoco.TurnResult? = @async.with_task_group(group => {
+  let outcome_cell : Ref[@posoco.TurnResult?] = Ref(None)
+  @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => {
       @async.sleep(timeout_ms)
       timed_out = true
-      group.return_immediately(None)
+      group.return_immediately()
     })
     let result = child.run_turn(user_message, spec.session_id) catch {
       error => {
@@ -725,10 +726,11 @@ async fn SubagentTools::spawn(
         raise error
       }
     }
-    Some(result)
+    outcome_cell.val = Some(result)
   }) catch {
-    _ => None
+    _ => ()
   }
+  let outcome = outcome_cell.val
   match outcome {
     Some(result) => {
       self.global_slots.release()
@@ -822,13 +824,19 @@ async fn SubagentTools::race_interactive(
   // `None` here, and the cleanup below is the only place the child task
   // and its parked asks are closed on a cancelled race.
   let raced : InteractiveOutcome? = @async.handle_cancellation(async fn() {
+    let winner : Ref[InteractiveOutcome?] = Ref(None)
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
         let info = armed.wait()
-        group.return_immediately(InteractiveOutcome::Asked(info))
+        winner.val = Some(InteractiveOutcome::Asked(info))
+        group.return_immediately()
       })
-      InteractiveOutcome::Terminal(handle.wait())
+      winner.val = Some(InteractiveOutcome::Terminal(handle.wait()))
     })
+    match winner.val {
+      Some(outcome) => outcome
+      None => abort("interactive race completed without an outcome")
+    }
   })
   let raced : InteractiveOutcome = match raced {
     None => {
