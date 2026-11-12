@@ -4,11 +4,11 @@ import {
 }
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async/aqueue",
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "moonbitlang/core/async" @core_async,
@@ -17,5 +17,5 @@ import {
 supported_targets = "native"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/fs" ],
 )
