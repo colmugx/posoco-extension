@@ -6,3 +6,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/debug",
 }
+
+options(
+  "allow-experimental-packages": [  ],
+)
