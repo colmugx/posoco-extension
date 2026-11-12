@@ -31,8 +31,8 @@ async fn ZcodeConn::write_line(
 ) -> Unit raise ZcodeError {
   self.write_lock.acquire()
   try {
-    self.writer.write(line)
-    self.writer.write("\n")
+    self.writer.write(@utf8.encode(line)[:])
+    self.writer.write(@utf8.encode("\n")[:])
     self.writer.flush()
   } catch {
     e => {
@@ -336,7 +336,7 @@ async fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
     e => raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{e}")
   }
   let text = @utf8.decode(raw) catch {
-    e => raise ZcodeCredsUnreadable(detail="cannot decode \{path}: \{e}")
+    _ => raise ZcodeCredsUnreadable(detail="cannot decode \{path}: invalid UTF-8")
   }
   let v2 = @json.parse(text) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot parse \{path}: \{e}")
@@ -368,8 +368,9 @@ async fn zcode_session_run(
   session_id~ : String?,
   mode~ : String,
 ) -> ZcodeTaskResult raise Error {
+  let outcome : Ref[ZcodeTaskResult?] = Ref(None)
   @async.with_task_group(group => {
-    zcode_delegated(
+    outcome.val = Some(zcode_delegated(
       group,
       cmd,
       registry,
@@ -378,8 +379,12 @@ async fn zcode_session_run(
       cwd~,
       session_id~,
       mode~,
-    )
+    ))
   })
+  match outcome.val {
+    Some(result) => result
+    None => abort("zcode task group completed without a result")
+  }
 }
 
 ///|
@@ -415,8 +420,8 @@ async fn zcode_delegated(
     group,
     cmd.0,
     cmd.1,
-    stdin=stdin_input,
-    stdout=stdout_output,
+    stdin=@process.ProcessInput::Shared(stdin_input),
+    stdout=@process.ProcessOutput::Shared(stdout_output),
     cancel_handler=@process.graceful_cancel(timeout=5000),
     no_wait=true,
   ) catch {
@@ -431,10 +436,10 @@ async fn zcode_delegated(
   group.spawn_bg(() => {
     let mut open = true
     while open {
-      let line : String? = reader.read_until("\n") catch { _ => None }
+      let line : Bytes? = reader.read_until(@utf8.encode("\n")[:]) catch { _ => None }
       match line {
         Some(chunk) => {
-          let trimmed = chunk.trim().to_owned()
+          let trimmed = (@utf8.decode(chunk) catch { _ => "" }).trim().to_owned()
           if trimmed != "" {
             conn.handle_line(trimmed) catch {
               _ => ()

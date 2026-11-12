@@ -44,6 +44,7 @@ async fn communicate(
     defer writer.release()
     process.write(bytes)
   }
+  let result_cell : Ref[InvocationResult?] = Ref(None)
   @async.with_task_group(group => {
     @async.pause()
     let err = group.spawn(() => {
@@ -137,13 +138,17 @@ async fn communicate(
         @utf8.decode(Bytes::from_array(stderr_bytes)),
       )
     }
-    {
+    result_cell.val = Some({
       outcome: session.finish(exit_code),
       stderr: @utf8.decode(Bytes::from_array(stderr_bytes)),
       logs,
       calls,
-    }
+    })
   })
+  match result_cell.val {
+    Some(result) => result
+    None => abort("communication task group completed without a result")
+  }
 }
 
 ///|
@@ -253,6 +258,7 @@ async fn Runtime::execute(
     }
   }
   defer self.active.remove(invocation_id)
+  let result_cell : Ref[InvocationResult?] = Ref(None)
   @async.with_task_group(group => {
     @async.pause()
     let task = group.spawn(allow_failure=true, () => {
@@ -338,10 +344,14 @@ async fn Runtime::execute(
     if cancelled.val {
       task.cancel()
     }
-    task.wait()
+    result_cell.val = Some(task.wait())
   }) catch {
     @protocol.ProtocolError::Invalid(reason) =>
       raise RuntimeError::ProtocolFailure(reason)
     error => raise error
+  }
+  match result_cell.val {
+    Some(result) => result
+    None => abort("invocation task group completed without a result")
   }
 }
