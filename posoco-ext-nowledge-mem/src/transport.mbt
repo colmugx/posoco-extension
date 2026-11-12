@@ -190,16 +190,7 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
     let (response, client) = @http.post_json(url, body, headers=http_headers) catch {
       err => return Err("nmem transport failure (stage=post_json): " + err.to_string())
     }
-    let body_data = client.read_all() catch {
-      err => {
-        client.close()
-        return Err("nmem transport failure (stage=read_response): " + err.to_string())
-      }
-    }
-    client.close()
-    let body_text = @utf8.decode(body_data) catch { _ => "" }
-    let body_json = @json.parse(body_text) catch { _ => Json::null() }
-    Ok({ status: response.code, body: body_json, })
+    Ok({ status: response.code, body: client, })
   }) catch {
     @async.TimeoutError =>
       Err(

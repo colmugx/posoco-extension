@@ -75,7 +75,8 @@ async fn ShellTools::bash_foreground(
   }
   let (reader, writer) = pipes
   let key = ctx.effect_id.to_int()
-  let attempted : Result[(Int32, String, Bool)?, Error] = Ok(
+  let scoped_result : Ref[(Int32, String, Bool)?] = Ref(None)
+  let attempted : Result[Bool?, Error] = Ok(
     @async.with_timeout_opt(timeout_ms, async fn() {
       @async.with_task_group(async fn(group) {
         defer reader.close()
@@ -83,8 +84,8 @@ async fn ShellTools::bash_foreground(
           group,
           "sh",
           ["-c", cmd],
-          stdout=writer,
-          stderr=writer,
+          stdout=@process.ProcessOutput::Shared(writer),
+          stderr=@process.ProcessOutput::Shared(writer),
           cwd?,
           cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
         )
@@ -112,8 +113,9 @@ async fn ShellTools::bash_foreground(
             ("", false)
           }
         }
-        (exit_code, content, decode_failed)
+        scoped_result.val = Some((exit_code, content, decode_failed))
       })
+      true
     }),
   ) catch {
     error => Err(error)
@@ -134,7 +136,10 @@ async fn ShellTools::bash_foreground(
         structured=Some(bash_timeout_detail(timeout_ms)),
       )
     }
-    Ok(Some((exit_code, content, decode_failed))) => {
+    Ok(Some(_)) => {
+      guard scoped_result.val is Some((exit_code, content, decode_failed)) else {
+        raise @posoco.RuntimeError::InvocationFailed("bash: missing process outcome")
+      }
       let content = if decode_failed {
         bash_decode_failure(exit_code)
       } else {
@@ -183,7 +188,7 @@ async fn bash_drain_native(
   let mut pending : Array[Byte] = []
   let mut decode_failed = false
   for ;; {
-    let chunk = reader.read_some(max_len=8192) catch { _ => None }
+    let chunk = reader.read() catch { _ => None }
     match chunk {
       None => break
       Some(data) => {

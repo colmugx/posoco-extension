@@ -80,7 +80,10 @@ impl MagpieTransport for HttpMagpieTransport with fn get(
     let (response, body) = @http.get(url, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    Answered(code=response.code, body=body.text())
+    let bytes = body.read_all() catch { _ => { body.close(); return Failed(detail="response read failed") } }
+    body.close()
+    let decoded = @utf8.decode(bytes) catch { _ => return Failed(detail="response decode failed") }
+    Answered(code=response.code, body=decoded)
   }) catch {
     failure =>
       raise MagpieGatewayError::Offline(
@@ -122,12 +125,12 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
     http_headers[@http.CaseInsensitiveString(key)] = value
   }
   let outcome = @async.with_timeout(self.timeout_ms, () => {
-    let (response, data) = @http.post(url, body, headers=http_headers) catch {
+    let (response, data) = @http.post_text(url, body, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    let text = data.text() catch {
-      _ => return Failed(detail="response body could not be decoded")
-    }
+    let text = data.read_all() catch { _ => { data.close(); return Failed(detail="response read failed") } }
+    data.close()
+    let text = @utf8.decode(text) catch { _ => return Failed(detail="response body could not be decoded") }
     Answered(code=response.code, body=text)
   }) catch {
     failure =>
@@ -146,7 +149,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
 /// request, `read_until("\n")` per line, closed exactly once on every exit
 /// path by the caller-facing handle.
 priv struct HttpEventStream {
-  client : @http.Client
+  client : @http.ClientConnection
   mut closed : Bool
 }
 
@@ -157,8 +160,12 @@ impl MagpieEventStream for HttpEventStream with fn next_line(
   if self.closed {
     return None
   }
-  self.client.read_until("\n") catch {
+  let bytes = self.client.read_until(@utf8.encode("\n")[:]) catch {
     err => raise MagpieGatewayError::Offline("stream read failed: \{err}")
+  }
+  match bytes {
+    None => None
+    Some(data) => Some(@utf8.decode(data) catch { _ => raise MagpieGatewayError::Offline("stream decoding failed") })
   }
 }
 
@@ -183,10 +190,10 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
   for key, value in headers {
     http_headers[@http.CaseInsensitiveString(key)] = value
   }
-  let client = @http.post_stream(url, headers=http_headers) catch {
+  let client = @http.request_stream(@http.RequestMethod::Post, url, headers=http_headers) catch {
     err => raise MagpieGatewayError::Offline("stream open failed: \{err}")
   }
-  client.write(body) catch {
+  client.write(@utf8.encode(body)[:]) catch {
     err => {
       client.close()
       raise MagpieGatewayError::Offline("stream write failed: \{err}")
