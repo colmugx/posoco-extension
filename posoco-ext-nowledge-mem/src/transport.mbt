@@ -175,7 +175,7 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
   body : Json,
   timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
-  guard split_url(url) is Some((origin, path)) else {
+  guard split_url(url) is Some(_) else {
     return Err("nmem transport failure (stage=split_url): invalid url: " + url)
   }
   // @http headers are case-insensitively keyed; the trait contract keeps
@@ -187,52 +187,18 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
   // The timeout bounds the whole exchange; on timeout the in-flight task is
   // cancelled, so a connection caught mid-await may skip close().
   let outcome : Result[NmemResponse, String] = @async.with_timeout(timeout_ms, () => {
-    let client = @http.Client::Client(origin, headers=http_headers) catch {
-      err =>
-        return Err(
-          "nmem transport failure (stage=create_client): " + err.to_string(),
-        )
-    }
-    client.request(@http.RequestMethod::Post, path) catch {
-      err => {
-        client.close()
-        return Err(
-          "nmem transport failure (stage=send_request): " + err.to_string(),
-        )
-      }
-    }
-    client.write(body.stringify()) catch {
-      err => {
-        client.close()
-        return Err(
-          "nmem transport failure (stage=write_body): " + err.to_string(),
-        )
-      }
-    }
-    client.flush() catch {
-      err => {
-        client.close()
-        return Err("nmem transport failure (stage=flush): " + err.to_string())
-      }
-    }
-    let response = client.end_request() catch {
-      err => {
-        client.close()
-        return Err(
-          "nmem transport failure (stage=end_request): " + err.to_string(),
-        )
-      }
+    let (response, client) = @http.post_json(url, body, headers=http_headers) catch {
+      err => return Err("nmem transport failure (stage=post_json): " + err.to_string())
     }
     let body_data = client.read_all() catch {
       err => {
         client.close()
-        return Err(
-          "nmem transport failure (stage=read_response): " + err.to_string(),
-        )
+        return Err("nmem transport failure (stage=read_response): " + err.to_string())
       }
     }
     client.close()
-    let body_json = @json.parse(body_data.text()) catch { _ => Json::null() }
+    let body_text = @utf8.decode(body_data) catch { _ => "" }
+    let body_json = @json.parse(body_text) catch { _ => Json::null() }
     Ok({ status: response.code, body: body_json, })
   }) catch {
     @async.TimeoutError =>

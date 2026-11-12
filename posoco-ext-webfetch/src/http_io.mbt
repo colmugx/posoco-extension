@@ -66,8 +66,16 @@ impl HttpIo for DefaultHttpIo with fn fetch(
   // status streams: 4xx/5xx error pages are often HTML and the pipeline
   // dispatches on content_type.
   let (body, bytes_read, truncated) = if status < 300 || status >= 400 {
-    read_response_body(body_data.binary(), max_bytes)
+    let raw = body_data.read_all() catch {
+      err => {
+        body_data.close()
+        raise @posoco.RuntimeError::InvocationFailed("webfetch: read failed: " + err.to_string())
+      }
+    }
+    body_data.close()
+    read_response_body(raw, max_bytes)
   } else {
+    body_data.close()
     ("", 0, false)
   }
   {

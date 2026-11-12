@@ -22,7 +22,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
   if kind is @fs.FileKind::Directory {
     raise read_failure("read", path, "is a directory")
   }
-  let (mtime_s, mtime_ns) = @fs.mtime(path) catch {
+  let stamp = @fs.mtime(path) catch {
     error => raise read_failure("stat", path, error.to_string())
   }
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
@@ -35,7 +35,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s, mtime_ns, size, }
+  { mtime_s: stamp.sec(), mtime_ns: stamp.nsec(), size, }
 }
 
 ///|
@@ -60,16 +60,10 @@ async fn native_read_lines(
   let lines : Array[String] = []
   let mut total = 0
   while true {
-    let chunk = file.read_until("\n") catch {
+    let chunk = file.read_until(@utf8.encode("\n")[:]) catch {
       e => {
         file.close()
-        match e {
-          @utf8.Malformed(_) =>
-            raise @posoco.RuntimeError::InvocationFailed(
-              "read: '\{@devkit.sanitize_path(path)}' is not valid UTF-8 (binary file); use grep or bash to inspect it",
-            )
-          _ => raise read_failure("read", path, e.to_string())
-        }
+        raise read_failure("read", path, e.to_string())
       }
     }
     match chunk {
@@ -77,7 +71,10 @@ async fn native_read_lines(
       Some(raw) => {
         total += 1
         if total > skip && lines.length() < take {
-          lines.push(strip_trailing_cr(raw))
+          let text = @utf8.decode(raw) catch {
+            _ => raise read_failure("decode", path, "invalid UTF-8")
+          }
+          lines.push(strip_trailing_cr(text))
         }
       }
     }
@@ -103,7 +100,7 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
   let buf : FixedArray[Byte] = FixedArray::make(size, b'\x00')
   let mut filled = 0
   while filled < size {
-    let n = file.read(buf, offset=filled, max_len=size - filled) catch {
+    let n = file.read_into(buf, offset=filled, max_len=size - filled) catch {
       error => {
         file.close()
         raise read_failure("read", path, error.to_string())
