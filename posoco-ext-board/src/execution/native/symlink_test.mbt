@@ -15,10 +15,10 @@ async test "native journal refuses symlinked root journal and temporary paths" {
   @fs.remove(root + "/executions.json")
   let store = @native.FileBoardExecutionStore(directory=root)
   assert_eq(store.load(), Ok([]))
-  @fs.write_file(root + "/target", "unchanged")
+  @fs.write_text(root + "/target", "unchanged")
   @fs.symlink(root + "/executions.json.tmp", target=root + "/target")
   assert_true(store.persist([]) is Err(@execution.StoreUnavailable))
-  assert_eq(@fs.read_file(root + "/target").text(), "unchanged")
+  assert_eq(@fs.read_text(root + "/target"), "unchanged")
   assert_eq(
     @fs.kind(root + "/executions.json.tmp", follow_symlink=false),
     @fs.SymLink,

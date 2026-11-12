@@ -172,7 +172,7 @@ async test "native journal serializes multi-slot identities with v1 records lock
     backend.shutdown()
     journal.close()
   })
-  let encoded = @fs.read_file(root + "/executions.json").text()
+  let encoded = @fs.read_text(root + "/executions.json")
   assert_false(encoded.contains("input"))
   assert_true(encoded.contains("\"schema_version\":1"))
   let decoded = @execution.decode_execution_journal(encoded).unwrap()
