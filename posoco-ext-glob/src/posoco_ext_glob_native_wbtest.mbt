@@ -104,7 +104,7 @@ async test "glob_zero_matches_fills_structured_summary" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(glob_call("**/*.noext", Some(Json::string(dir)))),
     )
@@ -132,9 +132,9 @@ async test "glob_multi_file_fills_structured_summary" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/c.txt", "// c\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/c.txt", "// c\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(glob_call("**/*.mbt", Some(Json::string(dir)))),
     )
@@ -168,9 +168,9 @@ async test "glob_anchored_base_resolves_and_stays_base_relative" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file(dir + "/a.txt", "x", create_mode=CreateNew)
+    @fs.write_text(dir + "/a.txt", "x", create_mode=CreateNew)
     @fs.mkdir(dir + "/sub")
-    @fs.write_file(dir + "/sub/b.txt", "y", create_mode=CreateNew)
+    @fs.write_text(dir + "/sub/b.txt", "y", create_mode=CreateNew)
     let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
     let tools = GlobTools::GlobTools(anchor=Some(anchor))
     let call : @posoco.ToolCall = {
@@ -212,9 +212,9 @@ async test "glob_limit_caps_output_with_footer" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
-    @fs.write_file("\{dir}/c.mbt", "// c\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/c.mbt", "// c\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(
         glob_call_fields([
@@ -279,17 +279,17 @@ async test "glob_returns_files_only_and_prunes_ignores_and_hidden" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/top.mbt", "// top\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/top.mbt", "// top\n", create_mode=CreateNew)
     @fs.mkdir("\{dir}/sub")
-    @fs.write_file("\{dir}/sub/nested.mbt", "// n\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/sub/nested.mbt", "// n\n", create_mode=CreateNew)
     @fs.mkdir("\{dir}/node_modules")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/node_modules/dep.mbt",
       "// dep\n",
       create_mode=CreateNew,
     )
     @fs.mkdir("\{dir}/.hidden")
-    @fs.write_file("\{dir}/.hidden/x.mbt", "// x\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/.hidden/x.mbt", "// x\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(
         glob_call_fields([
@@ -324,7 +324,7 @@ async test "glob_directory_pattern_yields_no_results" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     @fs.mkdir("\{dir}/sub")
-    @fs.write_file("\{dir}/sub/keep.txt", "x", create_mode=CreateNew)
+    @fs.write_text("\{dir}/sub/keep.txt", "x", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(
         glob_call_fields([
@@ -357,9 +357,9 @@ async test "glob_sorts_newest_first" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    @fs.write_file("\{dir}/older.mbt", "// older\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/older.mbt", "// older\n", create_mode=CreateNew)
     @async.sleep(60)
-    @fs.write_file("\{dir}/newer.mbt", "// newer\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/newer.mbt", "// newer\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
       test_ctx(
         glob_call_fields([
