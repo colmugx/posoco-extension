@@ -51,7 +51,7 @@ impl FsIo for NativeFsIo with fn write_atomic(
   }
   write_tmp_counter.val += 1
   let tmp = "\{path}.tmp-\{write_tmp_counter.val}"
-  @fs.write_file(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
+  @fs.write_text(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
     error => raise write_failure("write", path, error.to_string())
   }
   @fs.rename(tmp, path, replace=true) catch {

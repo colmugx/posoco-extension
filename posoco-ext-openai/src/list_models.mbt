@@ -152,7 +152,7 @@ let codex_models_dump_path : String = "/tmp/cetas-codex-models.json"
 /// no-op there; native and wasm write through @fs.
 #cfg(any(target="native", target="wasm"))
 async fn dump_models_response(path : String, body : String) -> Unit {
-  @fs.write_file(path, body) catch {
+  @fs.write_text(path, body) catch {
     _ => ()
   }
 }
