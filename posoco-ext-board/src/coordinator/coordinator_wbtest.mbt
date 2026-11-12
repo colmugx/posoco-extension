@@ -133,7 +133,7 @@ async test "mutations commit in fifo order and typed rejections keep state" {
 async test "two concurrent callers of one revision produce exactly one success" {
   @core_async.with_task_group(group => {
     let coordinator = ready_coordinator(group)
-    let results = @async.all([
+    let results = @core_async.all([
       () => coordinator.submit(command=c_create("t1", 0L)),
       () => coordinator.submit(command=c_create("t1", 0L)),
     ])
@@ -256,7 +256,7 @@ async test "caller mutation while queued cannot alter the admitted command" {
     let dod : Array[String] = ["draft"]
     // The submit task deep-copies the command before its first suspension,
     // so the mutation task's push can never reach the admitted input.
-    let results = @async.all([
+    let results = @core_async.all([
       () => {
         let submitted = coordinator.submit(command=c_create_dod("t1", 0L, dod))
         if submitted is Ok(_) {
@@ -291,7 +291,7 @@ async test "shutdown cleanup completes even when the caller is cancelled" {
     let task = group.spawn(() => coordinator.shutdown())
     // Let the teardown enter its join, then cancel the caller: the
     // protected cleanup must still close admission and join the loop.
-    @async.sleep(10)
+    @core_async.sleep(10)
     task.cancel()
     let _ = task.wait() catch { _ => () }
     assert_eq(coordinator.status(), Stopped)

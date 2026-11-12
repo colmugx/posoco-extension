@@ -110,8 +110,7 @@ async fn dist_is_stale(web : String, dist : String) -> Bool {
   for source in frontend_sources {
     match newest_mtime(web + "/" + source) {
       Some(stamp) =>
-        if stamp.0 > dist_stamp.0 ||
-          (stamp.0 == dist_stamp.0 && stamp.1 > dist_stamp.1) {
+        if stamp > dist_stamp {
           return true
         }
       None => ()

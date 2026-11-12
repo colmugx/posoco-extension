@@ -43,6 +43,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn kind(
     @fs.FileKind::Pipe => Other
     @fs.FileKind::BlockDevice => Other
     @fs.FileKind::CharDevice => Other
+    _ => Other
   }
 }
 
