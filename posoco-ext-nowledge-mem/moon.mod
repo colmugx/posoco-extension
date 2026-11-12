@@ -6,7 +6,6 @@ import {
   "colmugx/posoco@0.24.2",
   "colmugx/mcp@0.18.2",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.7",
   "moonbitlang/x@0.5.5",
 }
 

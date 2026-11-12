@@ -14,7 +14,6 @@ description = "Evidence-first /init command for generating concise, maintainable
 
 import {
   "colmugx/posoco@0.24.2",
-  "moonbitlang/async@0.22.7",
 }
 
 source = "src"
