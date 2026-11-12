@@ -43,14 +43,14 @@ impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
   }
   let result = match self.cwd {
     Some(cwd) =>
-      @process.run(bin, argv, cwd~, stdout=Collect, stderr=Collect, accepted_exit_code=_ => true) catch {
+      @process.run(bin, argv, cwd~, stdout=Collect, stderr=Collect) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
             "astgrep: spawn failed: \{bin}",
           )
       }
     None =>
-      @process.run(bin, argv, stdout=Collect, stderr=Collect, accepted_exit_code=_ => true) catch {
+      @process.run(bin, argv, stdout=Collect, stderr=Collect) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
             "astgrep: spawn failed: \{bin}",

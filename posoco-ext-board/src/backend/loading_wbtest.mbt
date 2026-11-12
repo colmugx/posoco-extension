@@ -48,7 +48,7 @@ async test "authoritative bootstrap gates on readiness without faking a snapshot
       let outcome = backend.bootstrap_snapshot()
       delivered.put(outcome)
     })
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_true(delivered.try_get() is None)
     store.release.put(())
     let frame = delivered.get().unwrap()

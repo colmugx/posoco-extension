@@ -237,7 +237,7 @@ async test "overflow before sender sends resync instead of initial or queued fra
     let _ = backend_tick(backend)
   }
   let sent : Array[@protocol.BoardServerFrame] = []
-  @async.with_timeout(1000, () => client.pump(frame => sent.push(frame)))
+  @core_async.with_timeout(1000, () => client.pump(frame => sent.push(frame)))
   assert_eq(sent, [
     @protocol.ResyncRequired(reason="client_queue_overflow", current_seq=4L),
   ])
@@ -255,11 +255,11 @@ async test "overflow cancels and joins a blocked bootstrap writer" {
     board_revision: 0L,
     payload: { "events": [] },
   })
-  let entered : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
-  let blocked : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
+  let entered : @core_async.Queue[Unit] = @core_async.Queue(kind=Blocking(1))
+  let blocked : @core_async.Queue[Unit] = @core_async.Queue(kind=Blocking(1))
   let mut exited = false
   let mut sends = 0
-  @async.with_timeout(1000, () => {
+  @core_async.with_timeout(1000, () => {
     @core_async.with_task_group(group => {
       let sender = group.spawn(() => {
         client.pump(_frame => {
@@ -285,10 +285,10 @@ async test "overflow cancels and joins a blocked bootstrap writer" {
 ///|
 async test "cancelling sender joins blocked writer and unsubscribes" {
   let backend = BoardBackend::BoardBackend(client_queue_depth=2)
-  let entered : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
-  let blocked : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
+  let entered : @core_async.Queue[Unit] = @core_async.Queue(kind=Blocking(1))
+  let blocked : @core_async.Queue[Unit] = @core_async.Queue(kind=Blocking(1))
   let mut exited = false
-  @async.with_timeout(1000, () => {
+  @core_async.with_timeout(1000, () => {
     @core_async.with_task_group(group => {
       let sender = group.spawn(() => {
         let client = backend.subscribe(0L, true)
