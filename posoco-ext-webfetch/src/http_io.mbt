@@ -1,4 +1,4 @@
-// Default HttpIo transport backed by moonbitlang/async/http.
+// Default HttpIo transport backed by moonbitlang/core/async/http.
 // Target-gated to [native, wasm, js] via moon.pkg; moonbitlang/async has no
 // network stack on wasm-gc, so hosts there inject their own `HttpIo`.
 
@@ -19,36 +19,18 @@ pub fn default_http_io() -> &HttpIo {
 /// of exactly `max_bytes` is indistinguishable from an over-long one without
 /// an extra probe read, so it is also reported as truncated).
 async fn read_response_body(
-  client : @http.Client,
+  body : @http.MessageBody,
   max_bytes : Int32,
 ) -> (String, Int32, Bool) raise @posoco.RuntimeError {
-  let buf : FixedArray[Byte] = FixedArray::make(max_bytes, b'\x00')
-  let mut total = 0
-  let mut saw_eof = false
-  while total < max_bytes {
-    let n = client.read(buf, offset=total, max_len=max_bytes - total) catch {
-      err => {
-        client.close()
-        raise @posoco.RuntimeError::InvocationFailed(
-          "webfetch: request failed: " + err.to_string(),
-        )
-      }
-    }
-    if n == 0 {
-      saw_eof = true
-      break
-    }
-    total = total + n
+  let data = body.binary()
+  let total = if data.length() < max_bytes { data.length() } else { max_bytes }
+  let raw = Bytes::makei(total, i => data[i])
+  let decoded = @utf8.decode(raw.exact_view()) catch {
+    _ => raise @posoco.RuntimeError::InvocationFailed(
+      "webfetch: response body is not valid UTF-8",
+    )
   }
-  client.close()
-  let raw = Bytes::makei(total, i => buf[i])
-  let body = @utf8.decode(raw.exact_view()) catch {
-    _ =>
-      raise @posoco.RuntimeError::InvocationFailed(
-        "webfetch: response body is not valid UTF-8",
-      )
-  }
-  (body, total, total == max_bytes && !saw_eof)
+  (decoded, total, data.length() >= max_bytes)
 }
 
 ///|
@@ -68,7 +50,7 @@ impl HttpIo for DefaultHttpIo with fn fetch(
       "posoco-webfetch/0.1 (+https://github.com/colmugx/posoco)",
     ),
   ])
-  let (response, client) = @http.get_stream(url, headers~) catch {
+  let (response, body_data) = @http.get(url, headers~) catch {
     err =>
       raise @posoco.RuntimeError::InvocationFailed(
         "webfetch: request failed: " + err.to_string(),
@@ -85,9 +67,8 @@ impl HttpIo for DefaultHttpIo with fn fetch(
   // status streams: 4xx/5xx error pages are often HTML and the pipeline
   // dispatches on content_type.
   let (body, bytes_read, truncated) = if status < 300 || status >= 400 {
-    read_response_body(client, max_bytes)
+    read_response_body(body_data, max_bytes)
   } else {
-    client.close()
     ("", 0, false)
   }
   {
