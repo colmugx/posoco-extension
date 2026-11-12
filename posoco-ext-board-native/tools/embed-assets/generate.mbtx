@@ -242,7 +242,7 @@ async fn collect(
     }
     match kind {
       Regular => {
-        let bytes = @fs.read_file(path).binary() catch {
+        let bytes = @fs.read_binary(path) catch {
           err => raise EmbedError("cannot read \{path}: \{Repr(err)}")
         }
         entries.push((url_path(components), bytes))
@@ -278,7 +278,7 @@ async fn check(
   guard existing else {
     raise EmbedError("stale: \{config.out} does not exist")
   }
-  let current = @fs.read_file(config.out).binary() catch {
+  let current = @fs.read_binary(config.out) catch {
     err => raise EmbedError("cannot read \{config.out}: \{Repr(err)}")
   }
   guard current == @utf8.encode(content) else {

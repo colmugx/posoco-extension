@@ -25,7 +25,7 @@ async fn version_cache_fixture_write_file(
   name : String,
   payload : String,
 ) -> Unit {
-  @fs.write_file(openai_cache_join(directory, name), payload)
+  @fs.write_text(openai_cache_join(directory, name), payload)
 }
 
 ///|
@@ -42,7 +42,7 @@ async fn version_cache_fixture_read_file(
   directory : String,
   name : String,
 ) -> String? {
-  let text = @fs.read_file(openai_cache_join(directory, name)).text() catch {
+  let text = @fs.read_text(openai_cache_join(directory, name)) catch {
     _ => ""
   }
   if text.is_empty() {

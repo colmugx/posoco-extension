@@ -177,7 +177,7 @@ async fn run_edit(
 ///|
 #cfg(target="native")
 async fn write_file_native(path : String, content : String) -> Unit {
-  @fs.write_file(path, content, create_mode=CreateOrTruncate)
+  @fs.write_text(path, content, create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -213,7 +213,7 @@ async test "edit_unique_match_reports_line" {
       ) {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_eq(content, "ok: 1 lines=2")
-        let after = @fs.read_file(path).text()
+        let after = @fs.read_text(path)
         inspect(after, content="alpha\nBETA\ngamma\n")
       }
       _ => fail("expected unique edit to succeed")
@@ -261,7 +261,7 @@ async test "edit_replace_all_replaces_every_occurrence" {
         assert_eq(content, "ok: 2 lines=2, 4")
       _ => fail("expected replace_all edit to succeed")
     }
-    let after = @fs.read_file(path).text()
+    let after = @fs.read_text(path)
     inspect(after, content="x\nbar\ny\nbar\nz\n")
   }
 }
@@ -313,7 +313,7 @@ async test "edit_strips_line_number_prefixes_from_old_text" {
       }
       _ => fail("expected prefixed edit to succeed via stripping")
     }
-    let after = @fs.read_file(path).text()
+    let after = @fs.read_text(path)
     inspect(after, content="alpha\nBETA\ngamma\n")
   }
 }
@@ -385,7 +385,7 @@ async test "edit_anchored_relative_path_resolves" {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_eq(content, "ok: 1 lines=2")
         assert_false(content.contains(dir))
-        let after = @fs.read_file(dir + "/u.txt").text()
+        let after = @fs.read_text(dir + "/u.txt")
         inspect(after, content="alpha\nBETA\ngamma\n")
       }
       _ => fail("expected anchored edit to succeed")
