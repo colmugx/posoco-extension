@@ -636,7 +636,7 @@ async test "same revision concurrency: one durable winner, one typed conflict" {
   @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
-    let results = @async.all([
+    let results = @core_async.all([
       () => coordinator.submit(command=c_create("t1", 0L)),
       () => coordinator.submit(command=c_create("t1", 0L)),
     ])
@@ -661,7 +661,7 @@ async test "same revision concurrency: a failed first write rolls back and the p
     let coordinator = ready_scripted(group, store)
     store.persists.push_back(StepFail(@store.TempWrite))
     store.persists.push_back(StepOk)
-    let results = @async.all([
+    let results = @core_async.all([
       () => coordinator.submit(command=c_create("t1", 0L)),
       () => coordinator.submit(command=c_create("t1", 0L)),
     ])
@@ -699,7 +699,7 @@ async test "deferred submissions persist in fifo order, one transaction each, ne
     // B and C queue behind it and must not touch the store early.
     let b = group.spawn(() => coordinator.submit(command=c_create("t2", 1L)))
     let c = group.spawn(() => coordinator.submit(command=c_create("t3", 2L)))
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(store.persist_attempts, 1)
     assert_eq(store.committed_writes.length(), 0)
     // Releasing A settles it, then B, then C — one transaction each.
@@ -767,7 +767,7 @@ async test "a cancelled caller leaves the accepted submission settling without s
     let _ = submitted.wait() catch { _ => Ok([]) }
     // The pipeline still settles the abandoned submission durably.
     let _ = gate.release.try_put(())
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(store.persist_attempts, 1)
     assert_eq(store.committed_writes.length(), 1)
     assert_eq(coordinator.revision(), Ok(1L))
@@ -790,7 +790,7 @@ async test "wait_ready parks every waiter on completion queues without polling" 
     let first = group.spawn(() => coordinator.wait_ready())
     let second = group.spawn(() => coordinator.wait_ready())
     let third = group.spawn(() => coordinator.wait_ready())
-    @async.sleep(1)
+    @core_async.sleep(1)
     // Queries during the load answer Initializing explicitly.
     assert_rejected(coordinator.revision(), Initializing)
     assert_rejected(coordinator.snapshot(), Initializing)
@@ -805,7 +805,7 @@ async test "wait_ready parks every waiter on completion queues without polling" 
     let parked = group.spawn(() => {
       coordinator.submit(command=c_create("t1", 4L))
     })
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(store.persist_attempts, 0)
     let _ = gate.release.try_put(())
     assert_true(first.wait() is Ok(_))
@@ -879,7 +879,7 @@ async test "a duplicate persist error during reconciliation is a no-op" {
       )
       is Ok(_),
     )
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(coordinator.status(), Reconciling)
     // The real reconciliation resolves exactly one outcome for the caller.
     let _ = gate.release.try_put(())
@@ -904,9 +904,9 @@ async test "shutdown finishes the in-flight persist, rejects deferred and stops"
     let a = group.spawn(() => coordinator.submit(command=c_create("t1", 0L)))
     let _ = gate.entered.get()
     let b = group.spawn(() => coordinator.submit(command=c_create("t2", 1L)))
-    @async.sleep(1)
+    @core_async.sleep(1)
     let teardown = group.spawn(() => coordinator.shutdown())
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(coordinator.status(), Stopping)
     // The teardown cannot finish while the persist is in flight.
     assert_eq(store.persist_attempts, 1)
@@ -929,7 +929,7 @@ async test "concurrent shutdown and submissions stay safe" {
   @core_async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
-    let results : Array[Int32] = @async.all([
+    let results : Array[Int32] = @core_async.all([
       () => {
         let outcome = coordinator.submit(command=c_create("t1", 0L))
         if outcome is Ok(_) {
@@ -977,9 +977,9 @@ async test "shutdown during a load finishes the load and closes cleanly" {
     let parked = group.spawn(() => {
       coordinator.submit(command=c_create("t1", 2L))
     })
-    @async.sleep(1)
+    @core_async.sleep(1)
     let teardown = group.spawn(() => coordinator.shutdown())
-    @async.sleep(1)
+    @core_async.sleep(1)
     assert_eq(coordinator.status(), Stopping)
     // The load is still in flight; the restore must finish before exit.
     let _ = gate.release.try_put(())

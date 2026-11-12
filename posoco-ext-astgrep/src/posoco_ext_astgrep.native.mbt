@@ -41,16 +41,16 @@ impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
       probed
     }
   }
-  let (exit_code, out, err) = match self.cwd {
+  let result = match self.cwd {
     Some(cwd) =>
-      @process.collect_output(bin, argv, cwd~) catch {
+      @process.run(bin, argv, cwd~, stdout=Collect, stderr=Collect, accepted_exit_code=_ => true) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
             "astgrep: spawn failed: \{bin}",
           )
       }
     None =>
-      @process.collect_output(bin, argv) catch {
+      @process.run(bin, argv, stdout=Collect, stderr=Collect, accepted_exit_code=_ => true) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
             "astgrep: spawn failed: \{bin}",
@@ -59,14 +59,14 @@ impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
   }
   // Decode failure must not masquerade as empty output (which would read as
   // "no matches" on exit 0), so it raises instead.
-  let stdout = out.text() catch {
+  let stdout = result.stdout_text() catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "astgrep: invalid UTF-8: \{bin}",
       )
   }
-  let stderr = err.text() catch { _ => "" }
-  (exit_code, stdout, stderr)
+  let stderr = result.stderr_text() catch { _ => "" }
+  (result.exit_code, stdout, stderr)
 }
 
 ///|

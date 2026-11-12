@@ -120,7 +120,7 @@ pub struct BoardCoordinator {
   priv mut draining : Bool
   priv mut generation : Int64
   priv mut waiter_seq : Int64
-  priv shutdown_gate : @async.Mutex
+  priv shutdown_gate : @core_async.Mutex
   /// Status mirror. Written by the actor loop (the single writer of the
   /// phase), and by attach/shutdown outside the loop's lifetime.
   priv mut phase_status : BoardCoordinatorStatus
@@ -155,7 +155,7 @@ pub fn BoardCoordinator::BoardCoordinator(
     draining: false,
     generation: 0L,
     waiter_seq: 0L,
-    shutdown_gate: @async.Mutex(),
+    shutdown_gate: @core_async.Mutex(),
     phase_status: Detached,
     store,
     now_ms,
@@ -452,7 +452,7 @@ pub async fn BoardCoordinator::revision(
 pub async fn BoardCoordinator::shutdown(self : BoardCoordinator) -> Unit {
   let generation = self.generation
   self.draining = true
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     self.shutdown_gate.acquire()
     defer self.shutdown_gate.release()
     // A concurrent shutdown must not tear down a subsequently reattached actor.

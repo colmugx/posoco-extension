@@ -19,10 +19,9 @@ pub fn default_http_io() -> &HttpIo {
 /// of exactly `max_bytes` is indistinguishable from an over-long one without
 /// an extra probe read, so it is also reported as truncated).
 async fn read_response_body(
-  body : @http.MessageBody,
+  data : Bytes,
   max_bytes : Int32,
 ) -> (String, Int32, Bool) raise @posoco.RuntimeError {
-  let data = body.binary()
   let total = if data.length() < max_bytes { data.length() } else { max_bytes }
   let raw = Bytes::makei(total, i => data[i])
   let decoded = @utf8.decode(raw.exact_view()) catch {
@@ -67,7 +66,7 @@ impl HttpIo for DefaultHttpIo with fn fetch(
   // status streams: 4xx/5xx error pages are often HTML and the pipeline
   // dispatches on content_type.
   let (body, bytes_read, truncated) = if status < 300 || status >= 400 {
-    read_response_body(body_data, max_bytes)
+    read_response_body(body_data.binary(), max_bytes)
   } else {
     ("", 0, false)
   }

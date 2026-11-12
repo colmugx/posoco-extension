@@ -278,10 +278,9 @@ pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
         "jsonl: failed to open " + path + " for append: " + e.to_string(),
       )
   }
-  let writer = file as &@io.Writer
   for msg in messages {
     let line = "\n" + message_to_json(msg).stringify()
-    writer.write(line) catch {
+    file.write(@utf8.encode(line)[:]) catch {
       e => {
         file.close()
         raise @posoco.SessionError::Save(
