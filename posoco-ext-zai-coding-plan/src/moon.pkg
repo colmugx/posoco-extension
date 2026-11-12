@@ -8,8 +8,8 @@ import {
   "posoco/kit-events" @kit_events,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/json",
 }
 
@@ -18,11 +18,12 @@ import {
   "colmugx/posoco-ext-zai" @zai,
   "posoco/devkit",
   "posoco/kit-events" @kit_events,
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
 } for "wbtest"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
   targets: {
     "zai_coding_plan_wbtest.mbt": [ "native" ],
     "quota_wbtest.mbt": [ "native" ],

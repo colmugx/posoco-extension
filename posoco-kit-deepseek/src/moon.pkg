@@ -5,7 +5,11 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_value-unused_constructor"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
