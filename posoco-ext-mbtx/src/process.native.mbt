@@ -8,17 +8,17 @@ priv struct NativeProcess {
 
 ///|
 impl GuestProcess for NativeProcess with fn write(self, bytes) {
-  self.stdin.write(bytes)
+  self.stdin.write(bytes[:])
 }
 
 ///|
 impl GuestProcess for NativeProcess with fn stdout(self) {
-  self.stdout.read_some(max_len=8192)
+  self.stdout.read()
 }
 
 ///|
 impl GuestProcess for NativeProcess with fn stderr(self) {
-  self.stderr.read_some(max_len=8192)
+  self.stderr.read()
 }
 
 ///|
@@ -35,6 +35,7 @@ async fn[X] with_process(
   body : async (&GuestProcess) -> X,
   extra_env~ : Map[String, String] = Map([]),
 ) -> X {
+  let outcome : Ref[X?] = Ref(None)
   @async.with_task_group(group => {
     @async.pause()
     let (child_stdin, stdin) = @process.write_to_process()
@@ -56,6 +57,10 @@ async fn[X] with_process(
       no_wait=true,
       cancel_handler=@process.graceful_cancel(timeout=1000),
     )
-    body(NativeProcess::{ stdin, stdout, stderr, process, })
+    outcome.val = Some(body(NativeProcess::{ stdin, stdout, stderr, process, }))
   })
+  match outcome.val {
+    Some(result) => result
+    None => abort("native process group completed without a result")
+  }
 }
