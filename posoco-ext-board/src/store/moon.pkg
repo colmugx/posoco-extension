@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco-ext-board/domain",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -9,7 +9,7 @@ import {
 // the js twins go through @node_fs.
 #cfg(target = "native")
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/encoding/utf8",
 }
@@ -31,13 +31,13 @@ import {
 
 supported_targets = "+native +js"
 
-// `async test` requires the root `moonbitlang/async` import but never names it
+// `async test` requires the root `moonbitlang/core/async` import but never names it
 // through the alias, and a test import cannot be target-gated.
 
 warnings = "-unused_package"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
   "native-stub": [ "truncate_stub.c" ],
   targets: {
     "file.native.mbt": [ "native" ],

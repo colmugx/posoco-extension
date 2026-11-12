@@ -6,9 +6,13 @@ import {
   "colmugx/posoco-ext-askquestion" @askquestion,
   "colmugx/posoco-ext-board/presence" @board_presence,
   "colmugx/posoco-ext-board/protocol" @board_protocol,
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
 supported_targets = "+native +js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
