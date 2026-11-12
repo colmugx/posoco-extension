@@ -11,8 +11,8 @@ import {
   "posoco/ext-oauth" @oauth,
   "posoco/kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-compact-summary" @compact_summary,
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
@@ -20,12 +20,13 @@ import {
 
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 warnings = "-unused_value-unused_constructor"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
   targets: {
     // HTTP-backed adaptors: native+wasm+js (moonbitlang/async/http is
     // unavailable on wasm-gc). The pure decoders (parse_zen_models,

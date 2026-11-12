@@ -11,21 +11,22 @@ import {
 // Bun FFI twin.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
 }
 
 #cfg(target = "js")
 import {
-  "moonbitlang/async/js_async",
+  "moonbitlang/core/async/js_async",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 supported_targets = "+native +js"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
   targets: {
     "posoco_ext_obsidian.native.mbt": [ "native", "wasm" ],
     "posoco_ext_obsidian.js.mbt": [ "js" ],

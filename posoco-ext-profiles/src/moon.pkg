@@ -5,9 +5,13 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
   "posoco/kit-events" @kit_events,
 } for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

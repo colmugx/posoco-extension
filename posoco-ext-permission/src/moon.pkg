@@ -8,6 +8,10 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "posoco/devkit/testkit" @tk,
 } for "test"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
