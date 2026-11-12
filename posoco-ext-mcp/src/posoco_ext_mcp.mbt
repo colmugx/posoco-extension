@@ -550,7 +550,7 @@ pub(all) struct MCPToolBridge {
   /// Host-provided long-lived task group. Every connection creation —
   /// connect, reconnect, or probe — must hold one (stdio spawns its child
   /// process on it). `None` until `attach`.
-  mut group : @async.TaskGroup[Unit]?
+  mut group : @async.TaskGroup?
   /// Host-provided lifetime task group on posoco's `moonbitlang/core/async`
   /// stack. Each connection's fuwaroid actor loop is spawned here (fuwaroid
   /// 0.4 spawns on core async), while the transport above keeps running on
@@ -663,7 +663,7 @@ pub async fn MCPToolBridge::discover(
 /// honestly instead.
 pub fn MCPToolBridge::attach(
   self : MCPToolBridge,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   lifetime? : @core_async.TaskGroup,
 ) -> Unit {
   self.group = Some(group)
@@ -860,7 +860,7 @@ pub fn MCPToolBridge::failures(self : MCPToolBridge) -> Array[(String, String)] 
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Result[Unit, String] {
   match self.connect_with_group(config, group) {
     Ok(_) => {
@@ -882,7 +882,7 @@ pub async fn MCPToolBridge::connect(
 async fn MCPToolBridge::open_client(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Result[@client.MCPClient, String] {
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
@@ -964,7 +964,7 @@ async fn MCPToolBridge::open_client(
 async fn MCPToolBridge::connect_with_group(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Result[Unit, String] {
   let mut refill_slot = -1
   let mut refill_epoch = 0
