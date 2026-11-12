@@ -36,7 +36,7 @@ impl FsIo for NativeFsIo with fn read_text(_self, path : String) -> String {
   let data = @fs.read_binary(path) catch {
     error => raise edit_failure("read", path, error.to_string())
   }
-  data.text() catch {
+  @utf8.decode(data) catch {
     _ => raise edit_failure("decode", path, "invalid UTF-8")
   }
 }

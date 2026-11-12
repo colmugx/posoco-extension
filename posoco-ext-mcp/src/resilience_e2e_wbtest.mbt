@@ -171,7 +171,7 @@ async fn e2e_execute(
 ///|
 async fn e2e_read_text(path : String) -> String? {
   let data = @fs.read_binary(path) catch { _ => return None }
-  let text = data.text() catch { _ => return None }
+  let text = @utf8.decode(data) catch { _ => return None }
   Some(text)
 }
 
