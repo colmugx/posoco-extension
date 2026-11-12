@@ -8,7 +8,7 @@ import {
 // the JSON wire vocabulary.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 #cfg(target = "js")
@@ -17,7 +17,7 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 #cfg(target = "native")
@@ -25,12 +25,13 @@ import {
   "colmugx/posoco/kernel",
 } for "wbtest"
 
-// `moonbitlang/async` is imported for the native-only white-box async
+// `moonbitlang/core/async` is imported for the native-only white-box async
 // tests above, so js/wasm checks report it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
   targets: {
     "posoco_ext_glob.js.mbt": [ "js" ],
     "posoco_ext_glob.native.mbt": [ "native", "wasm" ],

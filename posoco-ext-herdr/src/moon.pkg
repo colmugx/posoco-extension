@@ -10,10 +10,11 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
   "native-stub": [ "herdr_system_stub.c" ],
   targets: {
     "herdr_native.mbt": [ "native" ],
