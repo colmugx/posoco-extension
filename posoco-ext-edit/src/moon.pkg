@@ -7,7 +7,7 @@ import {
 // the JSON wire vocabulary.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 #cfg(target = "js")
@@ -20,11 +20,12 @@ import {
 // are simply excluded by the compiler.
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "colmugx/posoco/kernel",
 } for "wbtest"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
   targets: {
     "posoco_ext_edit.js.mbt": [ "js" ],
     "posoco_ext_edit.native.mbt": [ "native", "wasm" ],

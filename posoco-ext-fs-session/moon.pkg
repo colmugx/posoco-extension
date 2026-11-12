@@ -3,7 +3,7 @@ import {
   "colmugx/posoco-kit-model-management" @modelmgmt,
   "posoco/devkit",
   "posoco/kit-events" @kit_events,
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -15,17 +15,18 @@ import {
 // node:fs envelope and x/fs instead.
 #cfg(not(target = "js"))
 import {
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
   "moonbitlang/x/fs" @xfs,
 }
 
-// `async test` requires the root `moonbitlang/async` import but never names it
+// `async test` requires the root `moonbitlang/core/async` import but never names it
 // through the alias, so every target reports it unused.
 
 warnings = "-unused_package"
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/io" ],
   targets: {
     "jsonl_session.mbt": [ "native", "wasm" ],
     "jsonl_session.js.mbt": [ "js" ],
