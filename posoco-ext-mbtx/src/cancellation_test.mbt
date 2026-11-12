@@ -15,8 +15,8 @@ async fn BlockingInvoker::invoke(
     group.add_defer(() => self.settled = true)
     self.entered.put(())
     @async.sleep(60000)
-    @protocol.Success(content="unexpected completion", structured=None)
   })
+  @protocol.Success(content="unexpected completion", structured=None)
 }
 
 ///|
