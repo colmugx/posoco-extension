@@ -87,13 +87,16 @@ async test "direct_profile_command_rejects_unknown_id_before_submitting" {
     attribution=Map::from_array([]),
     activation_sink=Some(sink),
   )
-  match profiles.invoke(
-    "profiles",
-    Json::object(Map::from_array([
-      ("profile", Json::string("missing")),
-      ("session_id", Json::string("s1")),
-    ])),
-  ) {
+  match
+    profiles.invoke(
+      "profiles",
+      Json::object(
+        Map::from_array([
+          ("profile", Json::string("missing")),
+          ("session_id", Json::string("s1")),
+        ]),
+      ),
+    ) {
     @posoco.CommandOutcome::Failure(reason~) =>
       assert_true(reason.contains("unknown profile"))
     _ => fail("unknown profile must fail without submitting")

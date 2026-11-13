@@ -135,4 +135,3 @@ extern "js" fn js_cancel_effect_code(
   #|   if (host.state.settledEffects.has(key)) return 2;
   #|   return 1;
   #| }
-

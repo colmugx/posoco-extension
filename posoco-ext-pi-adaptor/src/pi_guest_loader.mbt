@@ -25,4 +25,3 @@ extern "js" fn js_host_set_project_trusted(
   trusted : Bool,
 ) -> Unit =
   #| (host, trusted) => { host.state.projectTrusted = trusted }
-

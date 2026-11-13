@@ -62,14 +62,12 @@ async fn[X] with_process(
     defer process.stdout.close()
     defer process.stderr.close()
     outcome.val = Some(
-      body(
-        NativeProcess::{
-          stdin: process.stdin,
-          stdout: process.stdout,
-          stderr: process.stderr,
-          process,
-        },
-      ),
+      body(NativeProcess::{
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        process,
+      }),
     )
   })
   match outcome.val {

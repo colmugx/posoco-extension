@@ -14,6 +14,8 @@ import {
 // Values
 pub fn activation_header(String) -> String
 
+pub fn compose_profiles(resident~ : Array[&@port.Extension], deferred~ : Array[&@port.Extension], manifests~ : Array[ProfileManifest], events? : @events.Events?, store? : &ProfileStore?, activation_sink? : &ProfileActivationSink?, summarizer? : ((Array[(String, Int32)]) -> (String, String))?) -> Result[ProfileComposition, String]
+
 pub fn deep_defer_extensions(exts~ : Array[&@port.Extension]) -> (Map[String, String], Array[&@port.Extension])
 
 pub fn find_pending_activations(Array[@kernel.Message]) -> Array[String]
@@ -25,6 +27,12 @@ pub fn scan_activated_profiles(Array[@kernel.Message]) -> Array[String]
 // Errors
 
 // Types and methods
+pub(all) struct ProfileComposition {
+  exts : Array[&@port.Extension]
+  profiles : Profiles
+  deferred_ids : Array[String]
+}
+
 #derive(Eq, @debug.Debug)
 pub(all) struct ProfileManifest {
   id : String
@@ -74,6 +82,6 @@ pub(open) trait ProfileActivationSink {
 }
 
 pub(open) trait ProfileStore {
-  fn read_all(Self) -> Result[Array[(String, String)], String]
-  fn write(Self, String, ProfileManifest) -> Result[Unit, String]
+  async fn read_all(Self) -> Result[Array[(String, String)], String]
+  async fn write(Self, String, ProfileManifest) -> Result[Unit, String]
 }

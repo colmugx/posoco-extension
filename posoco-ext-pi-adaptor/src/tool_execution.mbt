@@ -75,4 +75,3 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn execute(
     @posoco.ToolOutcome::Success(content=result.content(), structured~)
   }
 }
-

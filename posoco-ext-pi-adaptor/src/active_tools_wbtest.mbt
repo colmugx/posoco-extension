@@ -261,12 +261,14 @@ async test "registerTool and setActiveTools bump the catalog and flip dirty" {
   inspect(adaptor.catalog_dirty, content="false")
 }
 
- 
 ///|
 test "manifest contributes lifecycle and late tools stay separate from static tools" {
   let adaptor = pi_adaptor_new()
   wbtest_api_register_tool(
-    adaptor.host, "at_compose", "", "static tool",
+    adaptor.host,
+    "at_compose",
+    "",
+    "static tool",
     "{\"type\":\"object\",\"properties\":{}}",
   )
   let manifest = adaptor.manifest()
@@ -274,7 +276,10 @@ test "manifest contributes lifecycle and late tools stay separate from static to
   inspect(adaptor.static_tools.contains("at_compose"), content="true")
   inspect(pi_dynamic_tools(adaptor).length(), content="0")
   wbtest_api_register_tool(
-    adaptor.host, "after_compose", "", "late tool",
+    adaptor.host,
+    "after_compose",
+    "",
+    "late tool",
     "{\"type\":\"object\",\"properties\":{}}",
   )
   let dynamic = pi_dynamic_tools(adaptor)
@@ -286,19 +291,37 @@ test "manifest contributes lifecycle and late tools stay separate from static to
 test "active tool changes narrow only Pi tools at the next operation boundary" {
   let adaptor = pi_adaptor_new()
   wbtest_api_register_tool(
-    adaptor.host, "alpha", "", "alpha",
+    adaptor.host,
+    "alpha",
+    "",
+    "alpha",
     "{\"type\":\"object\",\"properties\":{}}",
   )
   wbtest_api_register_tool(
-    adaptor.host, "beta", "", "beta",
+    adaptor.host,
+    "beta",
+    "",
+    "beta",
     "{\"type\":\"object\",\"properties\":{}}",
   )
   let defs = adaptor.list_tools()
   let hook : &@posoco.PipelineHook = adaptor.hook as &@posoco.PipelineHook
-  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct, content="true")
+  inspect(
+    hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct,
+    content="true",
+  )
   wbtest_api_set_active_tools(adaptor.host, "[\"beta\"]")
-  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Disabled, content="true")
-  inspect(hook.tool_exposure(defs[1]) == @kernel.ToolExposure::Direct, content="true")
+  inspect(
+    hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Disabled,
+    content="true",
+  )
+  inspect(
+    hook.tool_exposure(defs[1]) == @kernel.ToolExposure::Direct,
+    content="true",
+  )
   wbtest_api_set_active_tools(adaptor.host, "[\"alpha\",\"beta\"]")
-  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct, content="true")
+  inspect(
+    hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct,
+    content="true",
+  )
 }

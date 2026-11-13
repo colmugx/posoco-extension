@@ -458,4 +458,3 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|
   #|   return { state, api, makeContext, visibleTools, executeAsync, normalizePiResult, errorResult, renderContent, emitFireAndForget };
   #| }
-

@@ -120,4 +120,3 @@ pub fn pi_adaptor_entries_json(adaptor : PiAdaptor) -> String {
 pub fn pi_adaptor_messages_json(adaptor : PiAdaptor) -> String {
   js_messages_json(adaptor.host)
 }
-

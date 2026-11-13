@@ -92,8 +92,6 @@ extern "js" fn js_host_set_hidden_tools(
   #|   );
   #| }
 
-
- 
 ///|
 /// Guest-side active visibility. The Posoco tool-exposure hook uses this only
 /// to *narrow* already-composed tools at the next operation boundary.

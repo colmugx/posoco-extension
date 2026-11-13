@@ -77,7 +77,8 @@ pub fn compose_profiles(
       deferred_ids.push(id)
     }
   }
-  let (gateway, toolless) = match @lazytools.LazyTools::defer_extensions(exts=deferred) {
+  let (gateway, toolless) = match
+    @lazytools.LazyTools::defer_extensions(exts=deferred) {
     Ok(pair) => pair
     Err(reason) => return Err(reason)
   }

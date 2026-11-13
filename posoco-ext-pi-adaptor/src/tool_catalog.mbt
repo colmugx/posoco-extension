@@ -138,7 +138,9 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn list_tools(
       @posoco.ToolDef(
         name=@posoco.ToolName::unchecked(name),
         description=js_tool_description(adaptor.host, index),
-        input_schema=parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
+        input_schema=parse_json_or_null(
+          js_tool_schema_json(adaptor.host, index),
+        ),
         owner=@posoco.OwnerId::unchecked("posoco_ext_pi_adaptor"),
         policy=@posoco.ExecutionPolicy::Parallel,
         provenance=Some("pi"),
@@ -221,4 +223,3 @@ pub async fn pi_adaptor_publish(adaptor : PiAdaptor) -> Unit {
     Err(_) => adaptor.catalog_dirty = true
   }
 }
-
