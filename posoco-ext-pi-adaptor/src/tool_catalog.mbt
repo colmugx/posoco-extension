@@ -109,22 +109,18 @@ pub fn pi_adaptor_tool_schema_json(
 
 ///|
 pub fn pi_adaptor_catalog_json(adaptor : PiAdaptor) -> String {
-  project_catalog_json(
-    filter_hidden_tools(
-      adaptor,
-      parse_json_or_null(js_catalog_json(adaptor.host)),
-    ),
+  filter_hidden_tools(
+    adaptor,
+    parse_json_or_null(js_catalog_json(adaptor.host)),
   ).stringify()
 }
 
 ///|
 /// Versioned snapshot of the Pi guest catalog (not a Posoco CatalogSource).
 pub fn pi_adaptor_catalog_snapshot_json(adaptor : PiAdaptor) -> String {
-  project_catalog_json(
-    filter_hidden_tools(
-      adaptor,
-      parse_json_or_null(js_catalog_snapshot_json(adaptor.host)),
-    ),
+  filter_hidden_tools(
+    adaptor,
+    parse_json_or_null(js_catalog_snapshot_json(adaptor.host)),
   ).stringify()
 }
 
@@ -142,9 +138,7 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn list_tools(
       @posoco.ToolDef(
         name=@posoco.ToolName::unchecked(name),
         description=js_tool_description(adaptor.host, index),
-        input_schema=project_tool_schema(
-          parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
-        ),
+        input_schema=parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
         owner=@posoco.OwnerId::unchecked("posoco_ext_pi_adaptor"),
         policy=@posoco.ExecutionPolicy::Parallel,
         provenance=Some("pi"),
