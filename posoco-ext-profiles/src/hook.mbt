@@ -37,8 +37,8 @@ impl @posoco.PipelineHook for Profiles with fn before_model(
   for profile_id in scan_activated_profiles(messages) {
     match self.find_entry(profile_id) {
       Some(entry) =>
-        for member in entry.members {
-          disclosed.add(member)
+        for ext_id in entry.members {
+          disclosed.add(ext_id)
         }
       None => ()
     }
@@ -47,8 +47,8 @@ impl @posoco.PipelineHook for Profiles with fn before_model(
     match self.find_entry(id) {
       Some(entry) => {
         messages.push(self.activation_message_with_disclosed(id, disclosed))
-        for member in entry.members {
-          disclosed.add(member)
+        for ext_id in entry.members {
+          disclosed.add(ext_id)
         }
         self.publish_activated(id)
       }
