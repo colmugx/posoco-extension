@@ -6,6 +6,7 @@ import {
   "colmugx/posoco-ext-board@0.1.0",
   "colmugx/posoco@0.21.0",
   "moonbitlang/moonback@0.8.6",
+  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.mbt.md"
