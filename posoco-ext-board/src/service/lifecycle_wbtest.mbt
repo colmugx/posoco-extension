@@ -11,7 +11,7 @@ impl WorkflowAgentFactory for UnusedFactory with fn prepare(_, _) {
 /// Even with no Agent active, shutdown must retain exclusive namespace ownership.
 async test "uncertain writer prevents journal release after Agent quiescence" {
   let directory = @fixtures.temporary_directory()
-  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let board = BoardWorkflows(directory~, agents=UnusedFactory::{ }, group~)
     assert_true(board.journal.load() is Ok([]))

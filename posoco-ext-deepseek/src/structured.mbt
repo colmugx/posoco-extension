@@ -64,9 +64,9 @@ pub async fn DeepSeekModelPort::json_schema_completion(
 ) -> Json raise @posoco.ModelError {
   let body = self.ds_json_schema_body(messages, schema_name, schema)
   let headers = build_headers(self.config)
-  let (response, body_data) = @http.post(
+  let (response, body_data) = @http.post_binary(
     chat_url(self.config),
-    body.stringify(),
+    @utf8.encode(body.stringify())[:],
     headers~,
   ) catch {
     err =>
@@ -79,13 +79,13 @@ pub async fn DeepSeekModelPort::json_schema_completion(
       classify_deepseek_http_status(
         "json_schema.http_status",
         response.code,
-        BodyBytesUtf8(body_data.binary().length()),
+        BodyBytesUtf8(body_data.length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let text = body_data.text() catch {
+  let text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "DeepSeek JSON schema response invalid UTF-8",

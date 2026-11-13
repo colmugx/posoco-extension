@@ -8,9 +8,9 @@ async fn ZaiModelPort::zai_compact_completion(
   options : @posoco.ChatOptions,
 ) -> @posoco.Completion raise @posoco.ModelError {
   let body = build_messages_request(self.config, prompt_messages, [], options)
-  let (response, body_data) = @http.post(
+  let (response, body_bytes) = @http.post_binary(
     messages_url(self.config),
-    body.stringify(),
+    @utf8.encode(body.stringify())[:],
     headers=build_headers(self.config),
   ) catch {
     err =>
@@ -18,10 +18,10 @@ async fn ZaiModelPort::zai_compact_completion(
         "zai transport failure (stage=compact_post): " + err.to_string(),
       )
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_bytes) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "zai compact parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+        "zai compact parse failure (stage=decode_utf8, body_bytes=\{body_bytes.length()})",
       )
   }
   if !is_zai_http_success(response.code) {

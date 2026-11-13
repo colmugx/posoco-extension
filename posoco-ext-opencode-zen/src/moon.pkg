@@ -14,6 +14,7 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
 }
@@ -26,7 +27,10 @@ import {
 warnings = "-unused_value-unused_constructor"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+  ],
   targets: {
     // HTTP-backed adaptors: native+wasm+js (moonbitlang/async/http is
     // unavailable on wasm-gc). The pure decoders (parse_zen_models,

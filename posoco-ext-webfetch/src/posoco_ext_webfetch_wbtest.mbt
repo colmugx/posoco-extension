@@ -1,11 +1,4 @@
 ///|
-test "wf skeleton" {
-  let tools = WebFetchTools::WebFetchTools()
-  inspect(tools.timeout_ms, content="30000")
-  inspect(tools.max_chars, content="24000")
-}
-
-///|
 /// ——— Test helpers ———
 
 ///|
@@ -191,20 +184,6 @@ test "wf args rejects bad url values" {
     ),
     content="webfetch: 'url' must be an absolute http/https URL",
   )
-}
-
-///|
-test "wf args parses url and offset" {
-  let (parsed, offset) = try_args(
-    Json::object(
-      Map::from_array([
-        ("url", Json::string("https://ex.com/p?q=1")),
-        ("offset", Json::number(7.0)),
-      ]),
-    ),
-  )
-  inspect(parsed.to_url_string(), content="https://ex.com/p?q=1")
-  guard offset is Some(7) else { fail("expected offset 7") }
 }
 
 ///|

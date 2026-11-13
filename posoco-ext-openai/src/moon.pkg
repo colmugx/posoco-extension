@@ -39,7 +39,14 @@ import {
 warnings = "-unused_async-struct_never_constructed-unused_field"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/http", "moonbitlang/core/async/js_async", "moonbitlang/core/async/socket", "moonbitlang/core/async/websocket" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/js_async",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/websocket",
+  ],
   "native-stub": [ "identity_stub.c" ],
   targets: {
     "identity.js.mbt": [ "js" ],

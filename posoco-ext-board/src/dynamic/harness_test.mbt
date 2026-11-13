@@ -39,7 +39,7 @@ impl @posoco.ModelPort for DynamicModel with fn chat(
     self.active -= 1
   }
   if self.delay > 0 {
-    @async.sleep(self.delay)
+    @core_async.sleep(self.delay)
   }
   if self.fail {
     raise @posoco.ModelError::Transport("controlled test failure")

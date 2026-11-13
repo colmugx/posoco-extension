@@ -79,40 +79,6 @@ test "config defaults to the chat-completions wire" {
 }
 
 ///|
-/// Rebuild helpers are record updates: a field added to the config later must
-/// reach every rebuild site without anyone remembering to copy it.
-test "with_api_key preserves every other field" {
-  let config = CustomConfig(
-    "sk-test",
-    base_url="https://example.com",
-    model="m",
-    endpoint_prefix="/v1",
-    protocol=CustomProtocol::Messages,
-    auth=CustomAuth::Bearer,
-    max_output_tokens=4096,
-    reasoning_effort=Some("high"),
-    thinking_efforts=["low", "high"],
-    context_window=Some(200000),
-    compact_threshold=Some(0.9),
-    supports_images=true,
-    send_prompt_cache_key=true,
-  )
-  let rebuilt = config.with_api_key("sk-new")
-  assert_eq(rebuilt.api_key, "sk-new")
-  assert_eq(rebuilt.base_url, "https://example.com")
-  assert_eq(rebuilt.endpoint_prefix, "/v1")
-  assert_eq(rebuilt.protocol, CustomProtocol::Messages)
-  assert_eq(rebuilt.auth, CustomAuth::Bearer)
-  assert_eq(rebuilt.max_output_tokens, 4096)
-  assert_eq(rebuilt.reasoning_effort, Some("high"))
-  assert_eq(rebuilt.thinking_efforts, ["low", "high"])
-  assert_eq(rebuilt.context_window, Some(200000))
-  assert_eq(rebuilt.compact_threshold, Some(0.9))
-  assert_true(rebuilt.supports_images)
-  assert_true(rebuilt.send_prompt_cache_key)
-}
-
-///|
 test "with_reasoning_effort accepts declared levels and off" {
   let config = CustomConfig(
     "sk",

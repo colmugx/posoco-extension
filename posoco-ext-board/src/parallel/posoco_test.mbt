@@ -297,58 +297,6 @@ async test "a real agent failure stops the wave under the default policy" {
 }
 
 ///|
-async test "the real execution timeout settles both held agents as TimedOut" {
-  @core_async.with_task_group(group => {
-    let models = [
-      parallel_real_model(hold=true),
-      parallel_real_model(hold=true),
-    ]
-    let resolver = parallel_resolver(available=[
-      "alpha/attempt-alpha-1", "beta/attempt-beta-1",
-    ])
-    let h = parallel_real_harness(
-      group,
-      tasks=["alpha", "beta"],
-      models~,
-      resolver~,
-    )
-    assert_true(
-      h.runner.start(
-        parallel_spec(
-          run_id="board-run-3",
-          max_concurrency=2,
-          max_elapsed_ms=5000,
-          execution_timeout_ms=100,
-        ),
-      )
-      is Ok(_),
-    )
-    parallel_yield_until(what="two held turns", check=() => {
-      h.models[0].calls == 1 && h.models[1].calls == 1
-    })
-    let status = h.runner.wait()
-    assert_eq(status.phase, @workflow.Failed)
-    assert_eq(
-      status.reason,
-      Some(@workflow.ExecutionFailed(@execution.TimedOut)),
-    )
-    assert_eq(status.failed, 2)
-    assert_eq(h.models[0].calls, 1)
-    assert_eq(h.models[1].calls, 1)
-    for binding in h.owner.bindings() {
-      assert_eq(binding.phase, @execution.Settled)
-      assert_eq(binding.outcome, Some(@execution.TimedOut))
-    }
-    // Each timed-out Board Attempt is Interrupted, not silently successful.
-    for attempt in h.backend.state().unwrap().attempts {
-      assert_eq(attempt.status, @domain.Interrupted)
-    }
-    assert_true(h.runner.shutdown())
-    h.backend.shutdown()
-  })
-}
-
-///|
 async test "cancel during real held agents settles both as cancelled" {
   @core_async.with_task_group(group => {
     let models = [

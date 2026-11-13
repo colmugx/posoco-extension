@@ -550,7 +550,7 @@ pub(all) struct MCPToolBridge {
   /// Host-provided long-lived task group. Every connection creation —
   /// connect, reconnect, or probe — must hold one (stdio spawns its child
   /// process on it). `None` until `attach`.
-  mut group : @core_async.TaskGroup?
+  mut group : @async.TaskGroup[Unit]?
   /// Host-provided lifetime task group on posoco's `moonbitlang/core/async`
   /// stack. Each connection's fuwaroid actor loop is spawned here (fuwaroid
   /// 0.4 spawns on core async), while the transport above keeps running on
@@ -663,7 +663,7 @@ pub async fn MCPToolBridge::discover(
 /// honestly instead.
 pub fn MCPToolBridge::attach(
   self : MCPToolBridge,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup[Unit],
   lifetime? : @core_async.TaskGroup,
 ) -> Unit {
   self.group = Some(group)
@@ -736,6 +736,9 @@ async fn MCPToolBridge::sleep_backoff_or_close(
   self : MCPToolBridge,
   total_ms : Int32,
 ) -> Bool {
+  // Probe retries run on the bridge's I/O group (moonbitlang/async), so the
+  // backoff sleeps there too: a core-async sleep would outlive a group exit
+  // and keep the retry task alive after the host stopped waiting for it.
   let slice_ms = 250
   let mut waited = 0
   while waited < total_ms {
@@ -744,7 +747,7 @@ async fn MCPToolBridge::sleep_backoff_or_close(
     } else {
       slice_ms
     }
-    @core_async.sleep(step)
+    @async.sleep(step)
     waited = waited + step
     if self.closing {
       return true
@@ -860,7 +863,7 @@ pub fn MCPToolBridge::failures(self : MCPToolBridge) -> Array[(String, String)] 
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
   match self.connect_with_group(config, group) {
     Ok(_) => {
@@ -882,7 +885,7 @@ pub async fn MCPToolBridge::connect(
 async fn MCPToolBridge::open_client(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup[Unit],
 ) -> Result[@client.MCPClient, String] {
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
@@ -964,7 +967,7 @@ async fn MCPToolBridge::open_client(
 async fn MCPToolBridge::connect_with_group(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
   let mut refill_slot = -1
   let mut refill_epoch = 0

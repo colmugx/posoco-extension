@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/core/encoding/utf8",
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "colmugx/posoco/runtime",
@@ -8,7 +7,7 @@ import {
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",
   "colmugx/fuwaroid",
-  "moonbitlang/core/async",
+  "moonbitlang/async",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/env",
   "moonbitlang/core/json",
@@ -21,10 +20,18 @@ import {
   "moonbitlang/core/async/fs",
 }
 
+#cfg(target = "native")
+import {
+  "moonbitlang/core/encoding/utf8",
+}
+
 supported_targets = "+native+js"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   targets: {
     "config_wbtest.mbt": [ "native" ],
     "resilience_e2e_wbtest.mbt": [ "native" ],

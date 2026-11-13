@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/core/encoding/utf8",
   "colmugx/posoco",
   "moonbitlang/core/debug",
 }
@@ -8,6 +7,11 @@ import {
 #cfg(not(target = "js"))
 import {
   "moonbitlang/core/async/fs",
+}
+
+#cfg(not(target = "js"))
+import {
+  "moonbitlang/core/encoding/utf8",
 }
 
 import {
@@ -19,7 +23,10 @@ import {
 // backend set so default-target checks skip instead of failing on the trait.
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   targets: {
     "default_store.native.mbt": [ "native", "wasm" ],
     "default_store.js.mbt": [ "js" ],

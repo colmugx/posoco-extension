@@ -10,7 +10,6 @@ import {
 #cfg(any(target = "native", target = "wasm"))
 import {
   "moonbitlang/core/async/process",
-  "moonbitlang/core/async/io",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/buffer",
@@ -26,7 +25,12 @@ import {
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/io", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/io",
+    "moonbitlang/core/async/js_async",
+    "moonbitlang/core/async/process",
+  ],
   targets: {
     "posoco_ext_ps1.js.mbt": [ "js" ],
     "posoco_ext_ps1.native.mbt": [ "native", "wasm" ],

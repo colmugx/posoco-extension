@@ -26,13 +26,13 @@ async fn DeepSeekModelPort::chat_stream(
   )
   let headers = build_headers(self.config)
   let url = chat_url(self.config)
-  let client = @http.post_stream(url, headers~) catch {
+  let client = @http.post(url, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=post_stream): " + err.to_string(),
       )
   }
-  client.write(body.stringify()) catch {
+  client.write(@utf8.encode(body.stringify())[:]) catch {
     err => {
       client.close()
       raise @posoco.ModelError::Transport(
@@ -71,7 +71,7 @@ async fn DeepSeekModelPort::chat_stream(
   let mut data_buffer = ""
   let mut last_yield = @async.now()
   while !done {
-    let line = client.read_until("\n") catch {
+    let line = client.read_until(b"\n") catch {
       err => {
         client.close()
         raise @posoco.ModelError::Transport(
@@ -81,7 +81,13 @@ async fn DeepSeekModelPort::chat_stream(
     }
     match line {
       Some(data) => {
-        let trimmed = data.trim()
+        let text = @utf8.decode(data) catch {
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "DeepSeek SSE chunk decode failure (stage=decode_utf8)",
+            )
+        }
+        let trimmed = text.trim()
         if trimmed.has_prefix("data:") {
           let payload = trimmed[5:].trim().to_owned()
           if payload.length() > 0 {

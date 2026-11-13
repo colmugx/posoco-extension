@@ -130,23 +130,34 @@ pub async fn fetch_zai_coding_plan_quota(
     "Accept": "application/json",
   }
   let fetched_at_ms = now_ms()
-  let (response, body_data) = @async.with_timeout(10000, () => {
+  let (response, conn) = @async.with_timeout(10000, () => {
     @http.get(zai_coding_plan_quota_url(base_url), headers~)
   }) catch {
     @async.TimeoutError =>
       return Err("Z.ai quota request timed out (timeout_ms=10000)")
     err => return Err("Z.ai quota request failed: " + err.to_string())
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      return Err("Z.ai quota body read failed: " + err.to_string())
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
     return Err(
       "Z.ai quota HTTP status: " +
       response.code.to_string() +
       ", body_bytes=" +
-      body_data.binary().length().to_string(),
+      body_bytes.length().to_string(),
     )
   }
-  let body_text = body_data.text() catch {
-    err => return Err("Z.ai quota body read failed: " + err.to_string())
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
+      return Err(
+        "Z.ai quota body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
+      )
   }
   let payload = @json.parse(body_text) catch {
     err => return Err("Z.ai quota JSON parse failed: " + err.to_string())

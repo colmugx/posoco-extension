@@ -87,9 +87,9 @@ impl @posoco.ModelPort for ScriptModel with fn chat(self, _, messages, _, _, _) 
     self.context.purpose == @service.WorkflowAgentPurpose::Execution {
     // Test-only barrier: both independent Agents must enter the model port.
     // A serialized runner fails the bounded wait instead of hanging.
-    let joined = @async.with_timeout(2000, () => {
+    let joined = @core_async.with_timeout(2000, () => {
       while self.state.active < 2 {
-        @async.sleep(1)
+        @core_async.sleep(1)
       }
       true
     }) catch {
@@ -100,7 +100,7 @@ impl @posoco.ModelPort for ScriptModel with fn chat(self, _, messages, _, _, _) 
     }
   }
   if self.state.delay > 0 {
-    @async.sleep(self.state.delay)
+    @core_async.sleep(self.state.delay)
   }
   if self.state.fail {
     raise @posoco.ModelError::Transport("private-provider-secret-must-not-leak")
@@ -180,7 +180,7 @@ impl @service.WorkflowAgentFactory for ScriptFactory with fn prepare(
   context,
 ) {
   self.state.contexts.push(context)
-  @async.pause()
+  @core_async.pause()
   {
     extensions: [
       ScriptModel::{ directory: self.directory, context, state: self.state, },

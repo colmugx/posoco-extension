@@ -89,7 +89,7 @@ async test "start_probes_without_attach_records_skip_failures" {
   }
   assert_eq(bridge.catalog_revision, 0)
   // Nothing was spawned, so no retry can add entries later.
-  @core_async.sleep(50)
+  @async.sleep(50)
   assert_eq(bridge.startup_failures.length(), 2)
 }
 
@@ -157,7 +157,7 @@ async test "reconnect_server_without_attach_fails_honestly" {
 
 ///|
 async test "start_probes_returns_before_connections_settle" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let bridge = probe_test_bridge(mode=LoadMode::Lazy, ["bogus"])
     bridge.attach(group)
     bridge.start_probes()
@@ -168,7 +168,7 @@ async test "start_probes_returns_before_connections_settle" {
     assert_eq(bridge.catalog_revision, 0)
     let mut waited = 0
     while bridge.startup_failures.length() == 0 && waited < 5_000 {
-      @core_async.sleep(25)
+      @async.sleep(25)
       waited += 25
     }
     assert_eq(bridge.startup_failures.length(), 1)
@@ -199,7 +199,7 @@ async test "on_start_after_start_probes_adds_nothing" {
 /// the revision never moves. A 300ms stable window proves the injected
 /// schedule (3 retries) ran to exhaustion.
 async test "start_probes_exhausted_retries_leave_one_failure_per_server" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let bridge = probe_test_bridge(mode=LoadMode::Lazy, ["s1", "s2"])
     bridge.attach(group)
     bridge.start_probes(backoff_ms=[10, 10, 10])
@@ -207,7 +207,7 @@ async test "start_probes_exhausted_retries_leave_one_failure_per_server" {
     let mut last_len = bridge.startup_failures.length()
     let mut stable = 0
     while waited < 5_000 && stable < 300 {
-      @core_async.sleep(25)
+      @async.sleep(25)
       waited += 25
       let len = bridge.startup_failures.length()
       if len == last_len {
@@ -265,8 +265,8 @@ async test "scrub_startup_failures_removes_only_named_server" {
 /// the retry return before the schedule exhausts, so the host's task group
 /// (and agent shutdown behind it) never waits out the remaining backoff.
 async test "close_interrupts_pending_probe_retries" {
-  let t0 = @core_async.now()
-  @core_async.with_task_group(group => {
+  let t0 = @async.now()
+  @async.with_task_group(group => {
     let bridge = probe_test_bridge_with_configs(mode=LoadMode::Lazy, [
       probe_test_config("dead"),
     ])
@@ -274,11 +274,11 @@ async test "close_interrupts_pending_probe_retries" {
     // The stdio command does not exist: the first probe fails on spawn,
     // then the retry sleeps on a 30s injected backoff.
     bridge.start_probes(backoff_ms=[30_000])
-    @core_async.sleep(200)
+    @async.sleep(200)
     assert_true(bridge.startup_failures.length() >= 1)
     bridge.close()
   })
   // Draining the group joins the background retry: without the closing
   // check this blocks the full 30s backoff, sliced checks cut it to ~250ms.
-  assert_true(@core_async.now() - t0 < 5_000)
+  assert_true(@async.now() - t0 < 5_000)
 }

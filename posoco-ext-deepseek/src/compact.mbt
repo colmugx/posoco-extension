@@ -253,7 +253,11 @@ async fn DeepSeekModelPort::ds_compact_completion(
   let body = self.ds_compact_request_body(head, tools, options)
   let headers = build_headers(self.config)
   let url = chat_url(self.config)
-  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, body_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=compact_post): " + err.to_string(),
@@ -264,13 +268,13 @@ async fn DeepSeekModelPort::ds_compact_completion(
       classify_deepseek_http_status(
         "compact.http_status",
         response.code,
-        BodyBytesUtf8(body_data.binary().length()),
+        BodyBytesUtf8(body_data.length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "DeepSeek compact parse failure (stage=decode_utf8, category=invalid_utf8)",

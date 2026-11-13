@@ -9,10 +9,14 @@
 /// like a normal turn.
 
 ///|
-async fn read_custom_error_body(client : @http.Client) -> CustomErrorBody {
+async fn read_custom_error_body(
+  client : @http.ClientConnection,
+) -> CustomErrorBody {
   let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let text = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  let byte_length = data.length()
+  let text = @utf8.decode(data) catch {
+    _ => return BodyBytesInvalidUtf8(byte_length)
+  }
   BodyText(text)
 }
 

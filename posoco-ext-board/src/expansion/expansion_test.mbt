@@ -834,7 +834,7 @@ impl @expansion.DynamicPlanSource for SlowSource with fn generate(self, context)
   self.entered.val = true
   self.context.val = Some(context)
   context.permitted_existing_dependencies.clear()
-  @async.sleep(10)
+  @core_async.sleep(10)
   Ok({ payload: payload(), })
 }
 
@@ -856,7 +856,7 @@ async test "generation is bounded single use and cannot race another operation o
         )
       })
       while !source.entered.val {
-        @async.sleep(1)
+        @core_async.sleep(1)
       }
       assert_true(
         host.prepare(payload(), authorization=Some(authority()))

@@ -96,7 +96,7 @@ fn ParallelWorkflowRunner::watch(
 ///|
 async fn ParallelWorkflowRunner::cleanup(self : ParallelWorkflowRunner) -> Bool {
   self.cancel_handles()
-  let joined = @async.with_timeout(4000, () => {
+  let joined = @core_async.with_timeout(4000, () => {
     for handle in self.handles.copy() {
       let binding = try handle.wait() catch {
         _ => None
@@ -128,10 +128,10 @@ async fn ParallelWorkflowRunner::drive(
   let remaining = (spec.max_elapsed_ms.to_int64() - self.elapsed_ms())
     .max(1L)
     .to_int()
-  let result = @async.handle_cancellation(() => {
+  let result = @core_async.handle_cancellation(() => {
     @core_async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
-        @async.sleep(remaining)
+        @core_async.sleep(remaining)
         self.deadline_expired = true
         raise ParallelDeadline
       })
@@ -147,7 +147,7 @@ async fn ParallelWorkflowRunner::drive(
         }
     }
   })
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     if result is None && self.phase != @workflow.Unresolved {
       self.finish(
         @workflow.Stopped,
@@ -177,7 +177,7 @@ async fn ParallelWorkflowRunner::run_loop(
 ) -> Unit {
   let mut stale = 0
   while true {
-    @async.pause()
+    @core_async.pause()
     if self.controlled &&
       self.phase is (Failed | Unresolved | Completed | Stopped) {
       return
@@ -310,7 +310,7 @@ async fn ParallelWorkflowRunner::run_loop(
               replan = true
               break
             }
-            @async.pause()
+            @core_async.pause()
           }
           Ok(@orchestration.Blocked(_)) => {
             replan = true
@@ -406,7 +406,7 @@ pub async fn ParallelWorkflowRunner::shutdown(
     return false
   }
   let deadline = (self.now_ms)() + timeout_ms.to_int64()
-  let joined = @async.with_timeout(timeout_ms, () => {
+  let joined = @core_async.with_timeout(timeout_ms, () => {
     if self.worker is Some(worker) {
       worker.wait()
     }

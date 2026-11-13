@@ -42,9 +42,7 @@ async fn version_cache_fixture_read_file(
   directory : String,
   name : String,
 ) -> String? {
-  let text = @fs.read_text(openai_cache_join(directory, name)) catch {
-    _ => ""
-  }
+  let text = @fs.read_text(openai_cache_join(directory, name)) catch { _ => "" }
   if text.is_empty() {
     None
   } else {
@@ -71,7 +69,9 @@ fn version_cache_fixture_cache(directory : String) -> &CodexClientVersionCache {
 /// afterwards — on success, assertion failure, or error alike.
 async fn version_cache_with_fixture(scenario : async (String) -> Unit) -> Unit {
   let directory = version_cache_fixture_dir()
-  defer version_cache_fixture_cleanup(directory)
+  defer @async.protect_from_cancel(() => {
+    version_cache_fixture_cleanup(directory)
+  })
   scenario(directory)
 }
 

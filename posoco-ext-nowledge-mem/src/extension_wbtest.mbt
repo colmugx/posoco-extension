@@ -305,7 +305,7 @@ async test "e2e: the system prompt carries guidance only, never data" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = nmem_agent(ext, model)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     assert_true(model.received_messages.length() > 0)
@@ -337,7 +337,7 @@ async test "on_start configures the mcp client with the resolved endpoint" {
   )
   let mcp = FakeNmemMcp::FakeNmemMcp()
   let ext = nmem_ext(mcp~, platform~)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     @posoco.Lifecycle::on_start(ext)
     guard mcp.configured is Some((url, auth_token, name)) else {
@@ -362,7 +362,7 @@ async test "e2e: completed turns sync create then incremental append" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     // The attached turn-end drain commits the create before run_turn
@@ -404,13 +404,13 @@ async test "attach runs the flusher loop inside a host task group" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     // The turn stages its create and the attached turn-end drain commits
     // it; the flusher's ticks then find the lane clean — no explicit
     // flush_pending call anywhere.
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
-    @async.sleep(1100)
+    @io.sleep(1100)
     ext.engine.stop()
   })
   inspect(transport.requests.length(), content="1")
@@ -429,9 +429,9 @@ async test "attach: flusher loop terminates on task group cancellation" {
   let ext = nmem_ext(transport~)
   let outcome : Result[Unit, Error] = Ok(
     @async.with_timeout(5000, () => {
-      @async.with_task_group(group => {
+      @io.with_task_group(group => {
         ext.attach(group)
-        @async.sleep(20)
+        @io.sleep(20)
         raise HostEof
       })
     }),
@@ -455,7 +455,7 @@ async test "on_shutdown stops the flusher, drains pending lanes, closes mcp" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     // The attached turn-end drain commits the create before run_turn
     // returns; on_shutdown's final drain then finds nothing pending.
@@ -536,7 +536,7 @@ async test "on_event: SessionRedirect stages the old lane and switches the sessi
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
-  @async.with_task_group(group => {
+  @io.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     guard ext.config is Some(config) else { fail("config was not resolved") }

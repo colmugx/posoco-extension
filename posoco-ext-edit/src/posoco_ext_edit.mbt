@@ -176,7 +176,10 @@ fn core_cause(cause : String) -> String {
   match text.find(": ") {
     Some(pos) => {
       let head = text[:pos]
-      if head.has_suffix(")") || head.contains("::") {
+      // `impl @io.BinaryReader for @fs.File: <reason>` and friends: the new
+      // async stack wraps the OS reason in a trait-impl label the model has no
+      // use for.
+      if head.has_suffix(")") || head.contains("::") || head.has_prefix("impl ") {
         text = text[pos + 2:].to_owned()
       }
     }

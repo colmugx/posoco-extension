@@ -43,7 +43,7 @@ pub fn DynamicWorkflowController::create(
   resolver~ : &@orchestration.BoardExecutionInputResolver,
   group~ : @core_async.TaskGroup,
   spec~ : DynamicWorkflowSpec,
-  now_ms~ : () -> Int64 = @async.now,
+  now_ms~ : () -> Int64 = @core_async.now,
 ) -> Result[DynamicWorkflowController, DynamicWorkflowError] {
   if !spec.validate() {
     return Err(InvalidSpec)
@@ -172,10 +172,10 @@ async fn[T] DynamicWorkflowController::perform(
     self.runner.status().remaining_ms.max(1L).to_int()
   }
   let task = self.group.spawn(allow_failure=true, () => {
-    result.val = Some(@async.with_timeout(timeout, work))
+    result.val = Some(@core_async.with_timeout(timeout, work))
   })
   self.operation = Some(task)
-  let waited = @async.handle_cancellation(() => {
+  let waited = @core_async.handle_cancellation(() => {
     task.wait()
     true
   }) catch {
@@ -183,7 +183,9 @@ async fn[T] DynamicWorkflowController::perform(
   }
   if waited != Some(true) {
     task.cancel()
-    let joined = @async.protect_from_cancel(() => join_operation(task, 4000))
+    let joined = @core_async.protect_from_cancel(() => {
+      join_operation(task, 4000)
+    })
     if !joined {
       self.unresolved = true
       return Err(OperationInterrupted)
@@ -485,8 +487,8 @@ pub async fn DynamicWorkflowController::wait_boundary(
     return Err(NotStarted)
   }
   let timeout = self.runner.status().remaining_ms.max(1L).to_int() + 4000
-  let joined = @async.with_timeout(timeout, () => {
-    @async.pause()
+  let joined = @core_async.with_timeout(timeout, () => {
+    @core_async.pause()
     while self.busy ||
           self.planning_active ||
           !self.owner.status().active_bindings.is_empty() ||
@@ -494,7 +496,7 @@ pub async fn DynamicWorkflowController::wait_boundary(
       if self.unresolved {
         return false
       }
-      @async.sleep(1)
+      @core_async.sleep(1)
     }
     true
   }) catch {
@@ -558,7 +560,7 @@ pub async fn DynamicWorkflowController::quiesce(
   if timeout_ms <= 0 {
     return false
   }
-  let start = @async.now()
+  let start = @core_async.now()
   if self.operation is Some(task) {
     let joined = join_operation(task, timeout_ms)
     if !joined {
@@ -572,7 +574,7 @@ pub async fn DynamicWorkflowController::quiesce(
     self.runner.status().phase is Unresolved {
     return false
   }
-  let remaining = (timeout_ms.to_int64() - (@async.now() - start))
+  let remaining = (timeout_ms.to_int64() - (@core_async.now() - start))
     .max(1L)
     .to_int()
   if !self.runner.shutdown(timeout_ms=remaining) {
@@ -588,12 +590,14 @@ pub async fn DynamicWorkflowController::shutdown(
   self : DynamicWorkflowController,
   timeout_ms~ : Int32 = 4000,
 ) -> Bool {
-  let start = @async.now()
+  let start = @core_async.now()
   if !self.quiesce(timeout_ms~) {
     return false
   }
-  let left = (timeout_ms.to_int64() - (@async.now() - start)).max(1L).to_int()
-  @async.with_timeout(left, () => {
+  let left = (timeout_ms.to_int64() - (@core_async.now() - start))
+    .max(1L)
+    .to_int()
+  @core_async.with_timeout(left, () => {
     self.backend.shutdown()
     true
   }) catch {
@@ -606,7 +610,7 @@ pub async fn DynamicWorkflowController::shutdown(
 /// termination. Its failure is returned by perform; this helper proves join
 /// only. A timeout, unlike a task failure, never proves termination.
 async fn join_operation(task : @core_async.Task[Unit], timeout : Int32) -> Bool {
-  @async.with_timeout(timeout, () => {
+  @core_async.with_timeout(timeout, () => {
     task.wait() catch {
       _ => ()
     }

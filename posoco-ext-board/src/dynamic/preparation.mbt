@@ -93,7 +93,7 @@ pub async fn DynamicWorkflowController::prepare_task(
         Ok(_) => ()
       }
       let (step, command) = pair
-      let result = @async.protect_from_cancel(() => {
+      let result = @core_async.protect_from_cancel(() => {
         self.partials[index] = {
           ..self.partials[index],
           step,

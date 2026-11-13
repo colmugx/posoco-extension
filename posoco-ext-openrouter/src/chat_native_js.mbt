@@ -6,10 +6,14 @@
 /// Drain a non-2xx response, keeping the provider's error text for the
 /// failure message. Uses `@http.Client`, so it co-resides with the chat impl
 /// on native+js.
-async fn read_error_body(client : @http.Client) -> OpenRouterErrorBody {
+async fn read_error_body(
+  client : @http.ClientConnection,
+) -> OpenRouterErrorBody {
   let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let text = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  let byte_length = data.length()
+  let text = @utf8.decode(data) catch {
+    _ => return BodyBytesInvalidUtf8(byte_length)
+  }
   BodyText(text)
 }
 
@@ -17,13 +21,13 @@ async fn read_error_body(client : @http.Client) -> OpenRouterErrorBody {
 /// The `Retry-After` header off a non-2xx response, when present. OpenRouter
 /// states the 429 wait here as delta seconds; the classifier routes it into
 /// the typed RateLimited verdict via the kit parser.
-fn retry_after_header(response : @http.Response) -> String? {
+fn retry_after_header(response : @http.ResponseHeader) -> String? {
   response.headers.get(@http.CaseInsensitiveString("Retry-After"))
 }
 
 ///|
 /// The `X-RateLimit-Reset` header (absolute epoch seconds), when present.
-fn rate_limit_reset_header(response : @http.Response) -> String? {
+fn rate_limit_reset_header(response : @http.ResponseHeader) -> String? {
   response.headers.get(@http.CaseInsensitiveString("X-RateLimit-Reset"))
 }
 
@@ -68,14 +72,14 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
-      let client = @http.post_stream(url, headers~) catch {
+      let client = @http.post(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "openrouter transport failure (stage=post_stream): " +
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -120,7 +124,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       let mut data_buffer = ""
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             match classify_openrouter_stream_termination(TransportFailure) {
@@ -131,7 +135,14 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         }
         match line {
           Some(data) => {
-            let trimmed = data.trim()
+            let text = @utf8.decode(data) catch {
+              _ =>
+                match classify_openrouter_stream_termination(TransportFailure) {
+                  Some(err) => raise err
+                  None => ""
+                }
+            }
+            let trimmed = text.trim()
             // Only "data:"-prefixed lines carry stream bytes; heartbeat
             // comment lines (`: OPENROUTER PROCESSING`) are skipped here.
             if trimmed.has_prefix("data:") {

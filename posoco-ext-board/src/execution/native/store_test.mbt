@@ -71,10 +71,7 @@ async test "native journal rejects corrupt files and existing temp paths without
   assert_eq(blocked.load(), Ok([]))
   @fs.write_text(root + "/executions.json.tmp", "do not overwrite")
   assert_true(blocked.persist([reserved()]) is Err(@execution.StoreUnavailable))
-  assert_eq(
-    @fs.read_text(root + "/executions.json.tmp"),
-    "do not overwrite",
-  )
+  assert_eq(@fs.read_text(root + "/executions.json.tmp"), "do not overwrite")
   blocked.close()
 }
 

@@ -24,7 +24,7 @@ pub async fn fetch_zen_models(
   for key, value in extra_headers {
     headers[@http.CaseInsensitiveString(key)] = value
   }
-  let (response, body_data) = @async.with_timeout(30000, () => {
+  let (response, conn) = @async.with_timeout(30000, () => {
     @http.get(zen_models_url(base_url, endpoint_prefix), headers~)
   }) catch {
     @async.TimeoutError =>
@@ -36,10 +36,19 @@ pub async fn fetch_zen_models(
         "OpenCode Zen list models request failed: " + err.to_string(),
       )
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      raise @posoco.ModelError::Transport(
+        "OpenCode Zen list models body read failed: " + err.to_string(),
+      )
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
     // The gateway's error body names the failure cause; carry it verbatim.
-    let byte_length = body_data.binary().length()
-    let text = body_data.text() catch {
+    let byte_length = body_bytes.length()
+    let text = @utf8.decode(body_bytes) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           "OpenCode Zen list models HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
@@ -49,10 +58,11 @@ pub async fn fetch_zen_models(
       "OpenCode Zen list models HTTP status: \{response.code}, body=\{text}",
     )
   }
-  let body_text = body_data.text() catch {
-    err =>
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
       raise @posoco.ModelError::Transport(
-        "OpenCode Zen list models body read failed: " + err.to_string(),
+        "OpenCode Zen list models body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
       )
   }
   let payload = @json.parse(body_text) catch {
@@ -76,7 +86,7 @@ pub async fn fetch_zen_models(
 /// image input, SDK wire signal, cost rates) for products on this package.
 pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @posoco.ModelError {
   let headers : @http.Headers = { "Accept": "application/json" }
-  let (response, body_data) = @async.with_timeout(30000, () => {
+  let (response, conn) = @async.with_timeout(30000, () => {
     @http.get(zen_models_dev_url, headers~)
   }) catch {
     @async.TimeoutError =>
@@ -88,9 +98,18 @@ pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @posoco.
         "models.dev metadata request failed: " + err.to_string(),
       )
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      raise @posoco.ModelError::Transport(
+        "models.dev metadata body read failed: " + err.to_string(),
+      )
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
-    let byte_length = body_data.binary().length()
-    let text = body_data.text() catch {
+    let byte_length = body_bytes.length()
+    let text = @utf8.decode(body_bytes) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           "models.dev metadata HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
@@ -100,10 +119,11 @@ pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @posoco.
       "models.dev metadata HTTP status: \{response.code}, body=\{text}",
     )
   }
-  let body_text = body_data.text() catch {
-    err =>
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
       raise @posoco.ModelError::Transport(
-        "models.dev metadata body read failed: " + err.to_string(),
+        "models.dev metadata body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
       )
   }
   let payload = @json.parse(body_text) catch {

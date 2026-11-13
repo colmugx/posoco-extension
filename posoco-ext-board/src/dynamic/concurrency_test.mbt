@@ -1,8 +1,8 @@
 ///|
 async fn dynamic_until(check : () -> Bool) -> Unit {
-  @async.with_timeout(2000, () => {
+  @core_async.with_timeout(2000, () => {
     while !check() {
-      @async.sleep(1)
+      @core_async.sleep(1)
     }
   })
 }
@@ -265,7 +265,7 @@ async test "boundary wait does not mistake a paused runner for a joined planning
     })
     dynamic_until(() => h.model.active == 1)
     let boundary = group.spawn(() => h.controller.wait_boundary())
-    @async.sleep(5)
+    @core_async.sleep(5)
     assert_true(boundary.try_wait() is None)
     ignore(planning.wait().unwrap())
     let status = boundary.wait().unwrap()

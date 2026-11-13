@@ -89,7 +89,7 @@ async test "a recovered mixed journal blocks start and never auto-executes" {
     )
     // A paused host never repairs, reconciles or replays by itself.
     for _ in 0..<64 {
-      @async.pause()
+      @core_async.pause()
       assert_eq(h.shared.runs, 0)
       assert_eq(h.resolver.execution_ids.length(), 0)
     }

@@ -5,6 +5,7 @@ import {
   "posoco/devkit",
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
+  "moonbitlang/async" @io,
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
@@ -37,7 +38,11 @@ import {
 supported_targets = "+native +js"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/http" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+  ],
   targets: {
     "runner.native.mbt": [ "native" ],
     "runner.js.mbt": [ "js" ],

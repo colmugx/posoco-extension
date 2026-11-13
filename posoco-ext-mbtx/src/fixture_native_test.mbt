@@ -25,9 +25,12 @@ async fn fixture_remove(path : String) -> Unit nocancel {
 
 ///|
 async fn fixture_compile(path : String) -> String {
-  let result = @process.run("moon", [
-    "run", "--build-only", "--target", "wasm", "--output-json", path,
-  ], stdout=Collect, stderr=Collect)
+  let result = @process.run(
+    "moon",
+    ["run", "--build-only", "--target", "wasm", "--output-json", path],
+    stdout=Collect,
+    stderr=Collect,
+  )
   if result.exit_code != 0 {
     fail(result.stdout_text() + result.stderr_text())
   }

@@ -84,8 +84,11 @@ async fn ShellTools::bash_foreground(
           group,
           "sh",
           ["-c", cmd],
-          stdout=@process.ProcessOutput::Shared(writer),
-          stderr=@process.ProcessOutput::Shared(writer),
+          // Both streams share one sink: the process package's write end is
+          // already a `&ProcessOutput`, and ordering between stdout and stderr
+          // is what the model needs for interleaved shell output.
+          stdout=writer,
+          stderr=writer,
           cwd?,
           cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
         )
@@ -138,7 +141,9 @@ async fn ShellTools::bash_foreground(
     }
     Ok(Some(_)) => {
       guard scoped_result.val is Some((exit_code, content, decode_failed)) else {
-        raise @posoco.RuntimeError::InvocationFailed("bash: missing process outcome")
+        raise @posoco.RuntimeError::InvocationFailed(
+          "bash: missing process outcome",
+        )
       }
       let content = if decode_failed {
         bash_decode_failure(exit_code)
@@ -188,7 +193,7 @@ async fn bash_drain_native(
   let mut pending : Array[Byte] = []
   let mut decode_failed = false
   for ;; {
-    let chunk = reader.read() catch { _ => None }
+    let chunk = reader.read_some()
     match chunk {
       None => break
       Some(data) => {
@@ -196,8 +201,8 @@ async fn bash_drain_native(
           continue
         }
         let joined = pending.copy()
-        for byte in data {
-          joined.push(byte)
+        for i in 0..<data.length() {
+          joined.push(data[i])
         }
         let (text, used, valid) = bash_utf8_complete_prefix(joined)
         if !valid {

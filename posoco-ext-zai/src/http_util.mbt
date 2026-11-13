@@ -19,9 +19,9 @@ fn is_zai_http_success(status : Int32) -> Bool {
 ///|
 /// Read the error body of a streamed non-2xx response, bounded. `None` when
 /// the body could not be read at all.
-async fn read_error_body_text(client : @http.Client) -> String? {
+async fn read_error_body_text(client : @http.ClientConnection) -> String? {
   let data = client.read_all() catch { _ => return None }
-  let text = data.text() catch { _ => return None }
+  let text = @utf8.decode(data) catch { _ => return None }
   if text.length() > 2048 {
     Some(text.exact_view(start=0, end=2048).to_owned())
   } else {

@@ -5,10 +5,15 @@
 
 ///|
 async fn rtk_rewrite(rtk_path : String, cmd : String) -> String? noraise {
-  let (_, out) = @process.collect_stdout(rtk_path, ["rewrite", cmd]) catch {
+  let result = @process.run(
+    rtk_path,
+    ["rewrite", cmd],
+    stdout=Collect,
+    stderr=Discard,
+  ) catch {
     _ => return None
   }
-  let text = out.text() catch { _ => return None }
+  let text = result.stdout_text() catch { _ => return None }
   let trimmed = text.trim().to_owned()
   if trimmed == "" {
     None

@@ -15,15 +15,19 @@ async fn OpenCodeZenModelPort::zen_post_chat_json(
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(self.config, scope)
   let url = chat_url(self.config)
-  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, body_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "opencode-zen transport failure (stage=post): " + err.to_string(),
       )
   }
   if !is_zen_http_success(response.code) {
-    let byte_length = body_data.binary().length()
-    let text = body_data.text() catch {
+    let byte_length = body_data.length()
+    let text = @utf8.decode(body_data) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           format_zen_http_error(
@@ -44,10 +48,10 @@ async fn OpenCodeZenModelPort::zen_post_chat_json(
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+        "opencode-zen response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.length()})",
       )
   }
   @json.parse(body_text) catch {

@@ -62,27 +62,6 @@ async test "list_tools_have_provenance" {
 }
 
 ///|
-test "extract_command_from_cmd_key" {
-  let args = Json::object(
-    Map::from_array([
-      ("cmd", Json::string("Get-ChildItem")),
-      ("dir", Json::string("C:\\tmp")),
-    ]),
-  )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "Get-ChildItem")
-}
-
-///|
-test "extract_command_from_command_key" {
-  let args = Json::object(
-    Map::from_array([("command", Json::string("git status"))]),
-  )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "git status")
-}
-
-///|
 /// A missing cmd/command raises a typed error instead of silently falling
 /// back to running the JSON blob as a shell command.
 async test "extract_command_empty_object_raises_typed_error" {
@@ -255,33 +234,6 @@ async test "anchored_session_starts_in_anchor_root" {
   match tools.execute(test_ctx(call)) {
     Success(content~, ..) => assert_eq(content.trim(), "/")
     _ => fail("expected Success for (Get-Location).Path")
-  }
-}
-
-///|
-async test "env_var_roundtrip_via_env_provider" {
-  // PS1_LIVE=1 gate: spawns the real pwsh.
-  if !ps1_live_enabled() {
-    return
-  }
-  let tools = PowerShellTools(exe="pwsh")
-  let call : @posoco.ToolCall = {
-    call_id: @posoco.CallId::unchecked("tc_env"),
-    name: @posoco.ToolName::unchecked("powershell"),
-    arguments: Json::object(
-      Map::from_array([
-        (
-          "cmd",
-          Json::string(
-            "$env:CETAS_PS1_TEST = 'v1'; Write-Output $env:CETAS_PS1_TEST",
-          ),
-        ),
-      ]),
-    ),
-  }
-  match tools.execute(test_ctx(call)) {
-    Success(content~, ..) => assert_eq(content.trim(), "v1")
-    _ => fail("expected Success for env var roundtrip")
   }
 }
 

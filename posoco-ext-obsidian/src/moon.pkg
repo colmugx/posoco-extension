@@ -26,7 +26,11 @@ import {
 supported_targets = "+native +js"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/js_async",
+    "moonbitlang/core/async/process",
+  ],
   targets: {
     "posoco_ext_obsidian.native.mbt": [ "native", "wasm" ],
     "posoco_ext_obsidian.js.mbt": [ "js" ],

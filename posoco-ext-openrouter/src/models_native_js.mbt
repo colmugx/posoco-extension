@@ -18,7 +18,7 @@ pub async fn fetch_openrouter_models(
     "Authorization": "Bearer " + api_key,
     "Accept": "application/json",
   }
-  let (response, body_data) = @async.with_timeout(30000, () => {
+  let (response, conn) = @async.with_timeout(30000, () => {
     @http.get(clean + "/models", headers~)
   }) catch {
     @async.TimeoutError =>
@@ -30,9 +30,18 @@ pub async fn fetch_openrouter_models(
         "OpenRouter list models request failed: " + err.to_string(),
       )
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      raise @posoco.ModelError::Transport(
+        "OpenRouter list models body read failed: " + err.to_string(),
+      )
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
-    let byte_length = body_data.binary().length()
-    let text = body_data.text() catch {
+    let byte_length = body_bytes.length()
+    let text = @utf8.decode(body_bytes) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           "OpenRouter list models HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
@@ -42,10 +51,11 @@ pub async fn fetch_openrouter_models(
       "OpenRouter list models HTTP status: \{response.code}, body=\{text}",
     )
   }
-  let body_text = body_data.text() catch {
-    err =>
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
       raise @posoco.ModelError::Transport(
-        "OpenRouter list models body read failed: " + err.to_string(),
+        "OpenRouter list models body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
       )
   }
   let payload = @json.parse(body_text) catch {

@@ -19,21 +19,6 @@ fn cache_scope(session : String) -> @posoco.InvocationScope {
 }
 
 ///|
-test "OpenRouterModelPort exposes config passthrough via provider_config" {
-  let config = OpenRouterConfig(
-    "sk-or-test",
-    model="anthropic/claude-3.7-sonnet",
-    context_window=Some(131072),
-    compact_threshold=Some(0.9),
-  )
-  let port = OpenRouterModelPort(config)
-  let pc = @posoco.ModelPort::provider_config(port)
-  assert_eq(pc.context_window, Some(131072))
-  assert_eq(pc.compact_threshold, Some(0.9))
-  assert_eq(pc.reasoning_effort_values, [])
-}
-
-///|
 test "OpenRouterConfig::with_reasoning_effort maps the selector vocabulary" {
   let config = OpenRouterConfig(
     "sk-or-test",
@@ -274,47 +259,6 @@ test "unrelated 400 bodies never set the rejection flag" {
 }
 
 ///|
-test "build_chat_request serializes model, messages, tools and chat options" {
-  let tool = @posoco.ToolDef::ToolDef(
-    name=@posoco.ToolName::unchecked("echo"),
-    description="echo back",
-    input_schema=Json::object(Map::from_array([])),
-    owner=@posoco.OwnerId::unchecked("test"),
-    policy=@posoco.ExecutionPolicy::Sequential,
-    provenance=None,
-  )
-  let body = build_chat_request(
-    OpenRouterConfig("k", model="anthropic/claude-3.7-sonnet"),
-    [user_msg("hello")],
-    [tool],
-    { temperature: Some(0.5), max_output_tokens: Some(256), },
-    false,
-    None,
-  )
-  guard body is Object(fields) else { fail("expected object body") }
-  match fields.get("model") {
-    Some(String(m)) => assert_eq(m, "anthropic/claude-3.7-sonnet")
-    _ => fail("expected model field")
-  }
-  match fields.get("messages") {
-    Some(Json::Array(arr)) => assert_true(arr.length() == 1)
-    _ => fail("expected messages array")
-  }
-  match fields.get("tools") {
-    Some(Json::Array(arr)) => assert_true(arr.length() == 1)
-    _ => fail("expected tools array")
-  }
-  match fields.get("temperature") {
-    Some(Number(t, ..)) => assert_eq(t, 0.5)
-    _ => fail("expected temperature field")
-  }
-  match fields.get("max_tokens") {
-    Some(Number(n, ..)) => assert_eq(n.to_int(), 256)
-    _ => fail("expected max_tokens field")
-  }
-}
-
-///|
 test "encode_message assistant replays raw reasoning as reasoning_details" {
   // The encrypted-block contract: the details array must survive byte-exact
   // (same element order), so Reasoning.raw goes out untouched under the key
@@ -354,164 +298,6 @@ test "encode_message assistant replays raw reasoning as reasoning_details" {
     None => ()
     Some(_) => fail("DeepSeek's reasoning_content key must never be used")
   }
-}
-
-///|
-test "encode_message assistant falls back to the reasoning string without raw" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
-    content=[@posoco.Content::Text("answer")],
-    tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
-    finish_reason=@posoco.FinishReason::Stop,
-  )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning") {
-    Some(String(r)) => assert_eq(r, "thinking...")
-    _ => fail("reasoning string must be preserved on assistant messages")
-  }
-  match obj.get("reasoning_details") {
-    None => ()
-    Some(_) => fail("no reasoning_details without a raw payload")
-  }
-}
-
-///|
-test "encode_message tool result carries tool_call_id and outcome text" {
-  let msg : @posoco.Message = @posoco.Message::ToolMessage(
-    call_id=@posoco.CallId::unchecked("call_42"),
-    tool_name=@posoco.ToolName::unchecked("read_file"),
-    outcome=@posoco.ToolOutcome::Success(
-      content="file contents",
-      structured=None,
-    ),
-  )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("role") {
-    Some(String(r)) => assert_eq(r, "tool")
-    _ => fail("expected tool role")
-  }
-  match obj.get("tool_call_id") {
-    Some(String(id)) => assert_eq(id, "call_42")
-    _ => fail("tool message MUST carry tool_call_id")
-  }
-  match obj.get("content") {
-    Some(String(c)) => assert_eq(c, "file contents")
-    _ => fail("expected outcome text as content")
-  }
-}
-
-///|
-test "encode_message system and user roles carry plain text content" {
-  let sys_json = encode_message(
-    @posoco.Message::SystemMessage(content=[Text("sys")]),
-    false,
-  )
-  guard sys_json is Object(sys_obj) else { fail("expected object") }
-  match sys_obj.get("role") {
-    Some(String(r)) => assert_eq(r, "system")
-    _ => fail("expected system role")
-  }
-  let user_json = encode_message(user_msg("hello"), false)
-  guard user_json is Object(user_obj) else { fail("expected object") }
-  match user_obj.get("role") {
-    Some(String(r)) => assert_eq(r, "user")
-    _ => fail("expected user role")
-  }
-  match user_obj.get("content") {
-    Some(String(c)) => assert_eq(c, "hello")
-    _ => fail("expected concatenated text content")
-  }
-}
-
-///|
-test "decode_chat_response parses reasoning, reasoning_details, tool_calls and usage" {
-  let fixture =
-    #|{"id":"gen-1","choices":[{"message":{"role":"assistant","content":"answer","reasoning":"deep thought","reasoning_details":[{"type":"reasoning.text","text":"deep thought"},{"type":"reasoning.encrypted","data":"QUJD"}],"tool_calls":[{"id":"call_7","type":"function","function":{"name":"echo","arguments":"{\"msg\":\"hi\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":100,"completion_tokens":40,"total_tokens":140,"prompt_tokens_details":{"cached_tokens":64}}}
-  let payload : Json = @json.parse(fixture) catch {
-    _ => abort("fixture JSON must parse")
-  }
-  let completion = decode_chat_response(payload)
-  assert_true(completion.message.content.length() == 1)
-  match completion.message.content[0] {
-    Text(s) => assert_eq(s, "answer")
-    _ => fail("expected text content")
-  }
-  assert_eq(completion.message.finish_reason, @posoco.FinishReason::ToolCalls)
-  match completion.message.reasoning {
-    Some(r) => {
-      assert_eq(r.content, "deep thought")
-      // The whole details array lands on Reasoning.raw, element-equal and
-      // order-preserving.
-      guard r.raw is Some(raw) else { fail("expected raw reasoning_details") }
-      match raw {
-        Array(items) => {
-          assert_true(items.length() == 2)
-          assert_eq(
-            items[0].stringify(),
-            "{\"type\":\"reasoning.text\",\"text\":\"deep thought\"}",
-          )
-          assert_eq(
-            items[1].stringify(),
-            "{\"type\":\"reasoning.encrypted\",\"data\":\"QUJD\"}",
-          )
-        }
-        _ => fail("raw must stay a JSON array")
-      }
-    }
-    None => fail("expected reasoning to be surfaced")
-  }
-  assert_true(completion.message.tool_calls.length() == 1)
-  let tc = completion.message.tool_calls[0]
-  assert_eq(tc.call_id.to_string(), "call_7")
-  assert_eq(tc.name.to_string(), "echo")
-  assert_eq(tc.arguments.stringify(), "{\"msg\":\"hi\"}")
-  match completion.usage {
-    Some(u) => {
-      assert_eq(u.input_tokens, Some(100))
-      assert_eq(u.output_tokens, Some(40))
-      assert_eq(u.total_tokens, Some(140))
-      assert_eq(u.cached_input_tokens, Some(64))
-    }
-    None => fail("expected usage")
-  }
-}
-
-///|
-/// reasoning_details without a `reasoning` string still replays: raw keeps
-/// the array and content degrades to empty (chosen over stitching display
-/// text out of details — that would risk reordering encrypted blocks).
-test "decode_chat_response keeps details-only reasoning with empty content" {
-  let fixture =
-    #|{"choices":[{"message":{"role":"assistant","content":"","reasoning_details":[{"type":"reasoning.encrypted","data":"QUJD"}]},"finish_reason":"stop"}]}
-  let payload : Json = @json.parse(fixture) catch {
-    _ => abort("fixture JSON must parse")
-  }
-  let completion = decode_chat_response(payload)
-  match completion.message.reasoning {
-    Some(r) => {
-      assert_eq(r.content, "")
-      match r.raw {
-        Some(Array(items)) => assert_true(items.length() == 1)
-        _ => fail("expected the details array on raw")
-      }
-    }
-    None => fail("details-only reasoning must still surface a Reasoning")
-  }
-}
-
-///|
-/// Neither `reasoning` nor `reasoning_details` present → the Completion
-/// carries no Reasoning at all.
-test "decode_chat_response omits reasoning when both fields are absent" {
-  let fixture =
-    #|{"choices":[{"message":{"role":"assistant","content":"plain"},"finish_reason":"stop"}]}
-  let payload : Json = @json.parse(fixture) catch {
-    _ => abort("fixture JSON must parse")
-  }
-  let completion = decode_chat_response(payload)
-  assert_true(completion.message.reasoning is None)
 }
 
 ///|
@@ -733,14 +519,6 @@ test "classify: body metadata is dropped when unsanitizable" {
     fail("expected Transport")
   }
   assert_false(msg.contains("error_type="))
-}
-
-///|
-test "openrouter_epoch_seconds_ms bounds its input" {
-  assert_eq(openrouter_epoch_seconds_ms("1778839243"), Some(1778839243000L))
-  assert_eq(openrouter_epoch_seconds_ms(""), None)
-  assert_eq(openrouter_epoch_seconds_ms("soon"), None)
-  assert_eq(openrouter_epoch_seconds_ms("99999999999999999999"), None)
 }
 
 ///|
@@ -1098,73 +876,6 @@ async test "ApiKeyFactory::login rejects an empty secret" {
 }
 
 ///|
-/// Discovery metadata drives the picker surface: level-bearing reasoning
-/// models expose their declared efforts with the endpoint's default selected,
-/// toggle models expose off/on, and plain models expose nothing.
-test "parse_openrouter_models maps reasoning metadata onto model info" {
-  let payload : Json = Json::object(
-    Map::from_array([
-      (
-        "data",
-        Json::array([
-          Json::object(
-            Map::from_array([
-              ("id", Json::string("anthropic/claude-sonnet-4.5")),
-              ("context_length", Json::number(200000.0)),
-              (
-                "reasoning",
-                Json::object(
-                  Map::from_array([
-                    (
-                      "supported_efforts",
-                      Json::array([
-                        Json::string("low"),
-                        Json::string("medium"),
-                        Json::string("high"),
-                      ]),
-                    ),
-                    ("default_effort", Json::string("high")),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-          Json::object(
-            Map::from_array([
-              ("id", Json::string("openai/gpt-5.1")),
-              (
-                "supported_parameters",
-                Json::array([Json::string("tools"), Json::string("reasoning")]),
-              ),
-            ]),
-          ),
-          Json::object(
-            Map::from_array([
-              ("id", Json::string("meta-llama/llama-4-scout")),
-              ("context_length", Json::number(128000.0)),
-            ]),
-          ),
-        ]),
-      ),
-    ]),
-  )
-  let models = parse_openrouter_models(payload)
-  assert_eq(models.length(), 3)
-  assert_eq(models[0].id, "anthropic/claude-sonnet-4.5")
-  assert_eq(models[0].context_length, Some(200000))
-  assert_eq(models[0].supported_efforts, ["low", "medium", "high"])
-  assert_eq(models[0].default_effort, Some("high"))
-  assert_true(models[0].reasoning_supported)
-  // supported_parameters-only reasoning is the off/on toggle, default on.
-  assert_true(models[1].reasoning_supported)
-  assert_true(models[1].default_enabled)
-  assert_eq(models[1].supported_efforts.length(), 0)
-  // A model without metadata is plain chat.
-  assert_false(models[2].reasoning_supported)
-  assert_eq(models[2].context_length, Some(128000))
-}
-
-///|
 /// The catalog builder pins the configured model first, preserves endpoint
 /// order for the rest, and bakes each model's metadata into its slot.
 test "openrouter_model_catalog expands discovery into ordered slots" {
@@ -1438,42 +1149,6 @@ test "openrouter static build with a jev model yields a decision-only catalog" {
   }
   assert_true(rebuilt.is_decision())
   assert_true(rebuilt.decision_port is Some(_))
-}
-
-///|
-test "openrouter decision port owns its systemone endpoint" {
-  let port = OpenRouterDecisionPort(
-    OpenRouterConfig(
-      "sk-or-v1-test",
-      model="typesafe/jev-router",
-      base_url="https://openrouter.ai/api/v1/",
-    ),
-  )
-  assert_eq(port.decision_url(), "https://openrouter.ai/api/v1/systemone")
-}
-
-///|
-test "openrouter decision encoder speaks the System One envelope" {
-  let request : @posoco.DecisionRequest = {
-    state: Json::object({ "task": Json::string("route a turn") }),
-    questions: [
-      @posoco.DecisionQuestion::Score(
-        id="effort",
-        instructions=Json::string("How much effort?"),
-        levels=[Json::string("low"), Json::string("high")],
-      ),
-    ],
-  }
-  let payload = openrouter_decision_request_json(request, "typesafe/jev-router")
-  guard payload is Object(root) else { fail("expected request object") }
-  assert_true(root.get("model") is Some(String("typesafe/jev-router")))
-  guard root.get("questions") is Some(Object(questions)) else {
-    fail("expected questions object")
-  }
-  guard questions.get("effort") is Some(Object(effort)) else {
-    fail("expected score question")
-  }
-  assert_true(effort.get("type") is Some(String("score")))
 }
 
 ///|

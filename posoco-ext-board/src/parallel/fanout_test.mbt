@@ -266,7 +266,7 @@ async test "a slow member holds the wave barrier against settled siblings" {
     // further authorization and no further entry beyond the held sibling.
     let authorized = h.resolver.resolved_attempts.length()
     for _ in 0..<64 {
-      @async.pause()
+      @core_async.pause()
       assert_eq(h.resolver.resolved_attempts.length(), authorized)
       assert_eq(h.shared.entered.length(), 2)
       assert_eq(h.runner.status().phase, @workflow.Running)

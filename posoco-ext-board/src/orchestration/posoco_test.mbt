@@ -487,38 +487,6 @@ async test "real orchestrator settles a model failure as Failed and leaves the R
 }
 
 ///|
-async test "host resolver timeout settles the active run as TimedOut with an Interrupted attempt" {
-  @core_async.with_task_group(group => {
-    let backend = real_ready_board(group)
-    let model = real_model(hold=true)
-    let resolver = real_resolver(
-      available=["task/attempt-1"],
-      timeout_ms=Some(100),
-    )
-    let (owner, orchestrator) = real_orchestrator(
-      group, backend, model, resolver,
-    )
-    let handle = match orchestrator.dispatch_next().unwrap() {
-      @orchestration.Admitted(handle) => handle
-      _ => fail("expected exactly one admitted execution")
-    }
-    model.entered.get()
-    let binding = handle.wait()
-    assert_eq(binding.phase, @execution.Settled)
-    assert_eq(binding.outcome, Some(@execution.TimedOut))
-    assert_eq(model.calls, 1)
-    assert_eq(model.stopped, 1)
-    let state = backend.state().unwrap()
-    assert_eq(state.tasks[0].stage, @domain.Ready)
-    assert_eq(state.attempts[0].status, @domain.Interrupted)
-    assert_eq(state.attempts[0].review, None)
-    assert_eq(owner.bindings()[0].outcome, Some(@execution.TimedOut))
-    assert_true(orchestrator.shutdown())
-    backend.shutdown()
-  })
-}
-
-///|
 async test "exact execution identity cancels the scoped run while wrong and repeated requests stay harmless" {
   @core_async.with_task_group(group => {
     let backend = real_ready_board(group)

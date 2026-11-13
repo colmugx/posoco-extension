@@ -52,7 +52,7 @@ pub async fn BoardWorkflows::shutdown(
   if timeout_ms <= 0 {
     return false
   }
-  @async.protect_from_cancel(() => {
+  @core_async.protect_from_cancel(() => {
     if self.operation is Some(task) {
       if !settle_operation(task, timeout_ms) {
         self.unresolved = true

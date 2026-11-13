@@ -31,23 +31,34 @@ pub async fn fetch_go_usage(
     headers[@http.CaseInsensitiveString(key)] = value
   }
   let fetched_at_ms = now_ms()
-  let (response, body_data) = @async.with_timeout(10000, () => {
+  let (response, conn) = @async.with_timeout(10000, () => {
     @http.get(go_usage_url(base_url), headers~)
   }) catch {
     @async.TimeoutError =>
       return Err("OpenCode Go usage request timed out (timeout_ms=10000)")
     err => return Err("OpenCode Go usage request failed: " + err.to_string())
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      return Err("OpenCode Go usage body read failed: " + err.to_string())
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
-    let detail = body_data.text() catch {
-      _ => "body_bytes=\{body_data.binary().length()}"
+    let detail = @utf8.decode(body_bytes) catch {
+      _ => "body_bytes=\{body_bytes.length()}"
     }
     return Err(
       "OpenCode Go usage HTTP status: \{response.code}, body=\{detail}",
     )
   }
-  let body_text = body_data.text() catch {
-    err => return Err("OpenCode Go usage body read failed: " + err.to_string())
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
+      return Err(
+        "OpenCode Go usage body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
+      )
   }
   let payload = @json.parse(body_text) catch {
     err => return Err("OpenCode Go usage JSON parse failed: " + err.to_string())

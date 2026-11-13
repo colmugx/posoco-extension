@@ -14,7 +14,11 @@ import {
 }
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http", "moonbitlang/core/async/socket" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
   "native-stub": [ "entropy_stub.c" ],
   targets: {
     "callback_server.native.mbt": [ "native" ],

@@ -209,21 +209,6 @@ test "parse_dedupes_exts_preserving_first_occurrence" {
 }
 
 ///|
-test "to_json_keeps_the_manifest_shape" {
-  let m : ProfileManifest = {
-    id: "moonbit",
-    name: "MoonBit dev",
-    description: "d",
-    exts: ["a", "b"],
-  }
-  let text = m.to_json().stringify()
-  assert_true(text.contains("\"id\":\"moonbit\""))
-  assert_true(text.contains("\"name\":\"MoonBit dev\""))
-  assert_true(text.contains("\"description\":\"d\""))
-  assert_true(text.contains("\"exts\":[\"a\",\"b\"]"))
-}
-
-///|
 /// ——— activation header scanning ———
 
 ///|

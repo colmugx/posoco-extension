@@ -51,7 +51,7 @@ pub struct ParallelWorkflowRunner {
 pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
   group~ : @core_async.TaskGroup,
-  now_ms~ : () -> Int64 = @async.now,
+  now_ms~ : () -> Int64 = @core_async.now,
 ) -> ParallelWorkflowRunner {
   {
     orchestrator,
@@ -211,7 +211,7 @@ async fn ParallelWorkflowRunner::start_inner(
   self.cancel_requested = false
   self.stop_requested = false
   self.deadline_expired = false
-  let initialized = @async.handle_cancellation(() => {
+  let initialized = @core_async.handle_cancellation(() => {
     let state = match self.orchestrator.board_state() {
       Ok(state) => state
       Err(_) => return Err(@workflow.BoardUnavailable)

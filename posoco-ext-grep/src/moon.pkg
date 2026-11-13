@@ -35,7 +35,11 @@ import {
 warnings = "-unused_package"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/js_async",
+  ],
   targets: {
     "posoco_ext_grep.js.mbt": [ "js" ],
     "posoco_ext_grep.native.mbt": [ "native", "wasm" ],

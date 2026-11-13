@@ -80,9 +80,16 @@ impl MagpieTransport for HttpMagpieTransport with fn get(
     let (response, body) = @http.get(url, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    let bytes = body.read_all() catch { _ => { body.close(); return Failed(detail="response read failed") } }
+    let bytes = body.read_all() catch {
+      _ => {
+        body.close()
+        return Failed(detail="response read failed")
+      }
+    }
     body.close()
-    let decoded = @utf8.decode(bytes) catch { _ => return Failed(detail="response decode failed") }
+    let decoded = @utf8.decode(bytes) catch {
+      _ => return Failed(detail="response decode failed")
+    }
     Answered(code=response.code, body=decoded)
   }) catch {
     failure =>
@@ -163,7 +170,12 @@ impl MagpieEventStream for HttpEventStream with fn next_line(
   }
   match bytes {
     None => None
-    Some(data) => Some(@utf8.decode(data) catch { _ => raise MagpieGatewayError::Offline("stream decoding failed") })
+    Some(data) =>
+      Some(
+        @utf8.decode(data) catch {
+          _ => raise MagpieGatewayError::Offline("stream decoding failed")
+        },
+      )
   }
 }
 

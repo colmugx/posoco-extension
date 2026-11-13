@@ -255,7 +255,7 @@ pub async fn AcpBridge::flush(self : AcpBridge) -> Int32 noraise {
 ///
 /// The pump exits when the queue is closed (`close`) or a send fails (dead
 /// connection). Updates arriving while no session is attached are dropped.
-pub fn[G] AcpBridge::spawn_pump(
+pub fn AcpBridge::spawn_pump(
   self : AcpBridge,
   group : @async.TaskGroup,
 ) -> Unit {

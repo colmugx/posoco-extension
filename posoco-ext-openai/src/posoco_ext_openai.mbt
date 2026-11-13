@@ -149,11 +149,11 @@ fn classify_openai_error_body(
 /// classifier can read a stated reset time; the text is `None` when the
 /// read failed or the body was not decodable.
 async fn read_error_body_summary(
-  client : @http.Client,
+  client : @http.ClientConnection,
 ) -> (OpenAIErrorBodySummary, String?) {
   let data = client.read_all() catch { _ => return (BodyReadFailed, None) }
-  let byte_length = data.binary().length()
-  let text = data.text() catch {
+  let byte_length = data.length()
+  let text = @utf8.decode(data) catch {
     _ => return (BodyBytesInvalidUtf8(byte_length), None)
   }
   (BodyBytesUtf8(byte_length), Some(text))
@@ -624,7 +624,7 @@ async fn OpenAIModelPort::chat_stream(
   let headers = build_headers(self.config, Some(session_id), true)
   codex_apply_body_headers(headers, payload)
   let (origin, path_prefix) = split_openai_base_url(self.config.base_url)
-  let client = @http.Client::Client(origin, headers~) catch {
+  let client = @http.post(origin + path_prefix + "/responses", headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
@@ -635,12 +635,6 @@ async fn OpenAIModelPort::chat_stream(
   // handler. Double-close is not safe on the JS backend: re-closing an
   // errored response stream re-drops the rejected cancel() promise.
   defer client.close()
-  client.request(@http.RequestMethod::Post, path_prefix + "/responses") catch {
-    err =>
-      raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=send_request): " + err.to_string(),
-      )
-  }
   match payload {
     Compressed(bytes, _) =>
       client.write(bytes) catch {
@@ -650,7 +644,7 @@ async fn OpenAIModelPort::chat_stream(
           )
       }
     Plain(text) =>
-      client.write(text) catch {
+      client.write(@utf8.encode(text)[:]) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "OpenAI transport failure (stage=write_body): " + err.to_string(),
@@ -710,12 +704,18 @@ async fn OpenAIModelPort::chat_stream(
   let mut done = false
   let mut last_yield = @async.now()
   while !done {
-    let line = client.read_until("\n") catch {
+    let line = client.read_until(b"\n") catch {
       err => raise read_stream_transport_error(err)
     }
     match line {
       Some(data) => {
-        let trimmed = data.trim()
+        let chunk = @utf8.decode(data) catch {
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI response parse failure (stage=decode_utf8, category=invalid_utf8)",
+            )
+        }
+        let trimmed = chunk.trim()
         if trimmed.has_prefix("data:") {
           let payload = trimmed["data:".length():].to_owned()
           let pl = payload.trim()
@@ -818,7 +818,7 @@ async fn openai_post_json(
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(config, session_id, false)
   let (origin, path_prefix) = split_openai_base_url(config.base_url)
-  let client = @http.Client::Client(origin, headers~) catch {
+  let client = @http.post(origin + path_prefix + path, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
@@ -827,7 +827,10 @@ async fn openai_post_json(
   // Every exit closes the client — including a coroutine cancellation that
   // unwinds a pending send/read without ever reaching an error handler.
   defer client.close()
-  let response = client.post(path_prefix + path, body.stringify()) catch {
+  let response = try {
+    client.write(@utf8.encode(body.stringify())[:])
+    client.end_request()
+  } catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=send_request): " + err.to_string(),
@@ -864,7 +867,7 @@ async fn openai_post_json(
     }
   }
   if !is_openai_http_success(response.code) {
-    let body_text : String? = Some(body_data.text()) catch { _ => None }
+    let body_text : String? = Some(@utf8.decode(body_data)) catch { _ => None }
     let decoded_chars : Int32? = match body_text {
       Some(text) => Some(text.length())
       None => None
@@ -880,7 +883,7 @@ async fn openai_post_json(
       None => ()
     }
     let body_summary = classify_openai_error_body(
-      body_data.binary().length(),
+      body_data.length(),
       decoded_chars,
     )
     let excerpt = match body_text {
@@ -898,10 +901,10 @@ async fn openai_post_json(
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "OpenAI response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+        "OpenAI response parse failure (stage=decode_utf8, body_bytes=\{body_data.length()})",
       )
   }
   @json.parse(body_text) catch {

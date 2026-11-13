@@ -27,7 +27,11 @@ async fn DeepSeekModelPort::post_chat_once(
   )
   let headers = build_headers(self.config)
   let url = chat_url(self.config)
-  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, body_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=post): " + err.to_string(),
@@ -38,16 +42,16 @@ async fn DeepSeekModelPort::post_chat_once(
       classify_deepseek_http_status(
         "chat.http_status",
         response.code,
-        BodyBytesUtf8(body_data.binary().length()),
+        BodyBytesUtf8(body_data.length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.binary().length()})",
+        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.length()})",
       )
   }
   let resp_json : Json = @json.parse(body_text) catch {

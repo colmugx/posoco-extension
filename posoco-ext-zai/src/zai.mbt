@@ -213,9 +213,9 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   )
   match stream {
     NoStream => {
-      let (response, body_data) = @http.post(
+      let (response, body_bytes) = @http.post_binary(
         messages_url(self.config),
-        body.stringify(),
+        @utf8.encode(body.stringify())[:],
         headers=build_headers(self.config),
       ) catch {
         err =>
@@ -223,10 +223,10 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
             "zai transport failure (stage=post): " + err.to_string(),
           )
       }
-      let body_text = body_data.text() catch {
+      let body_text = @utf8.decode(body_bytes) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "zai response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+            "zai response parse failure (stage=decode_utf8, body_bytes=\{body_bytes.length()})",
           )
       }
       if !is_zai_http_success(response.code) {
@@ -254,7 +254,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
       }
     }
     Stream(on_chunk) => {
-      let client = @http.post_stream(
+      let client = @http.post(
         messages_url(self.config),
         headers=build_headers(self.config),
       ) catch {
@@ -263,7 +263,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
             "zai transport failure (stage=post_stream): " + err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -302,7 +302,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
       let mut done = false
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
@@ -311,8 +311,14 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           }
         }
         match line {
-          Some(data) =>
-            for event in decoder.push(data + "\n") {
+          Some(data) => {
+            let chunk = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "zai SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            for event in decoder.push(chunk + "\n") {
               done = @messages.process_messages_event(
                 provider="zai",
                 event_name=event.name,
@@ -322,6 +328,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
                 state~,
               )
             }
+          }
           None => {
             client.close()
             raise @posoco.ModelError::ResponseParse(

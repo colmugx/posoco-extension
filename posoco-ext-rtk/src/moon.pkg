@@ -22,7 +22,11 @@ import {
 }
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/js_async",
+    "moonbitlang/core/async/process",
+  ],
   targets: {
     "posoco_ext_rtk.native.mbt": [ "native", "wasm" ],
     "posoco_ext_rtk.js.mbt": [ "js" ],

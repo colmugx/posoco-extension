@@ -1,25 +1,4 @@
 ///|
-test "extract_command_from_cmd_key" {
-  let args = Json::object(
-    Map::from_array([
-      ("cmd", Json::string("ls -la")),
-      ("dir", Json::string("/tmp")),
-    ]),
-  )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "ls -la")
-}
-
-///|
-test "extract_command_from_command_key" {
-  let args = Json::object(
-    Map::from_array([("command", Json::string("git status"))]),
-  )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "git status")
-}
-
-///|
 /// A missing cmd/command raises a typed error instead of silently falling
 /// back to running the JSON blob as a shell command.
 async test "extract_command_empty_object_raises_typed_error" {

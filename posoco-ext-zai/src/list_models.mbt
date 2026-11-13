@@ -128,7 +128,7 @@ pub async fn fetch_zai_models(
     "Accept": "application/json",
     "Accept-Language": "en-US,en",
   }
-  let (response, body_data) = @async.with_timeout(30000, () => {
+  let (response, conn) = @async.with_timeout(30000, () => {
     @http.get(zai_models_url(base_url, ZAI_MODELS_DISCOVERY_PREFIX), headers~)
   }) catch {
     @async.TimeoutError =>
@@ -140,18 +140,28 @@ pub async fn fetch_zai_models(
         "zai list models request failed: " + err.to_string(),
       )
   }
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      raise @posoco.ModelError::Transport(
+        "zai list models body read failed: " + err.to_string(),
+      )
+    }
+  }
+  conn.close()
   if response.code < 200 || response.code >= 300 {
     raise @posoco.ModelError::Transport(
       "zai list models HTTP status: " +
       response.code.to_string() +
       ", body_bytes=" +
-      body_data.binary().length().to_string(),
+      body_bytes.length().to_string(),
     )
   }
-  let body_text = body_data.text() catch {
-    err =>
+  let body_text = @utf8.decode(body_bytes) catch {
+    _ =>
       raise @posoco.ModelError::Transport(
-        "zai list models body read failed: " + err.to_string(),
+        "zai list models body read failed: invalid utf8, body_bytes=" +
+        body_bytes.length().to_string(),
       )
   }
   let payload = @json.parse(body_text) catch {

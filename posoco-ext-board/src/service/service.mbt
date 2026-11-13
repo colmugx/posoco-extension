@@ -39,7 +39,7 @@ pub fn BoardWorkflows::BoardWorkflows(
   agents~ : &WorkflowAgentFactory,
   group~ : @core_async.TaskGroup,
   policy~ : BoardWorkflowPolicy = BoardWorkflowPolicy(),
-  now_ms~ : () -> Int64 = () => @async.now(),
+  now_ms~ : () -> Int64 = () => @core_async.now(),
   authorize~ : () -> Bool = () => true,
 ) -> BoardWorkflows {
   {
@@ -200,13 +200,13 @@ async fn[T] BoardWorkflows::perform(
     .unwrap_or(self.policy.max_elapsed_ms)
   let task = self.group.spawn(allow_failure=true, () => {
     result.val = Some(
-      Ok(@async.with_timeout(timeout, work)) catch {
+      Ok(@core_async.with_timeout(timeout, work)) catch {
         error => Err(safe_error(error))
       },
     )
   })
   self.operation = Some(task)
-  let waited = @async.handle_cancellation(() => {
+  let waited = @core_async.handle_cancellation(() => {
     task.wait()
     true
   }) catch {
@@ -214,7 +214,7 @@ async fn[T] BoardWorkflows::perform(
   }
   if waited != Some(true) {
     task.cancel()
-    if !@async.protect_from_cancel(() => settle_operation(task, 4000)) {
+    if !@core_async.protect_from_cancel(() => settle_operation(task, 4000)) {
       self.unresolved = true
       return Err(UnresolvedExecution)
     }
@@ -229,7 +229,7 @@ async fn settle_operation(
   task : @core_async.Task[Unit],
   timeout : Int32,
 ) -> Bool {
-  @async.with_timeout(timeout, () => {
+  @core_async.with_timeout(timeout, () => {
     task.wait() catch {
       _ => ()
     }
@@ -272,7 +272,7 @@ async fn BoardWorkflows::submit(
 ) -> Unit {
   self.check()
   self.uncertain = true
-  let result = @async.protect_from_cancel(() => self.board.submit(command))
+  let result = @core_async.protect_from_cancel(() => self.board.submit(command))
   match result {
     Ok(_) => self.uncertain = false
     Err(@coordinator.Rejected(@domain.RevisionConflict(..))) => {

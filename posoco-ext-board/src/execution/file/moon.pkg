@@ -19,7 +19,10 @@ import {
 supported_targets = "+native+js"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   targets: {
     "store.native.mbt": [ "native" ],
     "store.js.mbt": [ "js" ],

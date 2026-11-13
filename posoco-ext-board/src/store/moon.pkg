@@ -1,6 +1,5 @@
 import {
   "colmugx/posoco-ext-board/domain",
-  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -9,13 +8,16 @@ import {
 // the js twins go through @node_fs.
 #cfg(target = "native")
 import {
-  "moonbitlang/core/async/fs",
   "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/utf8",
 }
 
 #cfg(target = "js")
 import {
+  // `async test` needs the core-async import in the js test namespace; the
+  // js source files themselves go through @node_fs and never name it.
+  "moonbitlang/core/async",
   "colmugx/posoco-ext-board/internal/storage" @node_fs,
 }
 
@@ -31,13 +33,17 @@ import {
 
 supported_targets = "+native +js"
 
-// `async test` requires the root `moonbitlang/core/async` import but never names it
-// through the alias, and a test import cannot be target-gated.
+// `async test` needs the core-async import in the test namespace; the aliased
+// per-target `import` above already covers the source files, so no unaliased
+// root import is needed (that duplication is what the checker warns about).
 
 warnings = "-unused_package"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   "native-stub": [ "truncate_stub.c" ],
   targets: {
     "file.native.mbt": [ "native" ],

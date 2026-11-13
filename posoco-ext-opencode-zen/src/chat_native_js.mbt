@@ -2,10 +2,12 @@
 /// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
 
 ///|
-async fn read_zen_error_body(client : @http.Client) -> ZenErrorBody {
+async fn read_zen_error_body(client : @http.ClientConnection) -> ZenErrorBody {
   let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let text = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  let byte_length = data.length()
+  let text = @utf8.decode(data) catch {
+    _ => return BodyBytesInvalidUtf8(byte_length)
+  }
   BodyText(text)
 }
 
@@ -121,14 +123,14 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       )
       let headers = build_headers(self.config, scope)
       let url = chat_url(self.config)
-      let client = @http.post_stream(url, headers~) catch {
+      let client = @http.post(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "\{self.config.client_id} transport failure (stage=post_stream): " +
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -170,7 +172,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       let mut data_buffer = ""
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             match classify_zen_stream_termination(TransportFailure) {
@@ -181,7 +183,13 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         }
         match line {
           Some(data) => {
-            let trimmed = data.trim()
+            let text = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "opencode-zen SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            let trimmed = text.trim()
             if trimmed.has_prefix("data:") {
               let payload = trimmed[5:].trim().to_owned()
               if payload.length() > 0 {

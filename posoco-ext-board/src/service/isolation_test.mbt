@@ -12,7 +12,7 @@ impl @service.WorkflowAgentFactory for SharedExecutionFactory with fn prepare(
   if context.purpose == @service.WorkflowAgentPurpose::Planning {
     return @service.WorkflowAgentFactory::prepare(self.normal, context)
   }
-  @async.sleep(5)
+  @core_async.sleep(5)
   {
     extensions: [self.shared],
     config: @posoco.agent_config(max_tool_rounds=Some(0)),
@@ -22,7 +22,7 @@ impl @service.WorkflowAgentFactory for SharedExecutionFactory with fn prepare(
 ///|
 async test "yielding factories cannot lease the same extension capability to parallel slots" {
   let directory = @fixtures.temporary_directory()
-  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let state = ScriptState::{
       invalid: false,
@@ -66,7 +66,7 @@ async test "yielding factories cannot lease the same extension capability to par
       config=@posoco.agent_config(),
       events=@posoco.EventSystem(),
     )
-    defer ignore(@async.protect_from_cancel(() => board.shutdown()))
+    defer ignore(@core_async.protect_from_cancel(() => board.shutdown()))
     let h = Harness::{ board, ui, state, parent, }
     let committed = proposed(h)
     let record = committed.snapshot.expansions[0]

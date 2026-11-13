@@ -58,11 +58,13 @@ fn classify_deepseek_http_status(
 ///|
 /// Drain a non-2xx response without exposing provider payloads.
 async fn read_error_body_summary(
-  client : @http.Client,
+  client : @http.ClientConnection,
 ) -> DeepSeekErrorBodySummary {
   let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  let byte_length = data.length()
+  let _ = @utf8.decode(data) catch {
+    _ => return BodyBytesInvalidUtf8(byte_length)
+  }
   BodyBytesUtf8(byte_length)
 }
 

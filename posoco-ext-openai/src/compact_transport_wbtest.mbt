@@ -34,7 +34,7 @@ priv enum CompactReply {
 struct CompactLoopback {
   server : @http.Server
   replies : Array[CompactReply]
-  requests : Array[@http.Request]
+  requests : Array[@http.RequestHeader]
   bodies : Array[String]
   mut next_reply : Int32
   mut client_disconnected : Bool
@@ -117,7 +117,7 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
     // body-end marker surfaces.
     let buf = StringBuilder()
     for i in 0..<64 {
-      match attempt_async(() => conn.read_some()) {
+      match attempt_async(() => conn.read()) {
         Ok(None) => break
         Ok(Some(data)) => buf.write_string(compact_body_text(data))
         Err(_) => break

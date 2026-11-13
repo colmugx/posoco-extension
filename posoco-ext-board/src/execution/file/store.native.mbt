@@ -56,7 +56,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
       )
       self.locked = true
       defer lock.close()
-      lock.write("board-execution-journal-v1\n")
+      lock.write(b"board-execution-journal-v1\n")
       lock.sync()
       // Lock ownership protects against duplicate external execution.
       // Persist the new directory entry before admitting any work; syncing
@@ -77,9 +77,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
     if @fs.kind(path, follow_symlink=false) != Regular {
       raise Unsafe
     }
-    let decoded = @execution.decode_execution_journal(
-      @fs.read_text(path),
-    )
+    let decoded = @execution.decode_execution_journal(@fs.read_text(path))
     if decoded is Err(_) {
       self.failed = true
     }

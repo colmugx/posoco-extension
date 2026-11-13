@@ -22,7 +22,13 @@ import {
 }
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/fs", "moonbitlang/core/async/js_async", "moonbitlang/core/async/process" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/aqueue",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/js_async",
+    "moonbitlang/core/async/process",
+  ],
   targets: {
     "process.native.mbt": [ "native" ],
     "toolchain_platform.native.mbt": [ "native" ],

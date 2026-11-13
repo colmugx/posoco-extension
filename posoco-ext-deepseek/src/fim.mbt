@@ -126,14 +126,18 @@ pub async fn DeepSeekModelPort::fim_completion(
   let body = build_fim_request_body(self.config, prefix, suffix, max_tokens)
   let headers = build_headers(self.config)
   let url = fim_url(self.config)
-  let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, resp_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=fim.post): " + err.to_string(),
       )
   }
   if !is_deepseek_http_success(response.code) {
-    let byte_length = resp_data.binary().length()
+    let byte_length = resp_data.length()
     match
       classify_deepseek_http_status(
         "fim.http_status",
@@ -144,10 +148,10 @@ pub async fn DeepSeekModelPort::fim_completion(
       None => ()
     }
   }
-  let resp_text = resp_data.text() catch {
+  let resp_text = @utf8.decode(resp_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=fim.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.binary().length()})",
+        "DeepSeek response parse failure (stage=fim.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.length()})",
       )
   }
   let resp_json : Json = @json.parse(resp_text) catch {
@@ -184,14 +188,18 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
   let body = build_prefix_request_body(self.config, messages, prefix, stop)
   let headers = build_headers(self.config)
   let url = prefix_url(self.config)
-  let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, resp_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=prefix.post): " + err.to_string(),
       )
   }
   if !is_deepseek_http_success(response.code) {
-    let byte_length = resp_data.binary().length()
+    let byte_length = resp_data.length()
     match
       classify_deepseek_http_status(
         "prefix.http_status",
@@ -202,10 +210,10 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
       None => ()
     }
   }
-  let resp_text = resp_data.text() catch {
+  let resp_text = @utf8.decode(resp_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=prefix.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.binary().length()})",
+        "DeepSeek response parse failure (stage=prefix.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.length()})",
       )
   }
   let resp_json : Json = @json.parse(resp_text) catch {

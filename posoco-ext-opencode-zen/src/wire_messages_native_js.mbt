@@ -190,9 +190,9 @@ async fn OpenCodeZenModelPort::chat_messages(
   match stream {
     NoStream => {
       let body = build_messages_request(self.config, messages, tools, options)
-      let (response, body_data) = @http.post(
+      let (response, body_data) = @http.post_binary(
         messages_url(self.config),
-        body.stringify(),
+        @utf8.encode(body.stringify())[:],
         headers=build_messages_headers(self.config, scope),
       ) catch {
         err =>
@@ -200,10 +200,10 @@ async fn OpenCodeZenModelPort::chat_messages(
             "opencode-zen transport failure (stage=post): " + err.to_string(),
           )
       }
-      let body_text = body_data.text() catch {
+      let body_text = @utf8.decode(body_data) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+            "opencode-zen response parse failure (stage=decode_utf8, body_bytes=\{body_data.length()})",
           )
       }
       if !is_zen_http_success(response.code) {
@@ -238,7 +238,7 @@ async fn OpenCodeZenModelPort::chat_messages(
         options,
         stream=true,
       )
-      let client = @http.post_stream(
+      let client = @http.post(
         messages_url(self.config),
         headers=build_messages_headers(self.config, scope),
       ) catch {
@@ -248,7 +248,7 @@ async fn OpenCodeZenModelPort::chat_messages(
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -288,7 +288,7 @@ async fn OpenCodeZenModelPort::chat_messages(
       let mut done = false
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
@@ -298,8 +298,14 @@ async fn OpenCodeZenModelPort::chat_messages(
           }
         }
         match line {
-          Some(data) =>
-            for event in decoder.push(data + "\n") {
+          Some(data) => {
+            let chunk = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "opencode-zen SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            for event in decoder.push(chunk + "\n") {
               done = @messages.process_messages_event(
                 provider="opencode-zen",
                 event_name=event.name,
@@ -316,6 +322,7 @@ async fn OpenCodeZenModelPort::chat_messages(
                 None => ()
               }
             }
+          }
           None => {
             client.close()
             match

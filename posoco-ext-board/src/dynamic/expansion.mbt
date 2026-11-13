@@ -156,7 +156,7 @@ pub async fn DynamicWorkflowController::generate_plan(
       Ok(_) => ()
     }
     self.planning_active = true
-    defer @async.protect_from_cancel(() => {
+    defer @core_async.protect_from_cancel(() => {
       self.planning_active = false
       let binding = find_first(self.owner.bindings(), b => {
         b.execution_id == request.execution_id &&

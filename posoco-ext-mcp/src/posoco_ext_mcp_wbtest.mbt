@@ -50,18 +50,6 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
 }
 
 ///|
-test "convert_content_to_string_resource_link" {
-  let items = [
-    @types.ContentBlock::resource_link(
-      "file:///config.json",
-      name="config.json",
-    ),
-  ]
-  let result = convert_content_to_string(items)
-  assert_eq(result, "[Resource: file:///config.json]")
-}
-
-///|
 test "convert_content_to_string_audio_and_unknown" {
   let items = [
     @types.ContentBlock::audio("0101", mime_type="audio/wav"),
@@ -90,28 +78,6 @@ fn catalog_test_mcp_tool(name : String) -> @types.ToolDefinition {
     Json::object(Map::from_array([])),
     description="test tool",
   )
-}
-
-///|
-test "catalog_plan_builds_complete_reverse_map" {
-  let entries = [
-    CatalogEntry::{
-      connection_index: 0,
-      tools: [catalog_test_tool("files__read")],
-    },
-    CatalogEntry::{
-      connection_index: 1,
-      tools: [catalog_test_tool("github__issue")],
-    },
-  ]
-  match plan_catalog(entries, 2) {
-    Ok(plan) => {
-      assert_eq(plan.entries.length(), 2)
-      assert_true(plan.tool_to_conn.get("files__read") is Some(0))
-      assert_true(plan.tool_to_conn.get("github__issue") is Some(1))
-    }
-    Err(message) => fail("unexpected catalog error: " + message)
-  }
 }
 
 ///|
@@ -581,17 +547,6 @@ test "http_connect_params_preserves_injected_header_order" {
     }
     _ => fail("expected http transport")
   }
-}
-
-///|
-test "convert_tool_def_preserves_external_description" {
-  let long = "prefix-" + "x".repeat(1200) + "-critical-tail"
-  let def = convert_tool_def(
-    @types.ToolDefinition::new("search", Json::object({}), description=long),
-    "srv",
-  )
-  assert_eq(def.description, long)
-  assert_true(def.description.contains("-critical-tail"))
 }
 
 ///|

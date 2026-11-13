@@ -18,10 +18,10 @@ async fn assert_no_storage_io(directory : String) -> Unit {
 /// teardown stay available.
 async test "denied live authorization blocks start and resume without any IO" {
   let directory = @fixtures.temporary_directory()
-  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group, authorize=() => false)
-    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
+    defer ignore(@core_async.protect_from_cancel(() => h.board.shutdown()))
     assert_eq(
       h.board.start(title="Live gate denied"),
       Err(@service.ApprovalDenied),
@@ -41,11 +41,11 @@ async test "denied live authorization blocks start and resume without any IO" {
 /// and nothing from the refused approval carries into later operations.
 async test "revoking live authorization during an answered approval still refuses the mutation" {
   let directory = @fixtures.temporary_directory()
-  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let gate = Ref(true)
     let h = harness(directory, group, authorize=() => gate.val)
-    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
+    defer ignore(@core_async.protect_from_cancel(() => h.board.shutdown()))
     let started = h.board.start(title="Live gate revocation").checked()
     ignore(
       h.board
@@ -98,10 +98,10 @@ async test "revoking live authorization during an answered approval still refuse
 /// execution-scope authority: that gate keeps requiring its own fresh Yes.
 async test "one explicit approval never coalesces into the other gate or replays" {
   let directory = @fixtures.temporary_directory()
-  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
   @core_async.with_task_group(group => {
     let h = harness(directory, group)
-    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
+    defer ignore(@core_async.protect_from_cancel(() => h.board.shutdown()))
     let started = h.board.start(title="Separate approvals").checked()
     ignore(
       h.board

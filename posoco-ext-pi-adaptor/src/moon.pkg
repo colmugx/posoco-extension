@@ -11,7 +11,10 @@ import {
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/js_async" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/js_async",
+  ],
   supported_targets: "js",
   link: {
     "js": {

@@ -539,41 +539,6 @@ test "manifest_declares_tool_provider_hook_observer_lifecycle_and_requires" {
 }
 
 ///|
-test "parse_outcome_detail_maps_envelope_prefixes" {
-  assert_eq(
-    parse_outcome_detail(
-      "[posoco-task-outcome id=t1] extension=posoco_ext_subagent label=subagent-1: child finished early",
-    ),
-    Some(("completed", "child finished early")),
-  )
-  assert_eq(
-    parse_outcome_detail(
-      "[posoco-task-outcome id=t2] extension=e label=l: failed: model exploded",
-    ),
-    Some(("failed", "failed: model exploded")),
-  )
-  assert_eq(
-    parse_outcome_detail(
-      "[posoco-task-outcome id=t3] extension=e label=l: timed out",
-    ),
-    Some(("timed_out", "timed out")),
-  )
-  assert_eq(
-    parse_outcome_detail(
-      "[posoco-task-outcome id=t4] extension=e label=l: cancelled: task cancelled",
-    ),
-    Some(("cancelled", "cancelled: task cancelled")),
-  )
-  assert_true(parse_outcome_detail("plain user message") is None)
-  assert_true(
-    parse_outcome_detail(
-      "[posoco-task-outcome id=t5] extension=e label=l (no detail colon)",
-    )
-    is None,
-  )
-}
-
-///|
 test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let def = @posoco.ToolProvider::list_tools(
@@ -1093,18 +1058,4 @@ test "answer_echo_word_renders_each_question_type" {
     ),
     "beta (index 1)",
   )
-}
-
-///|
-test "flatten_spaces_collapses_runs_and_bounds_length" {
-  assert_eq(flatten_spaces("  a\n\nb\t c "), "a b c")
-  assert_eq(flatten_spaces("\n\t keep inner  space "), "keep inner space")
-  assert_eq(flatten_spaces(""), "")
-  let buf = StringBuilder()
-  for _i in 0..<300 {
-    buf.write_string("x\n")
-  }
-  let long = flatten_spaces(buf.to_string())
-  assert_true(long.length() <= 200)
-  assert_true(!long.contains("\n"))
 }

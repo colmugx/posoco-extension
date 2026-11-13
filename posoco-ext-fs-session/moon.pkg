@@ -26,7 +26,11 @@ import {
 warnings = "-unused_package"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/io" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/io",
+  ],
   targets: {
     "jsonl_session.mbt": [ "native", "wasm" ],
     "jsonl_session.js.mbt": [ "js" ],

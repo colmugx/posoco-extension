@@ -21,9 +21,9 @@ async fn CustomModelPort::chat_messages(
   match stream {
     NoStream => {
       let body = build_messages_request(config, messages, tools, options)
-      let (response, body_data) = @http.post(
+      let (response, body_data) = @http.post_binary(
         messages_url(config),
-        body.stringify(),
+        @utf8.encode(body.stringify())[:],
         headers=build_wire_headers(config, self.request_headers),
       ) catch {
         err =>
@@ -32,10 +32,10 @@ async fn CustomModelPort::chat_messages(
             err.to_string(),
           )
       }
-      let body_text = body_data.text() catch {
+      let body_text = @utf8.decode(body_data) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "custom provider response parse failure (wire=messages, stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+            "custom provider response parse failure (wire=messages, stage=decode_utf8, body_bytes=\{body_data.length()})",
           )
       }
       if !is_custom_http_success(response.code) {
@@ -70,7 +70,7 @@ async fn CustomModelPort::chat_messages(
         options,
         stream=true,
       )
-      let client = @http.post_stream(
+      let client = @http.post(
         messages_url(config),
         headers=build_wire_headers(config, self.request_headers),
       ) catch {
@@ -80,7 +80,7 @@ async fn CustomModelPort::chat_messages(
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -121,7 +121,7 @@ async fn CustomModelPort::chat_messages(
       let mut done = false
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
@@ -131,8 +131,14 @@ async fn CustomModelPort::chat_messages(
           }
         }
         match line {
-          Some(data) =>
-            for event in decoder.push(data + "\n") {
+          Some(data) => {
+            let chunk = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "custom provider SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            for event in decoder.push(chunk + "\n") {
               match wire_path {
                 Some(path) => wire_log_append(path, event.data)
                 None => ()
@@ -147,6 +153,7 @@ async fn CustomModelPort::chat_messages(
                 state~,
               )
             }
+          }
           None => {
             client.close()
             match

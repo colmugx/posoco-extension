@@ -13,5 +13,9 @@ import {
 supported_targets = "native"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http", "moonbitlang/core/async/socket" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
 )

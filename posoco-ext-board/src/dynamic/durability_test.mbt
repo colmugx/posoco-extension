@@ -40,7 +40,7 @@ impl @store.BoardStore for ExpansionFaultStore with fn persist(
       ignore(self.inner.persist(snapshot, events).unwrap())
     }
     if self.delay > 0 {
-      @async.sleep(self.delay)
+      @core_async.sleep(self.delay)
     }
     if self.ambiguous {
       return Err(
@@ -239,7 +239,7 @@ async test "cancelled commit waiter retains identity and shutdown drains the acc
     store.delay = 60
     let commit = group.spawn(() => h.controller.commit(approval~))
     while !store.entered {
-      @async.sleep(1)
+      @core_async.sleep(1)
     }
     assert_true(h.controller.pause())
     assert_true(commit.wait() is Err(_))

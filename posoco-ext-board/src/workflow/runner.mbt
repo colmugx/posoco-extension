@@ -331,7 +331,9 @@ async fn SequentialWorkflowRunner::cleanup(
     None => self.phase != Unresolved
     Some(handle) => {
       ignore(self.orchestrator.cancel_active(handle.execution_id()))
-      let binding = try @core_async.with_timeout(4000, () => handle.wait()) catch {
+      let binding = try
+        @core_async.with_timeout(4000, () => handle.wait())
+      catch {
         _ => None
       } noraise {
         binding => Some(binding)

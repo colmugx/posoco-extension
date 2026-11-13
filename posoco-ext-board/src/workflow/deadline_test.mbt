@@ -43,7 +43,7 @@ async test "workflow deadline during settlement joins without fabricating cancel
     journal.entered.get()
     // Agent is already Completed; durable settlement remains in protected IO.
     // The workflow must cancel/join ownership, not invent Attempt Cancelled.
-    @async.sleep(200)
+    @core_async.sleep(200)
     assert_eq(h.adapter.runs, 1)
     assert_eq(h.owner.bindings()[0].phase, @execution.Finished)
     journal.release.put(())

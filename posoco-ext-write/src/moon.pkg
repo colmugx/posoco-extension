@@ -22,7 +22,10 @@ import {
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   targets: {
     "posoco_ext_write.js.mbt": [ "js" ],
     "posoco_ext_write.native.mbt": [ "native", "wasm" ],

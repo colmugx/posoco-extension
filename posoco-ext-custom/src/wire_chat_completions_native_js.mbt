@@ -24,7 +24,11 @@ async fn CustomModelPort::custom_post_chat_json(
 ) -> Json raise @posoco.ModelError {
   let headers = build_wire_headers(config, self.request_headers)
   let url = chat_url(config)
-  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+  let (response, body_data) = @http.post_binary(
+    url,
+    @utf8.encode(body.stringify())[:],
+    headers~,
+  ) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "custom provider transport failure (wire=chat_completions, stage=" +
@@ -34,8 +38,8 @@ async fn CustomModelPort::custom_post_chat_json(
       )
   }
   if !is_custom_http_success(response.code) {
-    let byte_length = body_data.binary().length()
-    let text = body_data.text() catch {
+    let byte_length = body_data.length()
+    let text = @utf8.decode(body_data) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           format_custom_http_error(
@@ -57,10 +61,10 @@ async fn CustomModelPort::custom_post_chat_json(
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "custom provider response parse failure (wire=chat_completions, stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+        "custom provider response parse failure (wire=chat_completions, stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.length()})",
       )
   }
   @json.parse(body_text) catch {
@@ -115,14 +119,14 @@ async fn CustomModelPort::chat_chat_completions(
       )
       let headers = build_wire_headers(config, self.request_headers)
       let url = chat_url(config)
-      let client = @http.post_stream(url, headers~) catch {
+      let client = @http.post(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "custom provider transport failure (wire=chat_completions, stage=post_stream): " +
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -166,7 +170,7 @@ async fn CustomModelPort::chat_chat_completions(
       let mut data_buffer = ""
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             match
@@ -181,7 +185,13 @@ async fn CustomModelPort::chat_chat_completions(
         }
         match line {
           Some(data) => {
-            let trimmed = data.trim()
+            let text = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "custom provider SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            let trimmed = text.trim()
             if trimmed.has_prefix("data:") {
               let payload = trimmed[5:].trim().to_owned()
               if payload.length() > 0 {

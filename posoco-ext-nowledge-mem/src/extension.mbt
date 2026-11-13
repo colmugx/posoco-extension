@@ -181,7 +181,7 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_shutdown(
 /// the engine, so the group must stay open for the agent's lifetime.
 pub fn NowledgeMem::attach(
   self : NowledgeMem,
-  group : @async.TaskGroup,
+  group : @io.TaskGroup[Unit],
 ) -> Unit {
   self.attached = true
   group.spawn_bg(() => self.run_flusher())

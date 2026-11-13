@@ -72,7 +72,7 @@ impl @orchestration.BoardExecutionInputResolver for ScriptedResolver with fn res
   candidate,
 ) {
   if self.delay_ms > 0 {
-    @async.sleep(self.delay_ms)
+    @core_async.sleep(self.delay_ms)
   }
   self.seq += 1
   let execution_id = "workflow-exec-\{self.seq}"
@@ -332,7 +332,7 @@ async fn workflow_yield_until(what~ : String, check~ : () -> Bool) -> Unit {
     if check() {
       return
     }
-    @async.pause()
+    @core_async.pause()
   }
   fail("timed out waiting for \{what}")
 }

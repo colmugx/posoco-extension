@@ -336,7 +336,8 @@ async fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
     e => raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{e}")
   }
   let text = @utf8.decode(raw) catch {
-    _ => raise ZcodeCredsUnreadable(detail="cannot decode \{path}: invalid UTF-8")
+    _ =>
+      raise ZcodeCredsUnreadable(detail="cannot decode \{path}: invalid UTF-8")
   }
   let v2 = @json.parse(text) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot parse \{path}: \{e}")
@@ -370,16 +371,18 @@ async fn zcode_session_run(
 ) -> ZcodeTaskResult raise Error {
   let outcome : Ref[ZcodeTaskResult?] = Ref(None)
   @async.with_task_group(group => {
-    outcome.val = Some(zcode_delegated(
-      group,
-      cmd,
-      registry,
-      config~,
-      task~,
-      cwd~,
-      session_id~,
-      mode~,
-    ))
+    outcome.val = Some(
+      zcode_delegated(
+        group,
+        cmd,
+        registry,
+        config~,
+        task~,
+        cwd~,
+        session_id~,
+        mode~,
+      ),
+    )
   })
   match outcome.val {
     Some(result) => result
@@ -436,10 +439,14 @@ async fn zcode_delegated(
   group.spawn_bg(() => {
     let mut open = true
     while open {
-      let line : Bytes? = reader.read_until(@utf8.encode("\n")[:]) catch { _ => None }
+      let line : Bytes? = reader.read_until(@utf8.encode("\n")[:]) catch {
+        _ => None
+      }
       match line {
         Some(chunk) => {
-          let trimmed = (@utf8.decode(chunk) catch { _ => "" }).trim().to_owned()
+          let trimmed = (@utf8.decode(chunk) catch { _ => "" })
+            .trim()
+            .to_owned()
           if trimmed != "" {
             conn.handle_line(trimmed) catch {
               _ => ()

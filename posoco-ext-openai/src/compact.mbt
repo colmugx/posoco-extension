@@ -137,7 +137,7 @@ async fn OpenAIModelPort::compact_v2_stream(
   let headers = build_headers(self.config, Some(session_id), true)
   codex_apply_body_headers(headers, payload)
   let (origin, prefix) = split_openai_base_url(self.config.base_url)
-  let client = @http.Client::Client(origin, headers~) catch {
+  let client = @http.post(origin + prefix + "/responses", headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
         "OpenAI compact transport failure (stage=create_client)",
@@ -146,9 +146,10 @@ async fn OpenAIModelPort::compact_v2_stream(
   defer client.close()
   let response = try {
     match payload {
-      Compressed(bytes, _) => client.post(prefix + "/responses", bytes)
-      Plain(text) => client.post(prefix + "/responses", text)
+      Compressed(bytes, _) => client.write(bytes)
+      Plain(text) => client.write(@utf8.encode(text)[:])
     }
+    client.end_request()
   } catch {
     _ =>
       raise @posoco.ModelError::Transport(
@@ -201,14 +202,16 @@ async fn OpenAIModelPort::compact_v2_stream(
   let data : Array[String] = []
   let mut last_yield = @async.now()
   while true {
-    let line = client.read_until("\n") catch {
+    let raw = client.read_until(b"\n") catch {
       _ =>
         raise @posoco.ModelError::Transport(
           "OpenAI compact transport failure (stage=read_stream)",
         )
     }
-    guard line is Some(line) else { raise compact_termination_error() }
-    let line = line.trim_end(chars="\r\n")
+    guard raw is Some(raw) else { raise compact_termination_error() }
+    let line = (@utf8.decode(raw) catch {
+      _ => raise compact_termination_error()
+    }).trim_end(chars="\r\n")
     if line.is_empty() {
       if !data.is_empty() {
         let payload = data.join("\n")

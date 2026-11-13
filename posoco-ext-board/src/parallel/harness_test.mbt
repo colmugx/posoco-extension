@@ -447,7 +447,7 @@ async fn parallel_yield_until(what~ : String, check~ : () -> Bool) -> Unit {
     if check() {
       return
     }
-    @async.pause()
+    @core_async.pause()
   }
   fail("timed out waiting for \{what}")
 }

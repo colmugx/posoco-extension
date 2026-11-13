@@ -84,9 +84,11 @@ async fn DeepSeekLoopback::serve(self : DeepSeekLoopback) -> Unit {
     defer conn.close()
     let request = conn.read_request()
     self.paths.push(request.path)
-    self.auths.push(request.headers.get("authorization"))
+    self.auths.push(
+      request.headers.get(@http.CaseInsensitiveString("authorization")),
+    )
     let buf = StringBuilder()
-    while conn.read_some() is Some(data) {
+    while conn.read() is Some(data) {
       buf.write_string(@utf8.decode(data))
     }
     self.bodies.push(buf.to_string())
@@ -125,7 +127,8 @@ async fn[T] contract_with_loopback(
   f : async (String, DeepSeekLoopback) -> T,
 ) -> (T, DeepSeekLoopback) {
   let loopback = DeepSeekLoopback::bind(replies)
-  let value = @async.with_task_group() <| group => {
+  let captured : Array[T] = []
+  @async.with_task_group() <| group => {
     let _ = group.spawn(() => loopback.serve())
     let outcome = attempt_async(() => {
       @async.with_timeout(20000, () => {
@@ -134,11 +137,12 @@ async fn[T] contract_with_loopback(
     })
     loopback.stop()
     match outcome {
-      Ok(value) => value
+      Ok(value) => captured.push(value)
       Err(e) => raise e
     }
   }
-  (value, loopback)
+  guard captured.length() == 1 else { fail("loopback run produced no value") }
+  (captured[0], loopback)
 }
 
 ///|

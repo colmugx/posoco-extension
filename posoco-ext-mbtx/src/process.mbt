@@ -47,11 +47,13 @@ async fn collect_process(
         let code = process.wait()
         out.wait()
         err.wait()
-        collected.val = Some((
-          code,
-          @utf8.decode(Bytes::from_array(output)) +
-          @utf8.decode(Bytes::from_array(diagnostics)),
-        ))
+        collected.val = Some(
+          (
+            code,
+            @utf8.decode(Bytes::from_array(output)) +
+            @utf8.decode(Bytes::from_array(diagnostics)),
+          ),
+        )
       })
       match collected.val {
         Some(result) => result

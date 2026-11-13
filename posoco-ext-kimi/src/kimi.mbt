@@ -109,9 +109,9 @@ async fn KimiModelPort::chat_nonstream(
     reasoning_effort=Some(self.config.reasoning_effort),
   )
   let headers = build_headers(self.config)
-  let (response, body_data) = @http.post(
+  let (response, body_data) = @http.post_binary(
     responses_url(self.config),
-    body.stringify(),
+    @utf8.encode(body.stringify())[:],
     headers~,
   ) catch {
     err =>
@@ -120,13 +120,13 @@ async fn KimiModelPort::chat_nonstream(
       )
   }
   if !is_kimi_http_success(response.code) {
-    let body_text = body_data.text() catch { _ => "" }
+    let body_text = @utf8.decode(body_data) catch { _ => "" }
     self.learn_prompt_cache_key_rejection(body_text)
     match
       classify_kimi_http_status(
         "chat.http_status",
         response.code,
-        BodyBytesUtf8(body_data.binary().length()),
+        BodyBytesUtf8(body_data.length()),
         body_text~,
         retry_after=retry_after_header(response),
         now_ms=@async.now(),
@@ -135,10 +135,10 @@ async fn KimiModelPort::chat_nonstream(
       None => ()
     }
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+        "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.length()})",
       )
   }
   let resp_json : Json = @json.parse(body_text) catch {
@@ -170,13 +170,13 @@ async fn KimiModelPort::chat_stream(
     reasoning_effort=Some(self.config.reasoning_effort),
   )
   let headers = build_headers(self.config)
-  let client = @http.post_stream(responses_url(self.config), headers~) catch {
+  let client = @http.post(responses_url(self.config), headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "kimi transport failure (stage=post_stream): " + err.to_string(),
       )
   }
-  client.write(body.stringify()) catch {
+  client.write(@utf8.encode(body.stringify())[:]) catch {
     err => {
       client.close()
       raise @posoco.ModelError::Transport(
@@ -224,7 +224,7 @@ async fn KimiModelPort::chat_stream(
   let mut done = false
   let mut last_yield = @async.now()
   while !done {
-    let line = client.read_until("\n") catch {
+    let line = client.read_until(b"\n") catch {
       err => {
         client.close()
         raise @posoco.ModelError::Transport(
@@ -234,7 +234,13 @@ async fn KimiModelPort::chat_stream(
     }
     match line {
       Some(data) => {
-        let trimmed = data.trim()
+        let text = @utf8.decode(data) catch {
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "kimi SSE chunk decode failure (stage=decode_utf8)",
+            )
+        }
+        let trimmed = text.trim()
         if trimmed.has_prefix("data:") {
           let payload = trimmed["data:".length():].to_owned()
           let pl = payload.trim()

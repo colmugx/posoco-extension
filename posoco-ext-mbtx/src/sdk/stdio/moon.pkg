@@ -2,7 +2,6 @@ import {
   "colmugx/posoco-ext-mbtx/protocol",
   "colmugx/posoco-ext-mbtx/sdk",
   "colmugx/fuwaroid",
-  "moonbitlang/core/async",
   "moonbitlang/core/async/aqueue",
   "moonbitlang/core/async/stdio" @system_stdio,
   "moonbitlang/core/async" @core_async,
@@ -14,5 +13,9 @@ supported_targets = "native + wasm"
 // `moonbitlang/core/async` stack, so the invocation scope is a core task group.
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/aqueue", "moonbitlang/core/async/stdio" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/aqueue",
+    "moonbitlang/core/async/stdio",
+  ],
 )

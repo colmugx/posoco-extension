@@ -7,7 +7,7 @@ async fn controlled_wait_paused(h : ParallelHarness) -> Unit {
     if h.runner.status().phase is (Failed | Stopped | Completed | Unresolved) {
       break
     }
-    @async.sleep(1)
+    @core_async.sleep(1)
   }
   fail("expected controlled boundary: \{Repr(h.runner.status())}")
 }

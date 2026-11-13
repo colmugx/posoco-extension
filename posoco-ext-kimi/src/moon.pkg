@@ -10,15 +10,10 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
   "moonbitlang/core/string",
-}
-
-// UTF-8 decoding backs the native identity probe.
-#cfg(target = "native")
-import {
-  "moonbitlang/core/encoding/utf8",
 }
 
 import {
@@ -31,7 +26,10 @@ import {
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/http" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+  ],
   "native-stub": [ "identity_stub.c" ],
   targets: {
     "identity.js.mbt": [ "js" ],

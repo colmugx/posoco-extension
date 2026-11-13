@@ -18,16 +18,17 @@ pub fn default_http_io() -> &HttpIo {
 /// true only when the read filled `max_bytes` without ever seeing EOF (a body
 /// of exactly `max_bytes` is indistinguishable from an over-long one without
 /// an extra probe read, so it is also reported as truncated).
-async fn read_response_body(
+fn read_response_body(
   data : Bytes,
   max_bytes : Int32,
 ) -> (String, Int32, Bool) raise @posoco.RuntimeError {
   let total = if data.length() < max_bytes { data.length() } else { max_bytes }
   let raw = Bytes::makei(total, i => data[i])
   let decoded = @utf8.decode(raw.exact_view()) catch {
-    _ => raise @posoco.RuntimeError::InvocationFailed(
-      "webfetch: response body is not valid UTF-8",
-    )
+    _ =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "webfetch: response body is not valid UTF-8",
+      )
   }
   (decoded, total, data.length() >= max_bytes)
 }
@@ -69,7 +70,9 @@ impl HttpIo for DefaultHttpIo with fn fetch(
     let raw = body_data.read_all() catch {
       err => {
         body_data.close()
-        raise @posoco.RuntimeError::InvocationFailed("webfetch: read failed: " + err.to_string())
+        raise @posoco.RuntimeError::InvocationFailed(
+          "webfetch: read failed: " + err.to_string(),
+        )
       }
     }
     body_data.close()

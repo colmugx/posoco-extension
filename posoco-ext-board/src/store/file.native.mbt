@@ -199,7 +199,11 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
   } catch {
     error => {
       // Cleanup must not mask the primary failure, even under cancellation.
-      @core_async.protect_from_cancel(() => @fs.remove(temp_path) catch { _ => () })
+      @core_async.protect_from_cancel(() => {
+        @fs.remove(temp_path) catch {
+          _ => ()
+        }
+      })
       if renamed.val {
         Err(DurabilityUncertain(error.to_string()))
       } else {

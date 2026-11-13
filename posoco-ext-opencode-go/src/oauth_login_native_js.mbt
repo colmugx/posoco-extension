@@ -22,8 +22,8 @@ async fn go_console_post_json(
     "Accept": "application/json",
     "User-Agent": "posoco/opencode-go",
   }
-  let (response, body_data) = @async.with_timeout(30000, () => {
-    @http.post(url, body.stringify(), headers~)
+  let (response, body_bytes) = @async.with_timeout(30000, () => {
+    @http.post_binary(url, @utf8.encode(body.stringify())[:], headers~)
   }) catch {
     @async.TimeoutError =>
       raise @oauth.OAuthError::HttpError(
@@ -34,7 +34,7 @@ async fn go_console_post_json(
         "OpenCode Console request failed: " + err.to_string(),
       )
   }
-  let text = body_data.text() catch {
+  let text = @utf8.decode(body_bytes) catch {
     _ =>
       raise @oauth.OAuthError::ParseError(
         "OpenCode Console response is not UTF-8: " + url,
@@ -61,7 +61,7 @@ async fn go_console_get_json(
       }
     None => ()
   }
-  let (response, body_data) = @async.with_timeout(15000, () => {
+  let (response, conn) = @async.with_timeout(15000, () => {
     @http.get(url, headers~)
   }) catch {
     @async.TimeoutError =>
@@ -73,7 +73,16 @@ async fn go_console_get_json(
         "OpenCode Console request failed: " + err.to_string(),
       )
   }
-  let text = body_data.text() catch {
+  let body_bytes = conn.read_all() catch {
+    err => {
+      conn.close()
+      raise @oauth.OAuthError::HttpError(
+        "OpenCode Console response read failed: " + err.to_string(),
+      )
+    }
+  }
+  conn.close()
+  let text = @utf8.decode(body_bytes) catch {
     _ =>
       raise @oauth.OAuthError::ParseError(
         "OpenCode Console response is not UTF-8: " + url,

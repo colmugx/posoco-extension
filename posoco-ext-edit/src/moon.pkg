@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/core/encoding/utf8",
   "colmugx/posoco",
   "posoco/devkit",
 }
@@ -9,6 +8,8 @@ import {
 #cfg(not(target = "js"))
 import {
   "moonbitlang/core/async/fs",
+  // UTF-8 decoding backs the native/wasm read path only.
+  "moonbitlang/core/encoding/utf8",
 }
 
 #cfg(target = "js")
@@ -26,7 +27,10 @@ import {
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async", "moonbitlang/core/async/fs" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
   targets: {
     "posoco_ext_edit.js.mbt": [ "js" ],
     "posoco_ext_edit.native.mbt": [ "native", "wasm" ],

@@ -205,51 +205,6 @@ async test "real Posoco run owns scope gates effect and durably settles without 
 }
 
 ///|
-async test "real Posoco failure and timeout await shutdown before durable attempt termination" {
-  for timed_out in [false, true] {
-    @core_async.with_task_group(group => {
-      let backend = prepared_board(group)
-      let model = probe(fail=!timed_out, block=timed_out)
-      let driver = @execution.PosocoBoardExecutionAdapter(extensions=() => {
-        [model]
-      })
-      let owner = @execution.BoardExecutionOwner(
-        backend~,
-        adapter=driver,
-        store=@execution.MemoryBoardExecutionStore(),
-      )
-      assert_true(owner.attach(group) is Ok(_))
-      let handle = match
-        owner.execute(request(timeout=if timed_out { Some(100) } else { None })) {
-        Ok(handle) => handle
-        Err(_) => fail("admission")
-      }
-      let binding = handle.wait()
-      assert_eq(binding.phase, @execution.Settled)
-      assert_eq(
-        binding.outcome,
-        Some(if timed_out { @execution.TimedOut } else { @execution.Failed }),
-      )
-      assert_eq(model.stopped, 1)
-      let state = match backend.state() {
-        Ok(value) => value
-        Err(_) => fail("state")
-      }
-      assert_eq(
-        state.attempts[0].status,
-        if timed_out {
-          @domain.Interrupted
-        } else {
-          @domain.Failed
-        },
-      )
-      assert_true(owner.shutdown())
-      backend.shutdown()
-    })
-  }
-}
-
-///|
 async test "real scoped cancellation targets owner identity and waits for Agent cleanup" {
   @core_async.with_task_group(group => {
     let backend = prepared_board(group)

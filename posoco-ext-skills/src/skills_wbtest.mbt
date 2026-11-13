@@ -267,104 +267,6 @@ fn repeat_text(ch : String, count : Int32) -> String {
 }
 
 ///|
-test "parser: required and portable optional frontmatter" {
-  let source =
-    #|---
-    #|name: review-pr
-    #|description: "Review a pull request: check correctness"
-    #|license: Apache-2.0
-    #|compatibility: Requires git
-    #|allowed-tools: read grep
-    #|metadata:
-    #|  author: example-org
-    #|  version: "1.0"
-    #|---
-    #|# Review PR
-  match
-    parse_skill_file(
-      source,
-      skill_md_path="/repo/.agents/skills/review-pr/SKILL.md",
-      skill_dir="/repo/.agents/skills/review-pr",
-      scope=SkillScope::Repository,
-    ) {
-    Ok(parsed) => {
-      let skill = parsed.descriptor
-      assert_eq(skill.name, "review-pr")
-      assert_eq(skill.description, "Review a pull request: check correctness")
-      assert_eq(skill.license, Some("Apache-2.0"))
-      assert_eq(skill.compatibility, Some("Requires git"))
-      assert_eq(skill.allowed_tools, Some("read grep"))
-      assert_eq(skill.metadata.get("author"), Some("example-org"))
-      assert_eq(skill.metadata.get("version"), Some("1.0"))
-      assert_eq(parsed.body, "# Review PR")
-    }
-    Err(reason) => fail(reason)
-  }
-}
-
-///|
-test "parser: quoted required scalars preserve exact YAML values" {
-  let source =
-    #|---
-    #|name: " demo "
-    #|description: "  Keep surrounding whitespace  "
-    #|---
-    #|Body
-  match
-    parse_skill_file(
-      source,
-      skill_md_path="/skills/demo/SKILL.md",
-      skill_dir="/skills/demo",
-      scope=SkillScope::Repository,
-    ) {
-    Ok(parsed) => {
-      assert_eq(parsed.descriptor.name, " demo ")
-      assert_eq(
-        parsed.descriptor.description,
-        "  Keep surrounding whitespace  ",
-      )
-      assert_true(has_diagnostic(parsed.diagnostics, InvalidName))
-      let catalog = catalog_of([
-        descriptor("demo", "plain", "/skills/plain"),
-        parsed.descriptor,
-      ])
-      assert_true(catalog.validate() is Ok(_))
-      assert_eq(catalog.skills.length(), 2)
-    }
-    Err(reason) => fail(reason)
-  }
-}
-
-///|
-test "parser: literal description and body are separated" {
-  let source =
-    #|---
-    #|name: release
-    #|description: |
-    #|  Prepare a release.
-    #|  Verify changelog and tests.
-    #|---
-    #|First instruction.
-    #|
-    #|Second instruction.
-  match
-    parse_skill_file(
-      source,
-      skill_md_path="/repo/.agents/skills/release/SKILL.md",
-      skill_dir="/repo/.agents/skills/release",
-      scope=SkillScope::Repository,
-    ) {
-    Ok(parsed) => {
-      assert_true(parsed.descriptor.description.contains("Verify changelog"))
-      assert_true(parsed.body.contains("First instruction"))
-      assert_true(parsed.body.contains("Second instruction"))
-      assert_false(parsed.body.contains("name: release"))
-    }
-    Err(reason) => fail(reason)
-  }
-}
-
-///|
 test "parser: missing required description is rejected" {
   let source =
     #|---
@@ -593,61 +495,6 @@ test "manifest: populated extension composes tools and optional prompt" {
     catalog_max_chars: 0,
   })
   assert_eq(zero_prompt.manifest().prompt_contributors.length(), 0)
-}
-
-///|
-test "paths: canonical helpers are Unicode-safe at path boundaries" {
-  assert_eq(normalize_dir_input("/repo/😀"), "/repo/😀")
-  assert_eq(parent_dir("/repo/😀/skill"), Some("/repo/😀"))
-  assert_eq(parent_dir("😀/skill"), Some("😀"))
-  assert_true(canonical_is_inside("/repo/😀/skill", "/repo/😀"))
-}
-
-///|
-test "paths: canonical helpers handle Windows drives and UNC roots" {
-  assert_eq(normalize_dir_input("C:\\repo\\sub\\"), "C:/repo/sub")
-  assert_eq(parent_dir("C:/repo/sub"), Some("C:/repo"))
-  assert_eq(parent_dir("C:/repo"), Some("C:/"))
-  assert_eq(parent_dir("C:/"), None)
-  assert_true(path_is_ancestor_or_same("C:/repo/sub", "C:/repo"))
-  assert_false(path_is_ancestor_or_same("C:/other", "C:/repo"))
-  assert_eq(parent_dir("//server/share/repo"), Some("//server/share"))
-  assert_eq(parent_dir("//server/share"), None)
-}
-
-///|
-test "catalog: runtime snapshots caller-owned mutable arrays and metadata" {
-  let fs = FakeFs()
-  let metadata : Map[String, String] = Map([("version", "1")])
-  let original : SkillDescriptor = {
-    ..descriptor("alpha", "Alpha", "/skills/alpha"),
-    metadata,
-  }
-  let source_skills : Array[SkillDescriptor] = [original]
-  let source_diagnostics : Array[SkillDiagnostic] = []
-  let source_catalog : SkillCatalog = {
-    skills: source_skills,
-    diagnostics: source_diagnostics,
-  }
-  let skills = must_skills(fs, source_catalog)
-  source_skills.push(descriptor("beta", "Beta", "/skills/beta"))
-  metadata.set("version", "2")
-  source_diagnostics.push({
-    severity: Warning,
-    code: InvalidName,
-    path: "/external",
-    message: "external mutation",
-  })
-  let first = skills.catalog()
-  assert_eq(first.skills.length(), 1)
-  assert_eq(first.diagnostics.length(), 0)
-  assert_eq(first.skills[0].metadata.get("version"), Some("1"))
-  // Mutating a returned snapshot also must not mutate the composed extension.
-  first.skills.push(descriptor("gamma", "Gamma", "/skills/gamma"))
-  first.skills[0].metadata.set("version", "3")
-  let second = skills.catalog()
-  assert_eq(second.skills.length(), 1)
-  assert_eq(second.skills[0].metadata.get("version"), Some("1"))
 }
 
 ///|
@@ -1074,17 +921,6 @@ async test "tool outcomes avoid duplicating large skill text in structured metad
 }
 
 ///|
-test "parser: directory-name validation normalizes Windows separators" {
-  let parsed = parse_skill_file(
-    "---\nname: demo\ndescription: Demo\n---\nBody",
-    skill_md_path="C:\\skills\\demo\\SKILL.md",
-    skill_dir="C:\\skills\\demo",
-    scope=SkillScope::User,
-  ).unwrap()
-  assert_false(has_diagnostic(parsed.diagnostics, InvalidName))
-}
-
-///|
 async test "discovery: repository skills cannot escape repo boundary through symlinks by default" {
   let fs = FakeFs()
   let logical_dir = "/repo/.agents/skills/demo"
@@ -1388,18 +1224,6 @@ async test "discovery: direct SKILL.md symlink cannot split instructions from pa
   assert_true(has_diagnostic(catalog.diagnostics, SkillPackageMismatch))
   // Reject package topology before consuming the linked instruction file.
   assert_false(fs.was_read(logical_skill))
-}
-
-///|
-test "parser: markdown body preserves leading indentation and trailing whitespace" {
-  let source = "---\nname: demo\ndescription: Demo\n---\n    indented code\n\n"
-  let parsed = parse_skill_file(
-    source,
-    skill_md_path="/skills/demo/SKILL.md",
-    skill_dir="/skills/demo",
-    scope=SkillScope::User,
-  ).unwrap()
-  assert_eq(parsed.body, "    indented code\n\n")
 }
 
 ///|

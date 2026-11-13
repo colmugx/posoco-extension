@@ -7,6 +7,7 @@ import {
   "colmugx/posoco-kit-provider@0.1.0",
   "colmugx/posoco-kit-model-management@0.1.0",
   "posoco/devkit@0.4.1",
+  "moonbitlang/async@0.22.7",
   "posoco/ext-oauth@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
   "posoco/kit-events@0.1.0",

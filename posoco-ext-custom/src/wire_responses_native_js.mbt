@@ -21,9 +21,9 @@ async fn CustomModelPort::chat_responses(
   match stream {
     NoStream => {
       let body = build_responses_request(config, messages, tools, options)
-      let (response, body_data) = @http.post(
+      let (response, body_data) = @http.post_binary(
         responses_url(config),
-        body.stringify(),
+        @utf8.encode(body.stringify())[:],
         headers=build_wire_headers(config, self.request_headers),
       ) catch {
         err =>
@@ -32,10 +32,10 @@ async fn CustomModelPort::chat_responses(
             err.to_string(),
           )
       }
-      let body_text = body_data.text() catch {
+      let body_text = @utf8.decode(body_data) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "custom provider response parse failure (wire=responses, stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+            "custom provider response parse failure (wire=responses, stage=decode_utf8, body_bytes=\{body_data.length()})",
           )
       }
       if !is_custom_http_success(response.code) {
@@ -72,14 +72,14 @@ async fn CustomModelPort::chat_responses(
       )
       let headers = build_wire_headers(config, self.request_headers)
       let url = responses_url(config)
-      let client = @http.post_stream(url, headers~) catch {
+      let client = @http.post(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "custom provider transport failure (wire=responses, stage=post_stream): " +
             err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -119,7 +119,7 @@ async fn CustomModelPort::chat_responses(
       let mut done = false
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
@@ -130,7 +130,13 @@ async fn CustomModelPort::chat_responses(
         }
         match line {
           Some(data) => {
-            let trimmed = data.trim()
+            let text = @utf8.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "custom provider SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            let trimmed = text.trim()
             if trimmed.has_prefix("data:") {
               let payload = trimmed[5:].trim().to_owned()
               if payload == "[DONE]" {

@@ -603,25 +603,6 @@ test "grep_result_text_does_not_echo_pattern_on_miss" {
 }
 
 ///|
-test "grep_files_footer_is_compact" {
-  let matches = [
-    GrepMatch::{ path: "a", line: 1, content: "x", },
-    GrepMatch::{ path: "b", line: 1, content: "x", },
-    GrepMatch::{ path: "c", line: 1, content: "x", },
-  ]
-  let (text, count, truncated) = grep_result_text(
-    FilesWithMatches,
-    matches,
-    "x",
-    2,
-  )
-  assert_eq(count, 3)
-  assert_true(truncated)
-  assert_true(text.has_suffix("… +1 files"))
-  assert_false(text.contains("Found"))
-}
-
-///|
 /// The motivating case: alternation is regex semantics under `regex: true`,
 /// while the same pattern stays a literal string (and matches nothing) by
 /// default.

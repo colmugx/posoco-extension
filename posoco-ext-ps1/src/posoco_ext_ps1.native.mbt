@@ -116,7 +116,9 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
     }
     Ok(_) => {
       guard outcome.val is Some((exit_code, content, decode_failed)) else {
-        raise @posoco.RuntimeError::InvocationFailed("powershell: missing process outcome")
+        raise @posoco.RuntimeError::InvocationFailed(
+          "powershell: missing process outcome",
+        )
       }
       let content = ps1_model_output(content, exit_code)
       let is_error = exit_code != 0 || decode_failed

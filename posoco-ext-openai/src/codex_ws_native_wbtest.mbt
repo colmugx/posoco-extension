@@ -237,7 +237,7 @@ async fn WsMock::serve(self : WsMock) -> Unit {
       match frame {
         Err(_) => break
         Ok(msg) => {
-          let text = msg.read_all().text() catch { _ => break }
+          let text = @utf8.decode(msg.read_all()) catch { _ => break }
           self.frames.push(text)
           let index = self.frames.length() - 1
           let script = if index < self.scripts.length() {
@@ -458,7 +458,7 @@ async test "codex ws does not fall back after hosted search starts before text" 
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         let frame = ws.recv()
-        mock.frames.push(frame.read_all().text())
+        mock.frames.push(@utf8.decode(frame.read_all()))
         ws.send_text(
           "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"web_search_call\",\"id\":\"ws_started\",\"status\":\"in_progress\"}}",
         )

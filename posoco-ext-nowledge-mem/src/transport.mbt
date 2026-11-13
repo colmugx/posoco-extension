@@ -188,7 +188,10 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
   // cancelled, so a connection caught mid-await may skip close().
   let outcome : Result[NmemResponse, String] = @async.with_timeout(timeout_ms, () => {
     let (response, client) = @http.post_json(url, body, headers=http_headers) catch {
-      err => return Err("nmem transport failure (stage=post_json): " + err.to_string())
+      err =>
+        return Err(
+          "nmem transport failure (stage=post_json): " + err.to_string(),
+        )
     }
     Ok({ status: response.code, body: client, })
   }) catch {

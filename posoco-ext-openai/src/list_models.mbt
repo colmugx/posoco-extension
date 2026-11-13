@@ -179,16 +179,26 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
     for k, v in headers {
       http_headers[k] = v
     }
-    let (response, body_data) = @http.get(url, headers=http_headers) catch {
+    let (response, conn) = @http.get(url, headers=http_headers) catch {
       err =>
         raise @posoco.ModelError::Transport(
           "OpenAI models request failed: " + err.to_string(),
         )
     }
-    let body = body_data.text() catch {
-      err =>
+    let body_bytes = conn.read_all() catch {
+      err => {
+        conn.close()
         raise @posoco.ModelError::Transport(
           "OpenAI models response body read failed: " + err.to_string(),
+        )
+      }
+    }
+    conn.close()
+    let body = @utf8.decode(body_bytes) catch {
+      _ =>
+        raise @posoco.ModelError::Transport(
+          "OpenAI models response body read failed: invalid utf8, body_bytes=" +
+          body_bytes.length().to_string(),
         )
     }
     OpenAIModelsHttpResponse::{ status: response.code, body, }
