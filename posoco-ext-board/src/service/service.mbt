@@ -145,7 +145,8 @@ async fn BoardWorkflows::initialize(self : BoardWorkflows) -> Unit {
   if self.board.wait_ready() is Err(_) {
     raise WorkflowFault(StoreUnavailable)
   }
-  let leases : Map[Int32, Array[&@posoco.Extension]] = Map([])
+  // Every slot must share the same lease table, not a backend-dependent Map copy.
+  let leases : Ref[Map[Int32, Array[&@posoco.Extension]]] = Ref(Map([]))
   let owner = @execution.BoardExecutionOwner::with_slots(
     backend=self.board,
     store=self.journal,
