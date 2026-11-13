@@ -22,6 +22,9 @@ pub(all) struct PiAdaptor {
   /// Name snapshot of the last accepted publication; suppresses identical
   /// re-publications.
   mut published_names : Array[String]
+  /// Static tools are already owned by the composed catalog. A dynamic
+  /// contribution may only contain tools registered after composition.
+  mut static_tools : Map[String, Bool]
 }
 
 ///|
@@ -36,6 +39,7 @@ pub fn PiAdaptor::PiAdaptor() -> PiAdaptor {
     contributions: None,
     catalog_dirty: true,
     published_names: [],
+    static_tools: Map::from_array([]),
   }
   js_host_set_on_catalog_change(host, fn() { adaptor.catalog_dirty = true })
   adaptor
@@ -459,6 +463,13 @@ pub impl @posoco.Extension for PiAdaptor with fn extension_id(
 
 ///|
 pub impl @posoco.Extension for PiAdaptor with fn manifest(adaptor : PiAdaptor) -> @posoco.ExtensionManifest {
+  // The manifest's ToolProvider is captured as static tools. Never publish
+  // these same names through ToolContributions: the directory rejects a
+  // duplicate even when both providers claim the same owner.
+  let initial = @posoco.ToolProvider::list_tools(adaptor)
+  for tool in initial {
+    adaptor.static_tools[tool.name.to_string()] = true
+  }
   @posoco.ExtensionManifest(
     id="posoco_ext_pi_adaptor",
     tools=[adaptor],
@@ -515,9 +526,24 @@ pub async fn pi_adaptor_publish(adaptor : PiAdaptor) -> Unit {
     Some(handle) => handle
     None => return
   }
-  let defs = @posoco.ToolProvider::list_tools(adaptor)
+  let defs : Array[@posoco.ToolDef] = []
+  for def in @posoco.ToolProvider::list_tools(adaptor) {
+    if !adaptor.static_tools.contains(def.name.to_string()) {
+      defs.push(def)
+    }
+  }
   let names = defs.map(fn(def) { def.name.to_string() })
   if names == adaptor.published_names {
+    return
+  }
+  // Only late-registered tools belong to the dynamic group. When the group
+  // becomes empty, withdraw it instead of exposing an empty stale version.
+  if defs.is_empty() {
+    let ack = handle.withdraw()
+    match ack {
+      Ok(_) => adaptor.published_names = []
+      Err(_) => adaptor.catalog_dirty = true
+    }
     return
   }
   let provider = PiLiveTools::{ defs, adaptor, } as &@posoco.ToolProvider
