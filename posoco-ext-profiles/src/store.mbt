@@ -12,8 +12,8 @@
 /// - `write` persists one manifest under a level. Hosts key the storage by
 ///   the manifest id — its file name stem.
 pub(open) trait ProfileStore {
-  fn read_all(Self) -> Result[Array[(String, String)], String]
-  fn write(Self, level : String, manifest : ProfileManifest) -> Result[
+  async fn read_all(Self) -> Result[Array[(String, String)], String]
+  async fn write(Self, level : String, manifest : ProfileManifest) -> Result[
     Unit,
     String,
   ]
