@@ -1,0 +1,31 @@
+name: pi adaptor scoped checks
+
+on:
+  pull_request:
+    paths:
+      - 'posoco-ext-pi-adaptor/**'
+      - '.github/workflows/pi-adaptor.yml'
+
+jobs:
+  pi-js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Update MoonBit registry
+        run: moon update
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Pi adaptor on JavaScript target
+        run: moon check --target js --output-json posoco-ext-pi-adaptor/src
+      - name: Test Pi adaptor on JavaScript target
+        run: moon test --target js posoco-ext-pi-adaptor/src
+      - name: Build Pi adaptor JS module
+        run: moon build --target js posoco-ext-pi-adaptor/src
+      - name: Run host integration fixtures
+        run: node --experimental-strip-types --test posoco-ext-pi-adaptor/test/host.test.mjs
