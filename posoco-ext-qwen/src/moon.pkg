@@ -14,11 +14,9 @@ import {
 
 import {
   "colmugx/posoco",
-  "moonbitlang/core/async" @core_async,
 } for "wbtest"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
 
   targets: { "posoco_ext_qwen_wbtest.mbt": [ "native" ] },
 )
