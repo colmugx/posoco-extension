@@ -726,7 +726,7 @@ test "menu_lists_fallback_sentence_rows_and_dangling_suffix_stably" {
   )
   let prompt = profiles.system_prompt()
   assert_true(prompt.has_prefix("## Profiles"))
-  assert_true(prompt.contains("when no profile matches, activate `all`"))
+  assert_true(prompt.contains("Never activate `all` automatically"))
   assert_true(prompt.contains("- moonbit: Working on MoonBit services"))
   assert_true(
     prompt.contains(
