@@ -26,6 +26,6 @@ pub impl @posoco.Extension for Profiles with fn manifest(self : Profiles) -> @po
     lifecycle=[self],
     commands=[self],
     prompt_contributors=[self],
-    requires=[@posoco.Capability::Ui],
+    requires=[],
   )
 }
