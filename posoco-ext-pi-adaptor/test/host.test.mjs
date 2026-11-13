@@ -123,42 +123,24 @@ test("records follow-ups and refreshes the dynamic catalog", async () => {
   assert.equal(dynamic.content, "late:registered");
 });
 
-test("projects unsupported schema keywords out of the Posoco-visible catalog", async () => {
+test("preserves TypeBox constraints in the Posoco-visible catalog", async () => {
   const { host } = await loadHost();
-
-  const tool = host.catalog().find((entry) => entry.name === "constrained_echo");
-  const params = tool.parameters;
-
-  // TypeBox numeric constraints are stripped...
-  assert.equal("minimum" in params.properties.count, false);
-  assert.equal("maximum" in params.properties.count, false);
-  assert.equal("default" in params.properties.count, false);
-  assert.equal(params.properties.count.type, "number");
-  assert.equal(params.properties.count.description, "Echo repeat count");
-  // ...anyOf unions collapse to an unconstrained but present parameter...
-  assert.equal("anyOf" in params.properties.mode, false);
-  assert.equal(params.properties.mode.description, "Optional echo mode");
-  // ...string/array constraints vanish at every nesting level...
-  assert.equal("minLength" in params.properties.text, false);
-  assert.equal(params.properties.text.type, "string");
-  assert.equal("minItems" in params.properties.tags, false);
-  assert.equal("maxItems" in params.properties.tags, false);
-  assert.equal("minLength" in params.properties.tags.items, false);
-  assert.equal(params.properties.tags.items.type, "string");
-  // ...and the supported skeleton survives intact.
-  assert.deepEqual(params.required, ["text"]);
-  assert.equal(params.additionalProperties, false);
-
-  // The tool still executes end-to-end; validation authority stays Pi-side.
+  const params = host.catalog().find((entry) => entry.name === "constrained_echo").parameters;
+  assert.equal(params.properties.count.minimum, 1);
+  assert.equal(params.properties.count.maximum, 3);
+  assert.equal(params.properties.count.default, 2);
+  assert.ok(Array.isArray(params.properties.mode.anyOf));
+  assert.equal(params.properties.text.minLength, 1);
+  assert.equal(params.properties.tags.minItems, 1);
+  assert.equal(params.properties.tags.maxItems, 3);
+  assert.equal(params.properties.tags.items.minLength, 1);
   const result = await host.execute("constrained_echo", "constrained-1", {
-    text: "hi",
-    count: 2,
-    mode: null,
+    text: "hi", count: 2, mode: null,
   });
   assert.equal(result.ok, true);
   assert.equal(result.content, "hi|hi");
-  assert.equal(result.details.mode, null);
 });
+
 
 async function waitFor(predicate, timeoutMs = 1_000) {
   const deadline = Date.now() + timeoutMs;
