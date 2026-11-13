@@ -14,14 +14,44 @@ impl @posoco.PipelineHook for Profiles with fn before_model(
   self : Profiles,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
+  // Compact may retain the frozen activation header but discard the manual.
+  // Restore header-only records before processing new activations so resumed
+  // model calls do not silently lose the instructions they depend on.
+  for i, message in messages {
+    match message {
+      @posoco.Message::UserMessage(content~) =>
+        match content {
+          [@posoco.Content::Text(text), ..] =>
+            for entry in self.entries() {
+              if text == activation_header(entry.id) {
+                messages[i] = self.activation_message(entry.id)
+                break
+              }
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  let disclosed : Set[String] = Set([])
+  for profile_id in scan_activated_profiles(messages) {
+    match self.find_entry(profile_id) {
+      Some(entry) =>
+        for member in entry.members {
+          disclosed.add(member)
+        }
+      None => ()
+    }
+  }
   for id in find_pending_activations(messages) {
     match self.find_entry(id) {
-      Some(_) => {
-        messages.push(self.activation_message(id))
+      Some(entry) => {
+        messages.push(self.activation_message_with_disclosed(id, disclosed))
+        for member in entry.members {
+          disclosed.add(member)
+        }
         self.publish_activated(id)
       }
-      // Unreachable for results this package produced (the catalog never
-      // shrinks), but an unknown id is never injected.
       None => ()
     }
   }
@@ -51,6 +81,17 @@ fn Profiles::activation_message(
   self : Profiles,
   id : String,
 ) -> @posoco.Message {
+  self.activation_message_with_disclosed(id, Set([]))
+}
+
+///|
+/// Incremental disclosure when profiles overlap: preserve a header for each
+/// activated profile, but include an extension's manual only once per session.
+fn Profiles::activation_message_with_disclosed(
+  self : Profiles,
+  id : String,
+  disclosed : Set[String],
+) -> @posoco.Message {
   let members = match self.find_entry(id) {
     Some(entry) => entry.members
     None => []
@@ -58,7 +99,7 @@ fn Profiles::activation_message(
   let manuals : Array[String] = []
   let resident : Array[String] = []
   for ext_id in members {
-    if self.defer_set.contains(ext_id) {
+    if self.defer_set.contains(ext_id) && !disclosed.contains(ext_id) {
       match self.captured_prompts.get(ext_id) {
         Some(text) => manuals.push(text)
         None => ()
