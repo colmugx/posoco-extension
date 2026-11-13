@@ -10,7 +10,7 @@ execution is connected through the public Posoco runtime seam:
 Pi package
   -> package.json.pi.extensions
   -> PiPackageHost / PiAdaptor
-  -> PiRuntime + PiCatalogSource
+  -> PiRuntime + ToolContributions
   -> Agent::with_runtime
   -> Posoco Agent
 ```
@@ -27,7 +27,7 @@ below).
 - JavaScript target only
 - unmodified Pi extension default exports
 - `registerTool` and JSON Schema / TypeBox-compatible parameter objects
-  (lossily projected, see tool schema projection below)
+  (preserved as JSON Schema; core owns schema validation)
 - synchronous and Promise-returning tools
 - `AbortSignal` cancellation correlated by Posoco `EffectId`
 - lifecycle handlers registered with `pi.on(...)` — the host emits the
@@ -44,10 +44,10 @@ below).
 - custom session entries through `appendEntry` (projected as observer
   events and persisted with the session)
 - `sendMessage(..., { triggerTurn: true })` and `sendUserMessage` through
-  `RuntimeControl` — parked while idle, delivered on the next host-driven
+  `AgentControl` — parked while idle, delivered on the next host-driven
   turn
-- `api.exec` (argv spawn with Pi `ExecResult` semantics)
-- dynamic tool registration through `CatalogSource` revisions
+- `api.exec` (argv spawn with Pi `ExecResult` semantics; see security caveat below)
+- dynamic tool registration through `ToolContributions` revisions
 - headless `ExtensionContext` with a session branch; `model` stays `null`
   and the model registry reports no models (model routing is host-owned)
 
@@ -156,58 +156,56 @@ contributes one port per projected Pi surface:
 | `PipelineHook` (`PiHook`) | injects the `<pi-tools>` prompt block at `before_model` |
 | `CommandPort` (`PiCommandPort`) | `pi:<name>` commands and `pi:#<key>` shortcut defs |
 
-Complete Pi tool
-semantics use `PiRuntime` and `PiCatalogSource` with `Agent::with_runtime`:
+Full async Pi execution uses `PiRuntime` with Posoco's standard
+`Agent::with_runtime` seam. Dynamic tools use the same Agent's owner-bound
+`ToolContributions` capability; the former `CatalogSource` API is retired.
 
 ```moonbit
 let pi = @pi.PiAdaptor()
-let port_runtime = @runtime.PortRuntime(
-  model~,
-  tools=ordinary_tool_routes,
-)
+// Load allowed Pi extensions before composition.
+let fallback = @runtime.PortRuntime(model~)
 let pi_runtime = @pi.PiRuntime(
   adaptor=pi,
-  fallback=port_runtime as &@runtime.Runtime,
-)
-let catalog = @pi.PiCatalogSource(
-  adaptor=pi,
-  base_tools=ordinary_tool_defs,
+  fallback=fallback as &@runtime.Runtime,
 )
 let agent = @posoco.Agent::with_runtime(
-  exts=extensions,
+  exts=extensions_with_pi,
   config=agent_config,
+  events=event_system,
   runtime=pi_runtime as &@runtime.Runtime,
-  catalog_source=catalog as &@runtime.CatalogSource,
 )
-
 pi_runtime.attach_control(agent.control())
 ```
 
-`PiRuntime` delegates model calls, compaction and non-Pi tools to the fallback
-runtime. Pi-owned tool effects are executed through the JavaScript host and
-mapped back to canonical Posoco `ToolOutcome` values.
+The manifest contributes ToolProvider, Observer, Hook and CommandPort **plus
+Lifecycle** for obtaining the dynamic contribution handle. Tools already
+present at composition are static. Only tools registered afterward may enter
+the dynamic group: Posoco rejects duplicate names even within one owner.
+Accepted dynamic revisions apply to future admitted operations, not a
+currently captured tool directory.
 
-## Tool schema projection
+## Source ownership
 
-Posoco core hard-fails agent composition when a catalog tool's input schema
-uses any keyword outside its supported JSON Schema subset, while Pi tools
-(TypeBox-based) freely use numeric constraints and unions. The adaptor
-therefore projects every Posoco-visible tool schema (`src/schema_project.mbt`,
-applied to tool `input_schema` and both catalog JSON views) down to a
-whitelist:
+| Layer | Files | Responsibility |
+| --- | --- | --- |
+| Composition | `src/adaptor.mbt` | One Pi guest, extension manifest and capability bindings |
+| Guest | `src/pi_guest_*.mbt` | JS-only Pi API emulation, loading, catalog FFI, effects and events |
+| Tool ports | `src/tool_catalog.mbt`, `src/tool_execution.mbt` | Tool definitions, static/dynamic distinction and sync port calls |
+| Runtime | `src/runtime_adaptor.mbt` | Posoco effects, cancellation, follow-up messages and fallback |
+| Projections | `src/hook_adaptor.mbt`, `src/event_observer.mbt`, `src/command_adaptor.mbt` | Prompt, event and command mapping |
+| Guest exports | `src/guest_observability.mbt` | UI, session, command and event host API |
 
-- kept — `type` (string form), `description`, `properties` (projected
-  recursively), `items` (object form projected, boolean kept), `required`,
-  `enum`, `const`, `additionalProperties` (boolean kept, object form
-  projected)
-- dropped — unions (`anyOf`/`oneOf`/`allOf`) and every validation-only
-  keyword (`minimum`, `maximum`, …)
+A future Native JavaScript engine will be a separate guest backend, not
+another implementation of Pi/Posoco semantics.
 
-Projection is lossy by design: the LLM-facing schema only steers argument
-generation, and runtime argument validation stays with the Pi extension's own
-TypeBox checks — tools receive raw arguments and validate them at execution
-time. The projector never fails; unknown shapes pass through minus the keys
-it does not know.
+## Tool schemas
+
+Posoco 0.24.2 uses `colmugx/json-schema@0.1.5` to validate JSON Schema
+2020-12. The former projector dropped union and constraint keywords due to an
+old core limitation; that silently weakened schemas. ToolDef and guest catalog
+now preserve the original Pi/TypeBox JSON Schema without lossy projection.
+Unsupported or invalid schemas should fail at Posoco's catalog validation
+boundary instead of being made permissive.
 
 ## Promise bridging
 
@@ -225,7 +223,7 @@ root `Promise::wait` panics because no coroutine is current.
 
 Tool-level `promptSnippet` / `promptGuidelines` are projected: a `PipelineHook`
 (`src/hook_adaptor.mbt`) appends one delimited `<pi-tools>` block to the system
-message on every model call, rebuilt from live host state and shaped like pi's
+message at Posoco's per-turn `before_model` boundary, built from live host state and shaped like pi's
 own rendering (`Available tools:` lines in registration order, deduplicated
 `Guidelines:` bullets). It rides `before_model` because the
 `SystemPromptContributor` contract is stable-only and forbids dynamic
@@ -241,38 +239,30 @@ and register tools successfully while still losing such instructions — that
 gap is why the ecosystem scan below marks several packages incompatible even
 though they load.
 
-## Projection matrix
+## Projection matrix and known limitations
 
-What each Pi API area becomes on the Posoco side, and its current coverage:
-
-| Pi surface | Posoco port | Coverage |
+| Pi API | Posoco mapping | Behavior |
 | --- | --- | --- |
-| `registerTool` + parameters schema | `ToolProvider` + `CatalogSource` (dynamic revisions) | projected; schema lossily whitelisted |
-| `on(...)` event families (agent / turn / message / tool_execution) | `Observer` (`PiEventObserver`) | projected; `session_start` emitted once per session with `new`/`resume` reasons, run boundary emits `agent_end` + `agent_settled` |
-| `onUpdate` partial results | live `tool_execution_update` to registered handlers | projected to the package's own handlers; not mirrored into the Posoco observer stream |
-| `ctx.ui.select/confirm/input` | `UiPort` requests (`UiRequest`) | projected when the host installs UI callbacks; awaiting works inside tool executes and event handlers (the await chain lives in JS) |
-| `ctx.ui.notify/setStatus/setWidget` | `UiPort` renders (`UiSlot` Notice/Status/Widget) | projected; `theme` renders as identity text passthrough |
-| `registerCommand` | `CommandPort` as `pi:<name>` `CommandDef`s | projected (coexistence namespace — unlike tools, commands never hide) |
-| `registerShortcut` | invisible `pi:#<key>` defs carrying `shortcut` | projected; routed by the host's keybinding pass |
-| `api.exec` | argv `child_process` spawn, Pi `ExecResult` shape | projected; runs outside the Posoco permission policy — host enhancement, documented risk |
-| `promptSnippet` / `promptGuidelines` | `PipelineHook::before_model` `<pi-tools>` block | projected |
-| `sendMessage(triggerTurn)` / `sendUserMessage` | `RuntimeControl::enqueue_follow_up`, idle messages parked | projected; parked envelopes flush at the next host-driven turn as their own follow-up turns |
-| `appendEntry` | observer `Custom(source="pi")` events + `Session.metadata["pi.custom_entries"]` persistence + seeded restore | projected |
-| `registerMessageRenderer` / `registerToolRenderer` | — | captured only; rendering is host-owned |
+| `registerTool` and parameters | `ToolProvider` + `ToolContributions` | Full schemas; late additions published for future operations |
+| `setActiveTools` / `getActiveTools` | Guest active view | Cannot retroactively change a captured static Posoco tool directory |
+| `on(...)` and `onUpdate` | `Observer`, guest event callbacks | Representative lifecycle/tool events; updates are guest-side |
+| `ctx.ui.*` | Installed host callbacks | Interactive if host provides UI; headless fallback otherwise |
+| `registerCommand`, `registerShortcut` | `CommandPort` | `pi:` namespace |
+| `promptSnippet`, `promptGuidelines` | `PipelineHook::before_model` | Per-turn persistent transcript rewrite, not per-model-call injection |
+| `sendMessage(triggerTurn)` | `AgentControl::enqueue_follow_up` | Parked while idle, retried on subsequent turn |
+| `appendEntry` | Host Session metadata | Seeding and persistence remain host-owned |
+| `api.exec` | JS `node:child_process` | Outside Posoco permission governance; explicit trust risk |
 
-Deliberate non-goals (won't-do, not deferred): the boundary keeps host
-control with Posoco — packages cannot rewire `setActiveTools` /
-`getActiveTools` (tool gating), `setModel` (model routing), `registerProvider`
-(provider composition), the `input` event (user input pipeline), or
-`user_bash` (host base tools). Component-closure UI (`ui.custom`, `editor`,
-`renderCall`, `MessageRenderer`, footer/header, themes) is not projectable
-across the FFI. The `pi.events`/flags bus is not projected because no supported target package
-requires it.
+Not fully implemented: `before_agent_start`, `context` mutation,
+`pi.events`, model/provider mutation, session-branch events, arbitrary
+custom TUI renderers and child-Pi runtimes.
 
-`before_agent_start` system-prompt replacement and `context` message rewriting
-remain disabled because Posoco validates tool arguments before hooks run and
-does not revalidate after a hook rewrite. Enabling rewriting without paired
-revalidation would bypass schema checks.
+The adaptor is best-effort and must **not** modify Posoco's kernel or weaken
+Posoco's tool permission and validation contract just to increase compatibility.
+
+`before_model` runs once at the turn's pump entry, NOT once per model step,
+and its changes are persisted. Pi packages depending on ephemeral model-step
+request rewriting are not currently compatible.
 
 ## AgentHarness (pi "v3") mapping
 
@@ -286,7 +276,7 @@ package imports harness APIs yet. When that changes, the port lookup is:
 | passive event stream (`watch` / `events.on` — listeners cannot mutate) | `Observer` | `PiEventObserver` projects turn events into `pi.on(...)` handlers |
 | `before_run` / `transform_context` (messages append / systemPrompt replace) | `PipelineHook::before_model` | `PiHook` `<pi-tools>` block; context rewriting parked |
 | `before_tool` (chained argument replacement, revalidated; block fails closed) | `PipelineHook::before_tool` | default `Approve` — argument rewriting is disabled because core validates reducer-side before hooks and does not revalidate after a rewrite; rewriting requires paired revalidation |
-| `before_run_end` follow-up | `RuntimeControl::enqueue_follow_up` | `PiRuntime` parked-followup queue flushed at the next `call_model` |
+| `before_run_end` follow-up | `AgentControl::enqueue_follow_up` | `PiRuntime` parked-followup queue flushed at the next `call_model` |
 
 Pi version knowledge lives entirely in the adaptor's JS bridge. Its by-name
 dispatch tolerates absent members, so an AgentHarness migration can be handled
