@@ -120,8 +120,8 @@ async test "an abandoned in-flight request exits promptly without a fabricated o
       #|  @async.with_task_group(inner => {
       #|    inner.spawn_bg(no_wait=true, () => ignore(ctx.call("read", {})))
       #|    @async.sleep(50)
-      #|    @protocol.Success(content="abandoned", structured=None)
       #|  })
+      #|  @protocol.Success(content="abandoned", structured=None)
       #|}
     let artifact = test_program(group, source)
     let abandoned_started = @async.now()
