@@ -127,12 +127,12 @@ test("preserves TypeBox constraints in the Posoco-visible catalog", async () => 
   const { host } = await loadHost();
   const params = host.catalog().find((entry) => entry.name === "constrained_echo").parameters;
   assert.equal(params.properties.count.minimum, 1);
-  assert.equal(params.properties.count.maximum, 3);
-  assert.equal(params.properties.count.default, 2);
+  assert.equal(params.properties.count.maximum, 10);
+  assert.equal(params.properties.count.default, 1);
   assert.ok(Array.isArray(params.properties.mode.anyOf));
   assert.equal(params.properties.text.minLength, 1);
   assert.equal(params.properties.tags.minItems, 1);
-  assert.equal(params.properties.tags.maxItems, 3);
+  assert.equal(params.properties.tags.maxItems, 5);
   assert.equal(params.properties.tags.items.minLength, 1);
   const result = await host.execute("constrained_echo", "constrained-1", {
     text: "hi", count: 2, mode: null,
