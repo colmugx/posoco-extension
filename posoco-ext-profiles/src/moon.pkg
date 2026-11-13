@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-ext-lazytools" @lazytools,
   "posoco/kit-events" @kit_events,
   "moonbitlang/core/debug",
 }
