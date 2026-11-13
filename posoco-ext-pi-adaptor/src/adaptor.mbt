@@ -465,6 +465,7 @@ pub impl @posoco.Extension for PiAdaptor with fn manifest(adaptor : PiAdaptor) -
     observers=[adaptor.events as &@posoco.Observer],
     hooks=[adaptor.hook as &@posoco.PipelineHook],
     commands=[adaptor.commands as &@posoco.CommandPort],
+    lifecycle=[adaptor as &@posoco.Lifecycle],
     requires=[@posoco.Capability::ToolContribution],
   )
 }

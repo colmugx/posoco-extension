@@ -39,17 +39,12 @@ test("loads real pi-web-access and registers expected tools", { skip: skipReason
     assert.equal(names.includes("source_check"), true, "expected tool 'source_check' in catalog (version >= 0.20)");
   }
 
-  // W1D: the catalog view must be free of keywords posoco core rejects at
-  // composition time (e.g. TypeBox numeric constraints and unions), since the
-  // raw 0.27.0 schemas triggered UnsupportedSchemaKeyword(keyword=minimum).
+  // Posoco 0.24.2 validates the complete JSON Schema vocabulary. Do not
+  // erase TypeBox constraints to make a package appear compatible.
   const webSearch = host.catalog().find((tool) => tool.name === "web_search");
   if (webSearch) {
-    const projected = JSON.stringify(webSearch.parameters);
-    console.log(`web_search projected parameters: ${projected}`);
-    assert.equal(projected.includes('"minimum":'), false, "projected web_search schema must not contain 'minimum'");
-    assert.equal(projected.includes('"maximum":'), false, "projected web_search schema must not contain 'maximum'");
-    assert.equal(projected.includes('"anyOf":'), false, "projected web_search schema must not contain 'anyOf'");
-    assert.equal(webSearch.parameters.type, "object", "expected web_search parameters to stay an object schema");
+    assert.equal(webSearch.parameters.type, "object");
+    assert.equal(typeof webSearch.parameters, "object");
   }
 });
 
