@@ -45,7 +45,7 @@ jobs:
         run: moon check --target js --output-json
 
       - name: moon test (native)
-        run: moon test --target native --jobs 1
+        run: moon test --target native
 
       - name: moon test (js)
         run: moon test --target js
