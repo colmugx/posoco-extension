@@ -36,7 +36,6 @@ pub fn compose_profiles(
   summarizer~ : ((Array[(String, Int32)]) -> (String, String))? = None,
 ) -> Result[ProfileComposition, String] {
   let deferred_ids : Array[String] = []
-  let deferred_by_id : Map[String, &@posoco.Extension] = Map::from_array([])
   let attribution : Map[String, String] = Map::from_array([])
   let seen_extensions : Set[String] = Set([])
   for ext in resident {
@@ -57,7 +56,6 @@ pub fn compose_profiles(
       return Err("profiles: duplicate extension id '{id}'")
     }
     seen_extensions.add(id)
-    deferred_by_id[id] = ext
     for provider in ext.manifest().tools {
       for tool in provider.list_tools() {
         attribution[tool.name.to_string()] = id
