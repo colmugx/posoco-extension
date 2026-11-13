@@ -2,7 +2,7 @@
 
 [Progressive context intent packages for Posoco agents](https://mooncakes.io/docs/colmugx/posoco-ext-profiles) —
 a profile is a named manifest (id, name, description, member ext list) that
-bundles related extensions into one working mode. The model activates a
+bundles related extension manuals for one task intent. Activation does not change tool permissions or tool availability. The model activates a
 profile with a single `activate_profile` call and the members' prompt manuals
 ride the next model request as one append-only user message; tool schemas stay
 behind the lazytools gateway the whole time.
@@ -14,11 +14,11 @@ behind the lazytools gateway the whole time.
 | Port | Contribution |
 |---|---|
 | `ToolProvider` | the `activate_profile` meta tool (model self-activation) (src/meta_tool.mbt) |
-| `SystemPromptContributor` | the `## Profiles` menu section: one `id: description` row per manifest plus the `all` fallback sentence (src/prompt_menu.mbt) |
+| `SystemPromptContributor` | the `## Profiles` menu section: one `id: description` row per manifest with `all` available only by explicit request (src/prompt_menu.mbt) |
 | `PipelineHook` | `before_model`: appends one activation user message per pending activation and fires the bus event (src/hook.mbt) |
 | `Observer` | per-session tool usage counters feeding `/profile save`, unwrapping lazytools gateway calls to the inner tool name (src/usage.mbt) |
 | `CommandPort` | `/profiles` (manual activation selector) and `/profile save` (skill-creator-shaped save) (src/command.mbt) |
-| `Lifecycle` | `on_compose` captures the composed `UiPort` for the selector (src/command.mbt) |
+| `Lifecycle` | `on_compose` optionally captures host UI for selector-less invocations (src/command.mbt) |
 
 ## Activation flow
 
@@ -64,7 +64,7 @@ exactly as listed in the menu. The result text is contract, not prose
 - Missing or non-string `profile` — `ToolReportedError` steering text; a
   different tool name raises `RuntimeError::UnknownTool`.
 
-The builtin `all` preset (members = the deep-deferred set) is activated like
+The builtin `all` preset (members = the profile-deferred set) is activated like
 any profile — one code path, no special-casing (src/profiles.mbt).
 
 ## Save flow
@@ -93,7 +93,40 @@ session's observed usage as a new profile (src/command.mbt):
    composition-time static and the full benefit lands at the next composition
    (src/command.mbt, src/prompt_menu.mbt).
 
-## Composition seam
+## Recommended Posoco Agent composition
+
+Use the one-call composer rather than assembling the deep-deferred views,
+attribution table and LazyTools gateway yourself:
+
+```moonbit nocheck
+let composition = @profiles.compose_profiles(
+  resident=[model, session_store, ..resident_features],
+  deferred=episodic_features,
+  manifests=loaded_manifests,
+  activation_sink=host_agent_sink,
+  store=host_profile_store,
+) // Result[ProfileComposition, String]
+let agent = @posoco.Agent(exts=composition.exts, config)
+```
+
+The composer preserves the resident prompt sections of deferred extensions
+**not** referenced by any authored profile, deep-defers only profile members,
+and keeps the deferred tool providers behind one LazyTools gateway. The
+returned `exts` array is the entire composition output; do not also register
+the original deferred extensions.
+
+`/profiles <id>` is available without a UI when the host supplies an
+Agent-backed activation sink and adds the current `session_id` to command
+arguments. Bare `/profiles` continues to use the host UI selector when one
+is available. There is no unconditional `Capability::Ui` dependency.
+
+When no profile matches, the model should proceed normally and discover tools
+with LazyTools. `all` is an explicit escape hatch, **not** an automatic fallback.
+Overlapping activations disclose each deferred extension manual once.
+Header-only compact activation records are rehydrated before the model call;
+compactors must still preserve the headers in the first place.
+
+## Low-level composition seam
 
 Host wiring — the whole policy lives at composition time; nothing here
 touches a session (src/defer_view.mbt, src/profiles.mbt):
@@ -107,7 +140,7 @@ touches a session (src/defer_view.mbt, src/profiles.mbt):
   host's policy (typically the union of loaded profiles' exts; hosts may
   protect never-defer extensions by leaving them out).
 - `Profiles::build(manifests~, defer_set~, captured_prompts~, attribution~,
-  bus?, store?, activation_sink?, summarizer?)` — every input is a
+  events?, store?, activation_sink?, summarizer?)` — every input is a
   composition-time constant. The host resolves the two-level manifest
   directory before calling (project overrides user on id collisions; the
   reserved `all` and path separators are rejected by
@@ -131,7 +164,7 @@ let profiles = Profiles::build(
   defer_set=deferred_ids,       // also the `all` membership
   captured_prompts=captured,
   attribution=tool_catalog,
-  bus=Some(devkit_bus),
+  events=Some(profile_publisher),
   store=Some(host_profile_store),
   activation_sink=Some(host_agent_activation_sink),
 )
@@ -158,9 +191,9 @@ submitting; the package's model-driven hook already provides idempotence.
 
 ## Host integration limits
 
-- **Cetas host integration is partial.** Current cetas hosts do not (a) pass
+- **Cetas host integration is not completed by this package PR.** Current cetas hosts do not (a) pass
   `session_id` in command invoke args, (b) supply a host-owned
-  `ProfileActivationSink`, or (c) apply the deep-deferred views. Consequences inside the package:
+  `ProfileActivationSink`, or (c) compose the Profile views into the active host. Consequences inside the package:
   `/profiles` selection reaches `manual_activate` and returns an explicit
   `Failure` naming the missing wiring when the activation sink or the `session_id`
   argument is absent; `/profile save` fails explicitly on a missing
