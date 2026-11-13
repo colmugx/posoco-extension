@@ -38,26 +38,39 @@ async fn[X] with_process(
   let outcome : Ref[X?] = Ref(None)
   @async.with_task_group(group => {
     @async.pause()
-    let (child_stdin, stdin) = @process.write_to_process()
-    defer stdin.close()
-    let (stdout, child_stdout) = @process.read_from_process()
-    defer stdout.close()
-    let (stderr, child_stderr) = @process.read_from_process()
-    defer stderr.close()
+    // Use process-owned pipes. A Shared(stdout/stderr) endpoint must be
+    // explicitly closed by its caller immediately after spawning. Keeping
+    // that write end open prevents readers from ever receiving EOF, so both
+    // collect_process and communicate can deadlock after the child exits.
+    //
+    // Collect/FeedFromParent let Process own the child ends instead, with
+    // only the parent-facing handles exposed on the returned process.
     let process = @process.spawn(
       group,
       command,
       args,
-      stdin=@process.ProcessInput::Shared(child_stdin),
-      stdout=@process.ProcessOutput::Shared(child_stdout),
-      stderr=@process.ProcessOutput::Shared(child_stderr),
+      stdin=@process.ProcessInput::FeedFromParent,
+      stdout=@process.ProcessOutput::Collect,
+      stderr=@process.ProcessOutput::Collect,
       cwd?=cwd.map(path => path[:]),
       inherit_env~,
       extra_env~,
       no_wait=true,
       cancel_handler=@process.graceful_cancel(timeout=1000),
     )
-    outcome.val = Some(body(NativeProcess::{ stdin, stdout, stderr, process, }))
+    defer process.stdin.close()
+    defer process.stdout.close()
+    defer process.stderr.close()
+    outcome.val = Some(
+      body(
+        NativeProcess::{
+          stdin: process.stdin,
+          stdout: process.stdout,
+          stderr: process.stderr,
+          process,
+        },
+      ),
+    )
   })
   match outcome.val {
     Some(result) => result
