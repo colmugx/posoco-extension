@@ -86,8 +86,7 @@ session's observed usage as a new profile (src/command.mbt):
    the reserved `all`) (src/command.mbt).
 3. **Persistence** — the manifest is written through the `ProfileStore` seam
    (default level `user`, optional `level` argument); a write failure is a
-   `Failure` and the manifest stays out of the catalog. With no store wired
-   the save is catalog-only — nothing persists. Either way the manifest
+   `Failure` and the manifest stays out of the catalog. Without a store the save fails explicitly, rather than pretending to persist. Either way the manifest
    enters the in-memory catalog immediately, so `activate_profile` accepts it
    the same session; the menu and the deep-deferred views stay
    composition-time static and the full benefit lands at the next composition
