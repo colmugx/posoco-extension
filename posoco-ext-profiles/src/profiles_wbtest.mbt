@@ -446,7 +446,7 @@ impl ProfileStore for InMemoryProfileStore with fn write(self, level, manifest) 
 extend InMemoryProfileStore with ProfileStore::{read_all, write}
 
 ///|
-test "store_roundtrips_manifests_across_levels" {
+async test "store_roundtrips_manifests_across_levels" {
   let store = InMemoryProfileStore::InMemoryProfileStore()
   let user_manifest : ProfileManifest = {
     id: "moonbit",
@@ -500,7 +500,7 @@ test "store_roundtrips_manifests_across_levels" {
 }
 
 ///|
-test "store_write_replaces_same_level_and_id" {
+async test "store_write_replaces_same_level_and_id" {
   let store = InMemoryProfileStore::InMemoryProfileStore()
   let first : ProfileManifest = {
     id: "web",
