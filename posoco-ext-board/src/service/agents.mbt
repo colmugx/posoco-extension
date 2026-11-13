@@ -7,7 +7,7 @@ priv struct FactoryAdapter {
   live : Ref[Bool]
   authorize : () -> Bool
   channel : @execution.BoardExecutionResultChannel
-  leases : Map[Int32, Array[&@posoco.Extension]]
+  leases : Ref[Map[Int32, Array[&@posoco.Extension]]]
   mut inner : @execution.PosocoBoardExecutionAdapter?
   mut active : Bool
 }
@@ -32,7 +32,7 @@ impl @execution.BoardExecutionAdapter for FactoryAdapter with fn run(
   self.active = true
   defer {
     self.active = false
-    self.leases.remove(self.slot)
+    self.leases.val.remove(self.slot)
   }
   let purpose = if self.planning_attempt.val == Some(request.attempt_id) {
     Planning
@@ -62,7 +62,7 @@ impl @execution.BoardExecutionAdapter for FactoryAdapter with fn run(
       manifest.id == "posoco_ext_board" {
       return @execution.Failed
     }
-    for other in self.leases.values() {
+    for other in self.leases.val.values() {
       for installed in other {
         if physical_equal(ext, installed) {
           return @execution.Failed
@@ -75,7 +75,7 @@ impl @execution.BoardExecutionAdapter for FactoryAdapter with fn run(
       }
     }
   }
-  self.leases[self.slot] = composition.extensions.copy()
+  self.leases.val[self.slot] = composition.extensions.copy()
   let inner = @execution.PosocoBoardExecutionAdapter(
     extensions=() => composition.extensions.copy(),
     config=composition.config,
