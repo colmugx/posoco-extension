@@ -102,6 +102,25 @@ fn pi_prompt_block(entries : Array[PiSnippetEntry]) -> String {
 }
 
 ///|
+/// A Pi active-set change may hide a tool from a subsequent Posoco operation,
+/// but may never widen the catalog's own exposure or permission policy.
+/// Posoco captures this verdict at operation admission; in-flight operations
+/// keep their immutable tool binding.
+impl @posoco.PipelineHook for PiHook with fn tool_exposure(
+  self : PiHook,
+  definition : @kernel.ToolDef,
+) -> @kernel.ToolExposure {
+  if definition.owner.to_string() != "posoco_ext_pi_adaptor" {
+    return @kernel.ToolExposure::Direct
+  }
+  if js_tool_is_active(self.host, definition.name.to_string()) {
+    @kernel.ToolExposure::Direct
+  } else {
+    @kernel.ToolExposure::Disabled
+  }
+}
+
+///|
 /// Append the block to the system message's content as its own Text element;
 /// messages other than the system message pass through untouched. Sync body
 /// satisfying the async trait slot: the read is a synchronous JS host peek.
@@ -144,6 +163,7 @@ impl @posoco.PipelineHook for PiHook with fn before_model(
 
 ///|
 pub extend PiHook with @posoco.PipelineHook::{
+  tool_exposure,
   on_post_event,
   on_turn_begin,
   before_model,

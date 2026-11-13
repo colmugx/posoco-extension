@@ -92,3 +92,10 @@ extern "js" fn js_host_set_hidden_tools(
   #|   );
   #| }
 
+
+ 
+///|
+/// Guest-side active visibility. The Posoco tool-exposure hook uses this only
+/// to *narrow* already-composed tools at the next operation boundary.
+extern "js" fn js_tool_is_active(host : JsPiHost, name : String) -> Bool =
+  #| (host, name) => host.visibleTools().some((tool) => tool.name === name)

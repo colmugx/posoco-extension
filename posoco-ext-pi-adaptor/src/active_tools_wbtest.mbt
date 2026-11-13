@@ -281,3 +281,24 @@ test "manifest contributes lifecycle and late tools stay separate from static to
   inspect(dynamic.length(), content="1")
   inspect(dynamic[0].name.to_string(), content="after_compose")
 }
+
+///|
+test "active tool changes narrow only Pi tools at the next operation boundary" {
+  let adaptor = pi_adaptor_new()
+  wbtest_api_register_tool(
+    adaptor.host, "alpha", "", "alpha",
+    "{\"type\":\"object\",\"properties\":{}}",
+  )
+  wbtest_api_register_tool(
+    adaptor.host, "beta", "", "beta",
+    "{\"type\":\"object\",\"properties\":{}}",
+  )
+  let defs = adaptor.list_tools()
+  let hook : &@posoco.PipelineHook = adaptor.hook as &@posoco.PipelineHook
+  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct, content="true")
+  wbtest_api_set_active_tools(adaptor.host, "[\"beta\"]")
+  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Disabled, content="true")
+  inspect(hook.tool_exposure(defs[1]) == @kernel.ToolExposure::Direct, content="true")
+  wbtest_api_set_active_tools(adaptor.host, "[\"alpha\",\"beta\"]")
+  inspect(hook.tool_exposure(defs[0]) == @kernel.ToolExposure::Direct, content="true")
+}
