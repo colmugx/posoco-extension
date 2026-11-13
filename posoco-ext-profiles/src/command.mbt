@@ -112,7 +112,20 @@ pub impl @posoco.CommandPort for Profiles with fn invoke(
           )
       }
     }
-    "profile" => self.invoke_profile_action(args)
+    "profile" => {
+      let attempted : Result[@posoco.CommandOutcome, Error] = Ok(
+        self.invoke_profile_action(args),
+      ) catch {
+        error => Err(error)
+      }
+      match attempted {
+        Ok(outcome) => outcome
+        Err(error) =>
+          @posoco.CommandOutcome::Failure(
+            reason="profile failed: \{error.to_string()}",
+          )
+      }
+    }
     _ => raise @posoco.CommandError::NotFound(id)
   }
 }
