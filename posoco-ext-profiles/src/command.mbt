@@ -24,7 +24,7 @@ pub impl @posoco.Lifecycle for Profiles with fn on_shutdown(_self : Profiles) ->
 }
 
 ///|
-pub impl @posoco.CommandPort for Profiles with fn commands(_self : Profiles) -> Array[
+pub impl @posoco.CommandPort for Profiles with fn commands(self : Profiles) -> Array[
   @posoco.CommandDef,
 ] {
   [
@@ -34,7 +34,18 @@ pub impl @posoco.CommandPort for Profiles with fn commands(_self : Profiles) -> 
       description: "Activate a profile in the current session",
       category: "profiles",
       ctype: @posoco.CommandType::Select,
-      params: [],
+      params: [
+        {
+          name: "profile",
+          label: "Profile",
+          description: "Profile id (omit to open the UI selector)",
+          ptype: @posoco.ParamType::Str,
+          required: false,
+          default: None,
+          choices: Some(self.catalog.map(fn(entry) { entry.id })),
+          positional: true,
+        },
+      ],
       aliases: [],
       shortcut: None,
       icon: None,
@@ -86,6 +97,11 @@ pub impl @posoco.CommandPort for Profiles with fn invoke(
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
   match id {
     "profiles" => {
+      // An explicit id works without a UI; the selector is only a fallback.
+      match json_string_field(args, "profile") {
+        Some(profile) => return self.manual_activate(profile, args)
+        None => ()
+      }
       // The selector awaits the UiPort; async calls carry the general
       // Error type, so the boundary folds any raise into a Failure.
       let attempted : Result[@posoco.CommandOutcome, Error] = Ok(
@@ -172,6 +188,13 @@ async fn Profiles::manual_activate(
   let session_id = match json_string_field(args, "session_id") {
     Some(session_id) if session_id != "" => session_id
     _ => return @posoco.CommandOutcome::Failure(reason=wiring_failure)
+  }
+  match self.find_entry(id) {
+    Some(_) => ()
+    None =>
+      return @posoco.CommandOutcome::Failure(
+        reason="unknown profile: \{id}; available: \{self.available_ids().join(", ")}",
+      )
   }
   match sink.submit(session_id, self.activation_message(id)) {
     Ok(_) => {
