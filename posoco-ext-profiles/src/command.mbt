@@ -213,7 +213,7 @@ async fn Profiles::manual_activate(
 }
 
 ///|
-fn Profiles::invoke_profile_action(
+async fn Profiles::invoke_profile_action(
   self : Profiles,
   args : Json,
 ) -> @posoco.CommandOutcome {
@@ -238,7 +238,7 @@ fn Profiles::invoke_profile_action(
 /// wired, and — regardless — enters the in-memory catalog immediately:
 /// activate_profile accepts it this session; the menu catches up next
 /// composition.
-fn Profiles::invoke_save_profile(
+async fn Profiles::invoke_save_profile(
   self : Profiles,
   args : Json,
 ) -> @posoco.CommandOutcome {
@@ -298,7 +298,10 @@ fn Profiles::invoke_save_profile(
           )
       }
     }
-    None => ()
+    None =>
+      return @posoco.CommandOutcome::Failure(
+        reason="profile save requires a durable ProfileStore; no store is configured",
+      )
   }
   self.catalog.push({
     id: manifest.id,
