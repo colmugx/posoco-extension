@@ -97,11 +97,6 @@ pub impl @posoco.CommandPort for Profiles with fn invoke(
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
   match id {
     "profiles" => {
-      // An explicit id works without a UI; the selector is only a fallback.
-      match json_string_field(args, "profile") {
-        Some(profile) => return self.manual_activate(profile, args)
-        None => ()
-      }
       // The selector awaits the UiPort; async calls carry the general
       // Error type, so the boundary folds any raise into a Failure.
       let attempted : Result[@posoco.CommandOutcome, Error] = Ok(
@@ -129,6 +124,11 @@ async fn Profiles::invoke_select_profiles(
   self : Profiles,
   args : Json,
 ) -> @posoco.CommandOutcome {
+  // Skip the selector completely for /profiles <id>, including headless hosts.
+  match json_string_field(args, "profile") {
+    Some(profile) => return self.manual_activate(profile, args)
+    None => ()
+  }
   let ui = match self.ui {
     Some(ui) => ui
     None =>
