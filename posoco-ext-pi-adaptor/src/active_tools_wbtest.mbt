@@ -260,3 +260,24 @@ async test "registerTool and setActiveTools bump the catalog and flip dirty" {
   pi_adaptor_publish(adaptor)
   inspect(adaptor.catalog_dirty, content="false")
 }
+
+ 
+///|
+test "manifest contributes lifecycle and late tools stay separate from static tools" {
+  let adaptor = pi_adaptor_new()
+  wbtest_api_register_tool(
+    adaptor.host, "at_compose", "", "static tool",
+    "{\"type\":\"object\",\"properties\":{}}",
+  )
+  let manifest = adaptor.manifest()
+  inspect(manifest.lifecycle.length(), content="1")
+  inspect(adaptor.static_tools.contains("at_compose"), content="true")
+  inspect(pi_dynamic_tools(adaptor).length(), content="0")
+  wbtest_api_register_tool(
+    adaptor.host, "after_compose", "", "late tool",
+    "{\"type\":\"object\",\"properties\":{}}",
+  )
+  let dynamic = pi_dynamic_tools(adaptor)
+  inspect(dynamic.length(), content="1")
+  inspect(dynamic[0].name.to_string(), content="after_compose")
+}

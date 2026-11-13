@@ -118,7 +118,7 @@ pub fn pi_adaptor_catalog_json(adaptor : PiAdaptor) -> String {
 }
 
 ///|
-/// Versioned catalog snapshot for Posoco Runtime/CatalogSource composition.
+/// Versioned snapshot of the Pi guest catalog (not a Posoco CatalogSource).
 pub fn pi_adaptor_catalog_snapshot_json(adaptor : PiAdaptor) -> String {
   project_catalog_json(
     filter_hidden_tools(
@@ -180,6 +180,20 @@ impl @posoco.ToolProvider for PiLiveTools with fn execute(
 }
 
 ///|
+/// Only tools registered *after* the static manifest snapshot may be
+/// contributed dynamically. Posoco checks collisions against the static
+/// directory; duplicating names under the same owner is still invalid.
+fn pi_dynamic_tools(adaptor : PiAdaptor) -> Array[@posoco.ToolDef] {
+  let defs : Array[@posoco.ToolDef] = []
+  for def in @posoco.ToolProvider::list_tools(adaptor) {
+    if !adaptor.static_tools.contains(def.name.to_string()) {
+      defs.push(def)
+    }
+  }
+  defs
+}
+
+///|
 /// Publish the current live pi tool set as the adaptor's contribution
 /// group (owner posoco_ext_pi_adaptor). Call from an async context — the
 /// model-call seam in PiRuntime. A rejected group keeps the previous
@@ -191,12 +205,7 @@ pub async fn pi_adaptor_publish(adaptor : PiAdaptor) -> Unit {
     Some(handle) => handle
     None => return
   }
-  let defs : Array[@posoco.ToolDef] = []
-  for def in @posoco.ToolProvider::list_tools(adaptor) {
-    if !adaptor.static_tools.contains(def.name.to_string()) {
-      defs.push(def)
-    }
-  }
+  let defs = pi_dynamic_tools(adaptor)
   let names = defs.map(fn(def) { def.name.to_string() })
   if names == adaptor.published_names {
     return
