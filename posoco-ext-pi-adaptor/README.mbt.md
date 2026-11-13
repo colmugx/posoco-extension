@@ -244,7 +244,7 @@ though they load.
 | Pi API | Posoco mapping | Behavior |
 | --- | --- | --- |
 | `registerTool` and parameters | `ToolProvider` + `ToolContributions` | Full schemas; late additions published for future operations |
-| `setActiveTools` / `getActiveTools` | Guest active view | Cannot retroactively change a captured static Posoco tool directory |
+| `setActiveTools` / `getActiveTools` | Guest active view + `PipelineHook::tool_exposure` | Narrows active tools at the next operation boundary; existing operations retain their captured catalog |
 | `on(...)` and `onUpdate` | `Observer`, guest event callbacks | Representative lifecycle/tool events; updates are guest-side |
 | `ctx.ui.*` | Installed host callbacks | Interactive if host provides UI; headless fallback otherwise |
 | `registerCommand`, `registerShortcut` | `CommandPort` | `pi:` namespace |
