@@ -28,7 +28,7 @@ impl @orchestration.BoardExecutionInputResolver for ParallelNoInput with fn reso
 
 ///|
 async test "explicit two-slot host composition without execution input" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let board = @backend.BoardBackend()
     board.attach(group)
     assert_true(board.bootstrap_snapshot() is Ok(_))
