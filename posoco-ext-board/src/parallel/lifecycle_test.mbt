@@ -5,7 +5,7 @@
 
 ///|
 async test "pause withdraws admission until the in-flight wave settles" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -58,7 +58,7 @@ async test "pause withdraws admission until the in-flight wave settles" {
 
 ///|
 async test "pausing before the first dispatch admits nothing until resume" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2)
     assert_true(h.runner.start(parallel_spec(max_concurrency=2)) is Ok(_))
     assert_true(h.runner.pause())
@@ -86,7 +86,7 @@ async test "pausing before the first dispatch admits nothing until resume" {
 
 ///|
 async test "stop after wave lets both members settle then stops admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma", "delta"],
@@ -126,7 +126,7 @@ async test "stop after wave lets both members settle then stops admission" {
 
 ///|
 async test "stop after wave from paused ends the run without admissions" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2)
     assert_true(h.runner.start(parallel_spec(max_concurrency=2)) is Ok(_))
     assert_true(h.runner.pause())
@@ -145,7 +145,7 @@ async test "stop after wave from paused ends the run without admissions" {
 
 ///|
 async test "cancel cancels every occupied identity at once" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -182,7 +182,7 @@ async test "cancel cancels every occupied identity at once" {
 
 ///|
 async test "cancel before the worker enters leaves nothing occupied" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2)
     assert_true(h.runner.start(parallel_spec(max_concurrency=2)) is Ok(_))
     h.runner.cancel()
@@ -200,7 +200,7 @@ async test "cancel before the worker enters leaves nothing occupied" {
 
 ///|
 async test "the structured deadline cancels the whole wave and stops admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -249,7 +249,7 @@ async test "the structured deadline cancels the whole wave and stops admission" 
 
 ///|
 async test "shutdown during a held wave cancels joins and closes admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2, hold=[
       "attempt-alpha-1", "attempt-beta-1",
     ])
@@ -279,7 +279,7 @@ async test "shutdown during a held wave cancels joins and closes admission" {
 
 ///|
 async test "duplicate and concurrent starts are rejected while one authorization owns the runner" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2, hold=[
       "attempt-alpha-1", "attempt-beta-1",
     ])

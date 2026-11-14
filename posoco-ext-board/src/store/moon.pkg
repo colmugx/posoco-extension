@@ -8,7 +8,7 @@ import {
 // the js twins go through @node_fs.
 #cfg(target = "native")
 import {
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/utf8",
 }
@@ -23,7 +23,7 @@ import {
 
 #cfg(target = "native")
 import {
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 } for "wbtest"
 
 #cfg(target = "js")

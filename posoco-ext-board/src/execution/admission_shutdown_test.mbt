@@ -26,7 +26,7 @@ impl @execution.BoardExecutionStore for GatedJournal with fn persist(
 
 ///|
 async test "shutdown cannot release journal while new admission is in flight behind a completed previous worker" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled()
     let store : GatedJournal = {

@@ -1,7 +1,7 @@
 ///|
 async test "public coordinator restores durable revision after restart" {
   let store = @store.MemoryBoardStore()
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let first = @coordinator.BoardCoordinator(store~, now_ms=() => 100L)
     assert_eq(first.status(), @coordinator.Detached)
     first.attach(group~)

@@ -1,10 +1,10 @@
 ///|
 async test "control joins a dependency chain with exact evidence and legal stages without Review approval" {
   let directory = @fixtures.temporary_directory()
-  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
-  @core_async.with_task_group(group => {
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  @async.with_task_group(group => {
     let h = harness(directory, group, max_executions=6)
-    defer ignore(@core_async.protect_from_cancel(() => h.board.shutdown()))
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let committed = proposed(h)
     let expansion = committed.snapshot.expansions[0]
     let a = expansion.mapping[0].task_id.value
@@ -125,10 +125,10 @@ async test "control joins a dependency chain with exact evidence and legal stage
 ///|
 async test "control is default denied duplicate scopes rejected and a revoked lease does not replenish budgets" {
   let directory = @fixtures.temporary_directory()
-  defer @core_async.protect_from_cancel(() => @fixtures.cleanup(directory))
-  @core_async.with_task_group(group => {
+  defer @async.protect_from_cancel(() => @fixtures.cleanup(directory))
+  @async.with_task_group(group => {
     let h = harness(directory, group, max_executions=6)
-    defer ignore(@core_async.protect_from_cancel(() => h.board.shutdown()))
+    defer ignore(@async.protect_from_cancel(() => h.board.shutdown()))
     let committed = proposed(h)
     let expansion = committed.snapshot.expansions[0]
     let a = expansion.mapping[0].task_id.value

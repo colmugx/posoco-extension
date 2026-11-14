@@ -40,7 +40,7 @@ impl @store.BoardStore for ExpansionFaultStore with fn persist(
       ignore(self.inner.persist(snapshot, events).unwrap())
     }
     if self.delay > 0 {
-      @core_async.sleep(self.delay)
+      @async.sleep(self.delay)
     }
     if self.ambiguous {
       return Err(
@@ -74,7 +74,7 @@ async fn durability_approval(
 
 ///|
 async test "lost graph commit acknowledgement reconciles one exact durable identity without replay" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = expansion_fault_store()
     let h = dynamic_harness(group, board_store=store)
     let approval = durability_approval(h)
@@ -112,7 +112,7 @@ async test "lost graph commit acknowledgement reconciles one exact durable ident
 
 ///|
 async test "absent uncertain graph evidence stays frozen and definitive failure publishes nothing" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     for ambiguous in [false, true] {
       let store = expansion_fault_store()
       let h = dynamic_harness(group, board_store=store)
@@ -149,7 +149,7 @@ async test "absent uncertain graph evidence stays frozen and definitive failure 
 
 ///|
 async test "partial preparation is independently durable and never automatically retried" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = expansion_fault_store()
     let h = dynamic_harness(group, board_store=store)
     let ids = dynamic_commit(h)
@@ -192,7 +192,7 @@ async test "partial preparation is independently durable and never automatically
 
 ///|
 async test "uncertain final preparation freezes dispatch until exact Attempt is read back without command replay" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = expansion_fault_store()
     let h = dynamic_harness(group, board_store=store)
     let ids = dynamic_commit(h)
@@ -229,7 +229,7 @@ async test "uncertain final preparation freezes dispatch until exact Attempt is 
 
 ///|
 async test "cancelled commit waiter retains identity and shutdown drains the accepted graph transaction" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = expansion_fault_store()
     let h = dynamic_harness(group, board_store=store)
     let approval = durability_approval(h)
@@ -239,7 +239,7 @@ async test "cancelled commit waiter retains identity and shutdown drains the acc
     store.delay = 60
     let commit = group.spawn(() => h.controller.commit(approval~))
     while !store.entered {
-      @core_async.sleep(1)
+      @async.sleep(1)
     }
     assert_true(h.controller.pause())
     assert_true(commit.wait() is Err(_))

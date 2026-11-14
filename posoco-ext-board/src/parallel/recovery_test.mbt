@@ -69,7 +69,7 @@ fn running_record(
 
 ///|
 async test "a recovered mixed journal blocks start and never auto-executes" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let journal = parallel_journal([
       settled_record("alpha", "attempt-alpha-1", "settled-exec"),
       running_record("beta", "attempt-beta-1", "recovered-exec"),
@@ -89,7 +89,7 @@ async test "a recovered mixed journal blocks start and never auto-executes" {
     )
     // A paused host never repairs, reconciles or replays by itself.
     for _ in 0..<64 {
-      @core_async.pause()
+      @async.pause()
       assert_eq(h.shared.runs, 0)
       assert_eq(h.resolver.execution_ids.length(), 0)
     }
@@ -108,7 +108,7 @@ async test "a recovered mixed journal blocks start and never auto-executes" {
 
 ///|
 async test "settled history is never reused and fresh attempts run with fresh identity" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let journal = parallel_journal([
       settled_record("alpha", "attempt-alpha-1", "spent-exec"),
     ])

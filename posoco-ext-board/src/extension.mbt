@@ -59,7 +59,7 @@ pub fn BoardExtension::backend(self : BoardExtension) -> @backend.BoardBackend {
 /// scope. This is runtime ownership only; it does not bind an Agent.
 pub fn BoardExtension::attach(
   self : BoardExtension,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
 ) -> Unit {
   self.runtime_.attach(group)
 }

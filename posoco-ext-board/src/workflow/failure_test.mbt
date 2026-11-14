@@ -6,7 +6,7 @@
 
 ///|
 async test "a failed execution stops the run under StopOnFailure" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -32,7 +32,7 @@ async test "a failed execution stops the run under StopOnFailure" {
 
 ///|
 async test "confirmed failures continue under ContinueOnConfirmedFailure" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha", "beta"],
@@ -64,7 +64,7 @@ async test "confirmed failures continue under ContinueOnConfirmedFailure" {
 
 ///|
 async test "an execution that never passes the Start gate stays unresolved" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(
       group,
       tasks=["alpha"],
@@ -92,7 +92,7 @@ async test "an execution that never passes the Start gate stays unresolved" {
 
 ///|
 async test "one stale plan is recomputed without replaying discarded input" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     h.resolver.stale_backend = Some(h.backend)
     h.resolver.stale_left = 1
@@ -122,7 +122,7 @@ async test "one stale plan is recomputed without replaying discarded input" {
 
 ///|
 async test "repeated stale plans fail the run instead of spinning" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     h.resolver.stale_backend = Some(h.backend)
     h.resolver.stale_left = 99

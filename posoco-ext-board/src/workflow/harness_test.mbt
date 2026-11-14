@@ -72,7 +72,7 @@ impl @orchestration.BoardExecutionInputResolver for ScriptedResolver with fn res
   candidate,
 ) {
   if self.delay_ms > 0 {
-    @core_async.sleep(self.delay_ms)
+    @async.sleep(self.delay_ms)
   }
   self.seq += 1
   let execution_id = "workflow-exec-\{self.seq}"
@@ -238,7 +238,7 @@ async fn workflow_task(
 /// Online Board with one Ready task and one queued Execute Attempt per given
 /// Task ID, driven through real commands only.
 async fn workflow_board(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   tasks~ : Array[String],
 ) -> @backend.BoardBackend {
   let creation_clock = fake_clock(now=1234L)
@@ -272,7 +272,7 @@ struct WorkflowHarness {
 /// to the trusted-host opt-in; `policy_enabled=false` exercises the safe
 /// disabled default.
 async fn workflow_harness(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   adapter~ : ScriptedAdapter = scripted_adapter(),
   clock~ : FakeClock = fake_clock(),
@@ -332,7 +332,7 @@ async fn workflow_yield_until(what~ : String, check~ : () -> Bool) -> Unit {
     if check() {
       return
     }
-    @core_async.pause()
+    @async.pause()
   }
   fail("timed out waiting for \{what}")
 }

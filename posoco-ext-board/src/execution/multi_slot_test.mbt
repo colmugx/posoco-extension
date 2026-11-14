@@ -53,7 +53,7 @@ fn held_journal(block_write~ : Int32, signal_write~ : Int32) -> HeldJournal {
 
 ///|
 async fn prepared_tasks(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   count : Int32,
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store=@store.MemoryBoardStore(), now_ms=() => {
@@ -112,7 +112,7 @@ fn slot_request(
 
 ///|
 async test "multi-slot owners run overlapping gated executions on isolated drivers" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let store = journal()
     let adapters : Array[ControlledAdapter] = []
@@ -164,7 +164,7 @@ async test "multi-slot owners run overlapping gated executions on isolated drive
 
 ///|
 async test "exact-identity cancellation targets one slot and leaves other slots running" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let adapters : Array[ControlledAdapter] = []
     let owner = @execution.BoardExecutionOwner::with_slots(
@@ -205,7 +205,7 @@ async test "exact-identity cancellation targets one slot and leaves other slots 
 
 ///|
 async test "held journal writes serialize other slots' settlement and admission behind one shared section" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 3)
     let store = held_journal(block_write=7, signal_write=11)
     let adapters : Array[ControlledAdapter] = []
@@ -269,7 +269,7 @@ async test "held journal writes serialize other slots' settlement and admission 
 
 ///|
 async test "one slot's journal write failure poisons every slot without unsafe writes" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 3)
     let store = journal(fail_write=7)
     let adapters : Array[ControlledAdapter] = []
@@ -342,7 +342,7 @@ async test "recovered mixed v1 journals block globally while settled-only histor
     ),
     Ok([settled, unresolved]),
   )
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 3)
     let adapters : Array[ControlledAdapter] = []
     let owner = @execution.BoardExecutionOwner::with_slots(
@@ -370,7 +370,7 @@ async test "recovered mixed v1 journals block globally while settled-only histor
     assert_true(owner.shutdown())
     backend.shutdown()
   })
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 3)
     let recovered = journal()
     assert_true(
@@ -403,7 +403,7 @@ async test "recovered mixed v1 journals block globally while settled-only histor
 
 ///|
 async test "concurrent duplicate admission is rejected across slots by identity and active task" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     assert_true(
       backend.handle_command({
@@ -474,7 +474,7 @@ async test "concurrent duplicate admission is rejected across slots by identity 
 
 ///|
 async test "slot construction validates concurrency calls factory once per slot and keeps single-slot defaults" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 1)
     let calls : Array[Int32] = []
     for invalid in [0, 9] {
@@ -538,7 +538,7 @@ async test "slot construction validates concurrency calls factory once per slot 
 
 ///|
 async test "shutdown cancels every slot and bounds the overall join while retaining ownership" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_tasks(group, 2)
     let drivers : Array[SlowCleanupAdapter] = []
     let owner = @execution.BoardExecutionOwner::with_slots(

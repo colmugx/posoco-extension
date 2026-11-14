@@ -1,7 +1,7 @@
 ///|
 async test "pause and stop during protected reservation do not cancel already reserved work" {
   for pause in [true, false] {
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       let journal : HoldingWorkflowJournal = {
         entered: @aqueue.Queue(kind=Unbounded),
         release: @aqueue.Queue(kind=Unbounded),

@@ -21,10 +21,10 @@ async fn lifecycle_accept(
 
 ///|
 async test "typed manual lifecycle builders commit every kind and outcome through authoritative events" {
-  @core_async.with_timeout(5000, () => {
+  @async.with_timeout(5000, () => {
     let clock = Ref(100L)
     let backend = @backend.BoardBackend(now_ms=() => clock.val)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       backend.attach(group)
       let replica = @client.BoardReplica::empty()
       assert_true(
@@ -142,11 +142,11 @@ async test "typed manual lifecycle builders commit every kind and outcome throug
 
 ///|
 async test "manual running attempt recovery is durable Interrupted and cannot be replayed as running" {
-  @core_async.with_timeout(5000, () => {
+  @async.with_timeout(5000, () => {
     let store = @store.MemoryBoardStore()
     let replica = @client.BoardReplica::empty()
     let first = @backend.BoardBackend(store~, now_ms=() => 100L)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       first.attach(group)
       assert_true(
         replica.apply_snapshot(first.bootstrap_snapshot().unwrap()) is Applied,
@@ -184,7 +184,7 @@ async test "manual running attempt recovery is durable Interrupted and cannot be
       first.shutdown()
     })
     let recovered = @backend.BoardBackend(store~, now_ms=() => 200L)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       recovered.attach(group)
       let snapshot = recovered.bootstrap_snapshot().unwrap()
       assert_eq(snapshot.board_revision, 4L)
@@ -219,7 +219,7 @@ async test "manual running attempt recovery is durable Interrupted and cannot be
       recovered.shutdown()
     })
     let unchanged = @backend.BoardBackend(store~, now_ms=() => 300L)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       unchanged.attach(group)
       let snapshot = unchanged.bootstrap_snapshot().unwrap()
       assert_eq(snapshot.board_revision, 4L)

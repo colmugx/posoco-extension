@@ -38,9 +38,7 @@ fn for_loop_found(
 }
 
 ///|
-async fn backend_with_parent(
-  group : @core_async.TaskGroup,
-) -> @backend.BoardBackend {
+async fn backend_with_parent(group : @async.TaskGroup) -> @backend.BoardBackend {
   let backend = expansion_backend()
   backend.attach(group)
   let created = backend.handle_command(headless_create("c1", "t1", 0L))
@@ -50,7 +48,7 @@ async fn backend_with_parent(
 
 ///|
 async test "expand graph commits atomically and projects one authoritative event" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = backend_with_parent(group)
     let events = backend
       .expand_graph(
@@ -102,7 +100,7 @@ async test "expand graph commits atomically and projects one authoritative event
 
 ///|
 async test "reuse of a committed expansion id is rejected as duplicate" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = backend_with_parent(group)
     let first = backend.expand_graph(
       expansion=@domain.ExpansionId("exp-1"),
@@ -157,7 +155,7 @@ async test "reuse of a committed expansion id is rejected as duplicate" {
 
 ///|
 async test "expand graph answers a stale revision with the live one" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = backend_with_parent(group)
     assert_eq(
       backend.expand_graph(
@@ -178,7 +176,7 @@ async test "expand graph answers a stale revision with the live one" {
 
 ///|
 async test "the wire command table gains no privileged expansion route" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = backend_with_parent(group)
     // An expansion-shaped frame is structurally rejected before any state
     // is read: the browser allowlist stays exactly the fixed eight names.

@@ -1,7 +1,7 @@
 ///|
 async test "unconfirmed durable Start never admits provider effects even when uncertainty committed the attempt" {
   for uncertain in [false, true] {
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       let storage : FailingBoardStorage = {
         inner: @store.MemoryBoardStore(),
         fail: false,
@@ -59,7 +59,7 @@ async test "unconfirmed durable Start never admits provider effects even when un
 
 ///|
 async test "immediate cancellation before worker entry never launches an Agent or marks attempt cancelled prematurely" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let adapter = controlled()
     let owner = @execution.BoardExecutionOwner(

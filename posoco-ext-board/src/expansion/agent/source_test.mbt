@@ -163,7 +163,7 @@ impl @expansion.ExpansionApprover for GrantApprover with fn approve(
 }
 
 ///|
-async fn plan_board(group : @core_async.TaskGroup) -> @backend.BoardBackend {
+async fn plan_board(group : @async.TaskGroup) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(now_ms=() => 100L)
   backend.attach(group)
   assert_true(backend.bootstrap_snapshot() is Ok(_))
@@ -229,7 +229,7 @@ fn plan_request(
 
 ///|
 async test "actual owned Posoco Agent yields scoped proposal without output in identity journal" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = plan_board(group)
     let model : PlanModel = {
       payload: "{\"schema_version\":1,\"proposal_id\":\"p\",\"parent_task_id\":\"parent\",\"base_revision\":4,\"tasks\":[]}",
@@ -278,7 +278,7 @@ async test "actual owned Posoco Agent yields scoped proposal without output in i
 
 ///|
 async test "planning authorization default denial context mismatch and Agent failure never expand graph" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = plan_board(group)
     let model : PlanModel = {
       payload: "not JSON",
@@ -330,7 +330,7 @@ async test "planning authorization default denial context mismatch and Agent fai
 
 ///|
 async test "actual Agent plans valid multi-task proposal through approval into one atomic commit and S4B outlook" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = plan_board(group)
     let model : PlanModel = {
       payload: proposal_payload(),
@@ -457,7 +457,7 @@ async test "actual Agent plans valid multi-task proposal through approval into o
 
 ///|
 async test "invalid or unauthorized Agent proposals are rejected before approval and mutate no graph" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = plan_board(group)
     queue_execute_attempt(backend, id="attempt-version")
     queue_execute_attempt(backend, id="attempt-parent")
@@ -620,7 +620,7 @@ async test "invalid or unauthorized Agent proposals are rejected before approval
 
 ///|
 async test "unread output of another execution blocks planning and is dropped without leaking" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = plan_board(group)
     queue_execute_attempt(backend, id="foreign-attempt")
     let model : PlanModel = {

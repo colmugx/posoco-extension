@@ -83,7 +83,7 @@ async test "native journal serializes multi-slot identities with v1 records lock
   let root = @fs.tmpdir(prefix="board-execution-multi-slot-")
   defer @fs.rmdir(root, recursive=true)
   let journal = @native.FileBoardExecutionStore(directory=root)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = @backend.BoardBackend(store=@store.FileBoardStore(root~), now_ms=() => {
       100L
     })
@@ -184,7 +184,7 @@ async test "native journal serializes multi-slot identities with v1 records lock
   // Restart: settled identities stay globally unique across slots and no
   // execution is replayed from the recovered journal.
   let restarted = @native.FileBoardExecutionStore(directory=root)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = @backend.BoardBackend(store=@store.FileBoardStore(root~))
     backend.attach(group)
     assert_true(backend.bootstrap_snapshot() is Ok(_))

@@ -1,6 +1,6 @@
 ///|
 async test "C1 control characters are rejected by proposal authority and canonical allocation" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = board(group)
     let before = backend.state().unwrap()
     for code in [0x7f, 0x80, 0x9c, 0x9f] {
@@ -46,7 +46,7 @@ async test "C1 control characters are rejected by proposal authority and canonic
 
 ///|
 async test "definitive pre-visibility store failure conflicts without uncertain replay" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store : AmbiguousStore = { inner: @store.MemoryBoardStore(), mode: 0, }
     let backend = @backend.BoardBackend(store~, now_ms=() => 100L)
     backend.attach(group)

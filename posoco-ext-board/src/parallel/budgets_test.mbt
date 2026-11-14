@@ -35,7 +35,7 @@ test "the wave spec constructor defaults to one slot and stop on failure" {
 
 ///|
 async test "structurally invalid waves are rejected without reserving the runner" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha"], capacity=2)
     let invalid : Array[@parallel.ParallelWorkflowSpec] = [
       parallel_spec(run_id=""),
@@ -79,7 +79,7 @@ async test "structurally invalid waves are rejected without reserving the runner
 
 ///|
 async test "a paused wave still consumes its elapsed budget" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta"],

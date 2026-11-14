@@ -5,7 +5,7 @@
 
 ///|
 async test "one stale plan is recomputed with fresh identity and no replay" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2, hold=[
       "attempt-alpha-1", "attempt-beta-1",
     ])
@@ -61,7 +61,7 @@ async test "one stale plan is recomputed with fresh identity and no replay" {
 
 ///|
 async test "a dependency blocks admission until it is manually Done" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -138,7 +138,7 @@ async test "a dependency blocks admission until it is manually Done" {
 
 ///|
 async test "the runner copies the selected scope and never mutates caller state" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -179,7 +179,7 @@ async test "the runner copies the selected scope and never mutates caller state"
 
 ///|
 async test "tasks created after start stay outside the frozen scope" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2, hold=[
       "attempt-alpha-1", "attempt-beta-1",
     ])
@@ -215,7 +215,7 @@ async test "tasks created after start stay outside the frozen scope" {
 
 ///|
 async test "Review-stage tasks are never auto-executed" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     // The trusted host knows delta's input metadata too, so the Review stage
     // is delta's only reason to stay blocked; alpha is the work to admit.
     let h = parallel_harness(

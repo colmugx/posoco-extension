@@ -136,7 +136,7 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
   let temp_path = self.directory + "/board.json.tmp"
   let renamed = Ref(false)
   try {
-    @core_async.protect_from_cancel(() => {
+    @async.protect_from_cancel(() => {
       @fs.mkdir(self.directory, recursive=true, allow_exist=true)
       let old_journal = self.journal()
       let scan = scan_journal_bytes(old_journal)
@@ -199,11 +199,7 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
   } catch {
     error => {
       // Cleanup must not mask the primary failure, even under cancellation.
-      @core_async.protect_from_cancel(() => {
-        @fs.remove(temp_path) catch {
-          _ => ()
-        }
-      })
+      @async.protect_from_cancel(() => @fs.remove(temp_path) catch { _ => () })
       if renamed.val {
         Err(DurabilityUncertain(error.to_string()))
       } else {

@@ -8,7 +8,7 @@ import {
   "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco-ext-board/parallel",
   "colmugx/posoco-ext-board/workflow",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 

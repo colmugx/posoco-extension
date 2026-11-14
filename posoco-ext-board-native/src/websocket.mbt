@@ -24,8 +24,8 @@ async fn board_read_text(ws : @websocket.Conn) -> String {
 async fn board_receive_hello(
   ws : @websocket.Conn,
 ) -> Result[@protocol.BoardHello, @protocol.BoardServerFrame] {
-  let raw = @core_async.with_timeout(5000, () => board_read_text(ws)) catch {
-    @core_async.TimeoutError =>
+  let raw = @async.with_timeout(5000, () => board_read_text(ws)) catch {
+    @async.TimeoutError =>
       return Err(
         @protocol.Error(
           code="hello_timeout",
@@ -73,7 +73,7 @@ async fn board_write_frame(
   ws : @websocket.Conn,
   frame : @protocol.BoardServerFrame,
 ) -> Unit {
-  @core_async.with_timeout(1000, () => {
+  @async.with_timeout(1000, () => {
     ws.send_text(@protocol.encode_server_frame(frame))
   })
 }
@@ -190,7 +190,7 @@ async fn NativeBoardWebServer::serve_ws(
     }
   }
   // any owns and joins both local tasks on success, failure and cancellation.
-  @core_async.any([
+  @async.any([
     () => board_client_sender(ws, client),
     () => board_receive_commands(ws, client, backend),
   ]) catch {

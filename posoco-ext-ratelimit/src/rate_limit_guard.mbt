@@ -32,10 +32,8 @@ pub fn RateLimitGuard::RateLimitGuard(
   probe_interval_ms~ : Int64 = 900000,
   max_probe_interval_ms~ : Int64 = 3600000,
   shutdown_timeout_ms~ : Int32 = 5000,
-  now_ms~ : () -> Int64 = fn() { @core_async.now() },
-  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) {
-    @core_async.sleep(ms)
-  },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
+  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) { @async.sleep(ms) },
   trace~ : (String) -> Unit = fn(_ : String) { () },
 ) -> RateLimitGuard {
   ignore(poll_interval_ms)
@@ -75,7 +73,7 @@ pub fn RateLimitGuard::bind(
 /// loop share the host's structured-concurrency lifetime.
 pub fn RateLimitGuard::start(
   self : RateLimitGuard,
-  group~ : @core_async.TaskGroup,
+  group~ : @async.TaskGroup,
   agent~ : @posoco.Agent,
 ) -> Unit {
   self.agent = Some(agent)
@@ -108,7 +106,7 @@ pub fn RateLimitGuard::start(
         }
         match outcome {
           Ok(_) => resumed = true
-          Err(@posoco.AgentError::Busy(..)) => @core_async.sleep(1)
+          Err(@posoco.AgentError::Busy(..)) => @async.sleep(1)
           Err(error) => raise error
         }
       }
@@ -124,7 +122,7 @@ pub fn RateLimitGuard::start(
 /// host group and spawns no polling monitor.
 pub fn RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
 ) -> Unit {
   match self.agent {
     Some(agent) => self.start(group~, agent~)
@@ -317,7 +315,7 @@ pub impl @posoco.Lifecycle for RateLimitGuard with fn on_compose(
 pub impl @posoco.Lifecycle for RateLimitGuard with fn on_shutdown(
   self : RateLimitGuard,
 ) -> Unit {
-  let _ = @core_async.protect_from_cancel(() => self.shutdown())
+  let _ = @async.protect_from_cancel(() => self.shutdown())
 }
 
 ///|

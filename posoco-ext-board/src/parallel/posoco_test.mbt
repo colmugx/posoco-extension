@@ -140,7 +140,7 @@ struct ParallelRealHarness {
 /// driver over models[N]; every slot therefore constructs and owns a fresh
 /// Agent per run, exactly like a real host composition.
 async fn parallel_real_harness(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   models~ : Array[ParallelRealModel],
   resolver~ : ParallelResolver,
@@ -173,7 +173,7 @@ async fn parallel_real_harness(
 
 ///|
 async test "two real agents run simultaneously with independent scopes" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let models = [
       parallel_real_model(hold=true),
       parallel_real_model(hold=true),
@@ -244,7 +244,7 @@ async test "two real agents run simultaneously with independent scopes" {
 
 ///|
 async test "a real agent failure stops the wave under the default policy" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     // The failing Agent holds its turn too, so both dedicated Agents are
     // inside their turns before the failure is released; an instant failure
     // would legitimately withdraw beta's admission instead of proving the
@@ -298,7 +298,7 @@ async test "a real agent failure stops the wave under the default policy" {
 
 ///|
 async test "cancel during real held agents settles both as cancelled" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let models = [
       parallel_real_model(hold=true),
       parallel_real_model(hold=true),

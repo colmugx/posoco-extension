@@ -27,7 +27,7 @@ impl @execution.BoardExecutionStore for WorkflowSettlementJournal with fn persis
 
 ///|
 async test "workflow deadline during settlement joins without fabricating cancellation outcome" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let journal : WorkflowSettlementJournal = {
       entered: @aqueue.Queue(kind=Unbounded),
       release: @aqueue.Queue(kind=Unbounded),
@@ -43,7 +43,7 @@ async test "workflow deadline during settlement joins without fabricating cancel
     journal.entered.get()
     // Agent is already Completed; durable settlement remains in protected IO.
     // The workflow must cancel/join ownership, not invent Attempt Cancelled.
-    @core_async.sleep(200)
+    @async.sleep(200)
     assert_eq(h.adapter.runs, 1)
     assert_eq(h.owner.bindings()[0].phase, @execution.Finished)
     journal.release.put(())
@@ -62,7 +62,7 @@ async test "workflow deadline during settlement joins without fabricating cancel
 
 ///|
 async test "deadline withdraws admission during held authorization with no reservation" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = workflow_board(group, tasks=["alpha"])
     let adapter = scripted_adapter()
     let owner = @execution.BoardExecutionOwner(

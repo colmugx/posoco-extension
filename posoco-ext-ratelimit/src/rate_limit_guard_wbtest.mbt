@@ -55,7 +55,7 @@ async test "hook events mutate only actor-owned recovery state" {
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 49000L }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @core_async.sleep(60000)
+    @async.sleep(60000)
   })
   let model = @tk.ScriptedModel::ScriptedModel([
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
@@ -71,7 +71,7 @@ async test "hook events mutate only actor-owned recovery state" {
     ],
     config=@tk.tk_config(),
   )
-  @core_async.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
@@ -90,7 +90,7 @@ async test "cancel_pending invalidates actor schedule" {
   let guard_ext = RateLimitGuard(now_ms=fn() { 1000L }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @core_async.sleep(60000)
+    @async.sleep(60000)
   })
   let model = @tk.ScriptedModel::ScriptedModel([
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("unused")),
@@ -106,7 +106,7 @@ async test "cancel_pending invalidates actor schedule" {
     ],
     config=@tk.tk_config(),
   )
-  @core_async.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     hook.on_post_event(Some(test_scope("s1")), quota_failure(Some(50000L)))
@@ -141,7 +141,7 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     ],
     config=@tk.tk_config(),
   )
-  @core_async.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let first : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
       agent.run_turn(@tk.tk_user_msg("task"), "s1"),
@@ -150,9 +150,9 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     }
     assert_true(first is Err(_))
     let resumed : Result[Unit, Error] = Ok(
-      @core_async.with_timeout(2000, () => {
+      @async.with_timeout(2000, () => {
         while model.call_count() < 2 {
-          @core_async.sleep(1)
+          @async.sleep(1)
         }
       }),
     ) catch {
@@ -189,7 +189,7 @@ pub impl @posoco.ModelPort for DelayedModel with fn chat(
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   self.started = self.started + 1
-  @core_async.sleep(self.delay_ms)
+  @async.sleep(self.delay_ms)
   self.finished = self.finished + 1
   @tk.tk_stop_response("done")
 }
@@ -225,7 +225,7 @@ async test "simultaneous due sessions serialize resume execution" {
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { now.val }, sleep_ms=async fn(
     _ms : Int32,
   ) {
-    @core_async.sleep(60000)
+    @async.sleep(60000)
   })
   let store = @tk.RecordingSessionPort::RecordingSessionPort()
   store.seed("s1", {
@@ -245,7 +245,7 @@ async test "simultaneous due sessions serialize resume execution" {
     ],
     config=@tk.tk_config(),
   )
-  @core_async.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     guard_ext.start(group~, agent~)
     let hook : &@posoco.PipelineHook = guard_ext
     let observer : &@posoco.Observer = guard_ext
@@ -258,9 +258,9 @@ async test "simultaneous due sessions serialize resume execution" {
     }
     guard_ext.poll()
     let first_started : Result[Unit, Error] = Ok(
-      @core_async.with_timeout(1000, () => {
+      @async.with_timeout(1000, () => {
         while model.started < 1 {
-          @core_async.sleep(1)
+          @async.sleep(1)
         }
       }),
     ) catch {
@@ -270,9 +270,9 @@ async test "simultaneous due sessions serialize resume execution" {
     assert_eq(model.started, 1)
     assert_eq(model.finished, 0)
     let both_finished : Result[Unit, Error] = Ok(
-      @core_async.with_timeout(2000, () => {
+      @async.with_timeout(2000, () => {
         while model.finished < 2 {
-          @core_async.sleep(1)
+          @async.sleep(1)
         }
       }),
     ) catch {

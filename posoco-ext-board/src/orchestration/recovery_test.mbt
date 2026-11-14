@@ -2,7 +2,7 @@
 async test "journal failure at every reservation and settlement boundary blocks further dispatch without replay" {
   for visible_failure in [false, true] {
     for fail_at in [1, 2, 3, 4, 5] {
-      @core_async.with_task_group(group => {
+      @async.with_task_group(group => {
         let backend = orch_board(group)
         let adapter = orch_adapter()
         let journal = orch_journal(fail_at~, visible_failure~)
@@ -52,7 +52,7 @@ async test "recovered nonsettled bindings block planner admission without automa
       @execution.Finished,
       @execution.Unresolved,
     ] {
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       let backend = orch_board(group)
       let adapter = orch_adapter()
       let journal = orch_journal()
@@ -99,7 +99,7 @@ async test "recovered nonsettled bindings block planner admission without automa
 
 ///|
 async test "historically settled Attempt and session execution identities cannot be reused" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -206,7 +206,7 @@ impl @store.BoardStore for OrchFailingBoardStore with fn persist(
 ///|
 async test "Board Finish persistence failures preserve authoritative commits and never redispatch uncertain work" {
   for uncertain in [false, true] {
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       let storage : OrchFailingBoardStore = {
         inner: @store.MemoryBoardStore(),
         fail: false,
@@ -265,7 +265,7 @@ async test "Board Finish persistence failures preserve authoritative commits and
 ///|
 async test "unconfirmed Board Start fails closed even if the authoritative mutation committed" {
   for uncertain in [false, true] {
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       let storage : OrchFailingBoardStore = {
         inner: @store.MemoryBoardStore(),
         fail: false,

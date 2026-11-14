@@ -346,7 +346,7 @@ fn recovery_fold_query(
 
 ///|
 fn RateLimitRuntime::start(
-  group~ : @core_async.TaskGroup,
+  group~ : @async.TaskGroup,
   policy~ : RecoveryPolicy,
   now_ms~ : () -> Int64,
   sleep_ms~ : async (Int32) -> Unit,

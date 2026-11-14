@@ -1,6 +1,6 @@
 ///|
 fn test_registry(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   init~ : Registry = Registry::{ pending: Map([]), next_id: 1, closed: false, },
 ) -> @fuwaroid.Fuwaroid[RegistryCmd, RegistryQuery, RegistryReply] {
   @fuwaroid.Fuwaroid::spawn(
@@ -51,7 +51,7 @@ async fn registry_expect_refused(
 
 ///|
 async test "out-of-order replies settle their own waiter" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     let first = registry_ask_admitted(registry)
     let second = registry_ask_admitted(registry)
@@ -73,7 +73,7 @@ async test "out-of-order replies settle their own waiter" {
 
 ///|
 async test "unknown and duplicate replies are explicit refusals" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     registry_expect_refused(
       registry,
@@ -95,7 +95,7 @@ async test "unknown and duplicate replies are explicit refusals" {
 
 ///|
 async test "exhausted request ids refuse admission instead of wrapping" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(
       init=Registry::{ pending: Map([]), next_id: 2147483647, closed: false, },
       group,
@@ -106,7 +106,7 @@ async test "exhausted request ids refuse admission instead of wrapping" {
 
 ///|
 async test "released registrations free the registry and late replies are refused" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     let abandoned = registry_ask_admitted(registry)
     let kept = registry_ask_admitted(registry)
@@ -130,7 +130,7 @@ async test "released registrations free the registry and late replies are refuse
 
 ///|
 async test "finish rejects a final result while requests are pending" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     let _ignored = registry_ask_admitted(registry)
     // Finish is one atomic step: it refuses and closes admission, so a
@@ -155,7 +155,7 @@ async test "finish rejects a final result while requests are pending" {
 
 ///|
 async test "finish closes a drained registry to further traffic" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     let only = registry_ask_admitted(registry)
     registry_ask_acked(
@@ -178,7 +178,7 @@ async test "finish closes a drained registry to further traffic" {
 
 ///|
 async test "a stopped registry refuses asks without waiting for the deadline" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let registry = test_registry(group)
     registry.close()
     match registry.join() {

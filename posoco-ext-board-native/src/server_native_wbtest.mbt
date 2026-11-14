@@ -10,7 +10,7 @@ async test "native server binds loopback random port and guards bootstrap" {
     backend=Some(@backend.BoardBackend::BoardBackend()),
   )
   let web : &BoardWebServer = server
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let endpoint = match web.bind() {
       Ok(value) => value
       Err(error) => fail("unexpected bind error: \{error}")
@@ -20,7 +20,7 @@ async test "native server binds loopback random port and guards bootstrap" {
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let _ = web.run()
     })
-    @core_async.sleep(10)
+    @async.sleep(10)
 
     let (health_code, health_body) = board_http_get(
       endpoint.base_url() + "/health",
@@ -82,7 +82,7 @@ async test "native close is idempotent and rebind mints fresh secret" {
     backend=Some(@backend.BoardBackend::BoardBackend()),
   )
   let web : &BoardWebServer = server
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let first = match web.bind() {
       Ok(value) => value
       Err(error) => fail("unexpected bind error: \{error}")
@@ -109,8 +109,8 @@ async test "native close is idempotent and rebind mints fresh secret" {
 
 ///|
 async test "native server refuses to bind until a backend is installed and then serves it" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let server = NativeBoardWebServer::NativeBoardWebServer()
       let web : &BoardWebServer = server
       // Presentation plumbing without a backend must not serve anything.
@@ -160,8 +160,8 @@ async test "native server refuses to bind until a backend is installed and then 
 
 ///|
 async test "native close_server keeps the backend and reopens with fresh ws state" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(now_ms=() => 1234L)
       let server = NativeBoardWebServer::NativeBoardWebServer()
       let opener : FakeBrowserOpener = { opened: [], }

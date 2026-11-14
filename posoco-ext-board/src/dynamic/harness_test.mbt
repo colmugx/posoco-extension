@@ -39,7 +39,7 @@ impl @posoco.ModelPort for DynamicModel with fn chat(
     self.active -= 1
   }
   if self.delay > 0 {
-    @core_async.sleep(self.delay)
+    @async.sleep(self.delay)
   }
   if self.fail {
     raise @posoco.ModelError::Transport("controlled test failure")
@@ -146,7 +146,7 @@ struct DynamicHarness {
 
 ///|
 async fn dynamic_harness(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   enabled~ : Bool = true,
   max_executions~ : Int32 = 8,
   max_expansions~ : Int32 = 4,

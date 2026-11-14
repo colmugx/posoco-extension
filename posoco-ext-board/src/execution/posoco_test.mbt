@@ -51,7 +51,7 @@ impl @posoco.ModelPort for RealAgentProbe with fn chat(
   }
   ignore(self.entered.try_put(()) catch { _ => false })
   if self.block {
-    @core_async.sleep(60000)
+    @async.sleep(60000)
   }
   if self.fail {
     raise @posoco.ModelError::Transport("test failure")
@@ -99,7 +99,7 @@ fn probe(
 
 ///|
 async fn prepared_board(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
@@ -143,7 +143,7 @@ fn request(timeout~ : Int32? = None) -> @execution.BoardExecutionRequest {
 
 ///|
 async test "real Posoco run owns scope gates effect and durably settles without task movement" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let store = @execution.MemoryBoardExecutionStore()
     let model = probe(
@@ -206,7 +206,7 @@ async test "real Posoco run owns scope gates effect and durably settles without 
 
 ///|
 async test "real scoped cancellation targets owner identity and waits for Agent cleanup" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let model = probe(block=true)
     let driver = @execution.PosocoBoardExecutionAdapter(extensions=() => [model])

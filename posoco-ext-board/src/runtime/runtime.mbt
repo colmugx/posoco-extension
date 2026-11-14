@@ -9,7 +9,7 @@ pub struct BoardRuntime {
   priv backend_ : @backend.BoardBackend
   server : &BoardWebServer
   opener : &BrowserOpener
-  priv gate : @core_async.Mutex
+  priv gate : @async.Mutex
   priv mut supervisor : @fuwaroid.Supervisor[Unit]?
   priv mut server_task : @fuwaroid.SupervisedTask[Unit]?
   priv mut server_status : BoardServerStatus
@@ -29,7 +29,7 @@ pub fn BoardRuntime::with_adapters(
     backend_: backend,
     server,
     opener,
-    gate: @core_async.Mutex::Mutex(),
+    gate: @async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
     server_status: Stopped,
@@ -50,7 +50,7 @@ pub fn BoardRuntime::backend(self : BoardRuntime) -> @backend.BoardBackend {
 /// Tasks capability is attached.
 pub fn BoardRuntime::attach(
   self : BoardRuntime,
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
 ) -> Unit {
   if self.supervisor is None {
     self.supervisor = Some(@fuwaroid.Supervisor(group~))
@@ -134,7 +134,7 @@ pub async fn BoardRuntime::ensure_server(
 ) -> Result[BoardEndpoint, String] {
   self.gate.acquire()
   defer self.gate.release()
-  @core_async.protect_from_cancel(() => self.ensure_server_locked())
+  @async.protect_from_cancel(() => self.ensure_server_locked())
 }
 
 ///|
@@ -176,7 +176,7 @@ async fn BoardRuntime::close_server_locked(self : BoardRuntime) -> Unit {
 pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
   self.gate.acquire()
   defer self.gate.release()
-  @core_async.protect_from_cancel(() => self.close_server_locked())
+  @async.protect_from_cancel(() => self.close_server_locked())
 }
 
 ///|
@@ -187,7 +187,7 @@ pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
 /// cancelled caller cannot leave a half-open listener or an unjoined
 /// coordinator.
 pub async fn BoardRuntime::shutdown(self : BoardRuntime) -> Unit {
-  @core_async.protect_from_cancel(() => {
+  @async.protect_from_cancel(() => {
     self.close_server()
     self.backend_.shutdown()
     match self.supervisor {

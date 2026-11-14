@@ -4,7 +4,7 @@ import {
   "colmugx/fuwaroid",
   "moonbitlang/core/async/aqueue",
   "moonbitlang/core/async/stdio" @system_stdio,
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 }
 
 supported_targets = "native + wasm"

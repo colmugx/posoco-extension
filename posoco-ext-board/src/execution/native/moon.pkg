@@ -10,7 +10,7 @@ import {
   "moonbitlang/core/async/aqueue",
   "colmugx/posoco",
   "colmugx/posoco/kernel",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 } for "test"
 
 supported_targets = "native"

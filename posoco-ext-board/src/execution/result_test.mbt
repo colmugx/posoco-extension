@@ -1,6 +1,6 @@
 ///|
 async test "scoped Agent text result is bounded one-shot and only readable by exact settled binding" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let store = @execution.MemoryBoardExecutionStore()
     let model = probe()
@@ -40,7 +40,7 @@ async test "scoped Agent text result is bounded one-shot and only readable by ex
 
 ///|
 async test "oversized Agent output completes the turn but never enters the result channel" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = prepared_board(group)
     let model = probe()
     let channel = @execution.BoardExecutionResultChannel(max_chars=3)

@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "posoco/kit-events" @kit_events,
   "colmugx/fuwaroid",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -10,7 +10,7 @@ import {
   "colmugx/posoco",
   "posoco/kit-events" @kit_events,
   "colmugx/fuwaroid",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // The white-box testkit is only exercised by native-only tests.

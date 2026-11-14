@@ -31,9 +31,9 @@ async fn board_wait_clients(
   backend : @backend.BoardBackend,
   count : Int32,
 ) -> Unit {
-  @core_async.with_timeout(1000, () => {
+  @async.with_timeout(1000, () => {
     while backend.subscriber_count() != count {
-      @core_async.sleep(1)
+      @async.sleep(1)
     }
   })
 }
@@ -51,8 +51,8 @@ fn board_backend_tick(
 
 ///|
 async test "native shared runtime hello live reconnect two three and command rejection" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let runtime = default_board_runtime(8, client_queue_depth=2)
       runtime.attach(group)
       let endpoint = match runtime.ensure_server() {
@@ -133,8 +133,8 @@ async test "native shared runtime hello live reconnect two three and command rej
 
 ///|
 async test "native first command version cursor binary and oversized frames are rejected" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -195,8 +195,8 @@ async test "native first command version cursor binary and oversized frames are 
 
 ///|
 async test "native retained snapshot security gates and connection cleanup" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -267,8 +267,8 @@ async test "native retained snapshot security gates and connection cleanup" {
 
 ///|
 async test "native overflow sends resync closes and reset zero snapshots" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(client_queue_depth=2)
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -351,8 +351,8 @@ impl @store.BoardStore for GatedLoadStore with fn persist(
 
 ///|
 async test "native overflow during bootstrap await resyncs and never installs the snapshot" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let store : GatedLoadStore = {
         entered: @aqueue.Queue(kind=@aqueue.Blocking(1)),
         release: @aqueue.Queue(kind=@aqueue.Blocking(1)),
@@ -365,7 +365,7 @@ async test "native overflow during bootstrap await resyncs and never installs th
         backend=Some(backend),
       )
       backend.attach(group)
-      @core_async.with_timeout(1000, () => store.entered.get())
+      @async.with_timeout(1000, () => store.entered.get())
       let endpoint = match server.bind() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -401,8 +401,8 @@ async test "native overflow during bootstrap await resyncs and never installs th
 
 ///|
 async test "native shutdown cancels a reader still waiting for Hello" {
-  @core_async.with_timeout(2000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(2000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -430,8 +430,8 @@ async test "native shutdown cancels a reader still waiting for Hello" {
 
 ///|
 async test "native Hello deadline closes without subscription" {
-  @core_async.with_timeout(7000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(7000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),

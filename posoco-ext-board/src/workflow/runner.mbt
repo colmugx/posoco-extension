@@ -6,13 +6,13 @@ priv suberror WorkflowDeadline
 /// execution journal or background discovery loop is owned here.
 pub struct SequentialWorkflowRunner {
   priv orchestrator : @orchestration.BoardOrchestrator
-  priv group : @core_async.TaskGroup
+  priv group : @async.TaskGroup
   priv now_ms : () -> Int64
   priv wake : @aqueue.Queue[Unit]
   priv history : Array[String]
   priv mut spec : WorkflowRunSpec?
   priv mut scope : Array[String]
-  priv mut worker : @core_async.Task[Unit]?
+  priv mut worker : @async.Task[Unit]?
   priv mut active : @execution.BoardExecutionHandle?
   priv mut phase : WorkflowPhase
   priv mut closed : Bool
@@ -38,8 +38,8 @@ pub struct SequentialWorkflowRunner {
 /// backend shutdown, and a false shutdown result must never be ignored.
 pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
-  group~ : @core_async.TaskGroup,
-  now_ms~ : () -> Int64 = @core_async.now,
+  group~ : @async.TaskGroup,
+  now_ms~ : () -> Int64 = @async.now,
 ) -> SequentialWorkflowRunner {
   {
     orchestrator,
@@ -178,7 +178,7 @@ pub async fn SequentialWorkflowRunner::start(
   self.deadline_expired = false
   self.stop_requested = false
   self.cancel_requested = false
-  let initialized = @core_async.handle_cancellation(() => {
+  let initialized = @async.handle_cancellation(() => {
     let state = match self.orchestrator.board_state() {
       Ok(state) => state
       Err(_) => return Err(BoardUnavailable)
@@ -331,9 +331,7 @@ async fn SequentialWorkflowRunner::cleanup(
     None => self.phase != Unresolved
     Some(handle) => {
       ignore(self.orchestrator.cancel_active(handle.execution_id()))
-      let binding = try
-        @core_async.with_timeout(4000, () => handle.wait())
-      catch {
+      let binding = try @async.with_timeout(4000, () => handle.wait()) catch {
         _ => None
       } noraise {
         binding => Some(binding)
@@ -358,10 +356,10 @@ async fn SequentialWorkflowRunner::drive(
   let remaining = (spec.max_elapsed_ms.to_int64() - self.elapsed_ms())
     .max(1L)
     .to_int()
-  let completed = @core_async.handle_cancellation(() => {
-    @core_async.with_task_group(deadline_scope => {
+  let completed = @async.handle_cancellation(() => {
+    @async.with_task_group(deadline_scope => {
       deadline_scope.spawn_bg(no_wait=true, () => {
-        @core_async.sleep(remaining)
+        @async.sleep(remaining)
         // Withdraw admission before cancellation is delivered through protected
         // reservation IO, including if the wall clock moved backwards.
         self.deadline_expired = true
@@ -379,7 +377,7 @@ async fn SequentialWorkflowRunner::drive(
         }
     }
   })
-  @core_async.protect_from_cancel(() => {
+  @async.protect_from_cancel(() => {
     if completed is None && self.phase != Unresolved {
       self.finish(
         Stopped,
@@ -410,7 +408,7 @@ async fn SequentialWorkflowRunner::run_loop(
 ) -> Unit {
   let mut stale = 0
   while true {
-    @core_async.pause()
+    @async.pause()
     if self.cancel_requested || self.closed {
       self.finish(
         Stopped,
@@ -596,7 +594,7 @@ pub async fn SequentialWorkflowRunner::shutdown(
     return false
   }
   let deadline = (self.now_ms)() + timeout_ms.to_int64()
-  let joined = @core_async.with_timeout(timeout_ms, () => {
+  let joined = @async.with_timeout(timeout_ms, () => {
     if self.worker is Some(worker) {
       worker.wait()
     }

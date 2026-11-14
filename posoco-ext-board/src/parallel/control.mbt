@@ -13,7 +13,7 @@ priv struct Completion {
 /// orchestrator/owner to the runner while its authorization is active.
 pub struct ParallelWorkflowRunner {
   priv orchestrator : @orchestration.BoardOrchestrator
-  priv group : @core_async.TaskGroup
+  priv group : @async.TaskGroup
   priv now_ms : () -> Int64
   priv wake : @aqueue.Queue[Unit]
   priv completions : @aqueue.Queue[Completion]
@@ -25,7 +25,7 @@ pub struct ParallelWorkflowRunner {
   priv mut scope_busy : Bool
   priv mut spec : ParallelWorkflowSpec?
   priv mut scope : Array[String]
-  priv mut worker : @core_async.Task[Unit]?
+  priv mut worker : @async.Task[Unit]?
   priv mut phase : @workflow.WorkflowPhase
   priv mut starting : Bool
   priv mut entered : Bool
@@ -50,8 +50,8 @@ pub struct ParallelWorkflowRunner {
 ///|
 pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
-  group~ : @core_async.TaskGroup,
-  now_ms~ : () -> Int64 = @core_async.now,
+  group~ : @async.TaskGroup,
+  now_ms~ : () -> Int64 = @async.now,
 ) -> ParallelWorkflowRunner {
   {
     orchestrator,
@@ -211,7 +211,7 @@ async fn ParallelWorkflowRunner::start_inner(
   self.cancel_requested = false
   self.stop_requested = false
   self.deadline_expired = false
-  let initialized = @core_async.handle_cancellation(() => {
+  let initialized = @async.handle_cancellation(() => {
     let state = match self.orchestrator.board_state() {
       Ok(state) => state
       Err(_) => return Err(@workflow.BoardUnavailable)

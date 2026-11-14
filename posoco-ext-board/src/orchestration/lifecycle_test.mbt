@@ -1,6 +1,6 @@
 ///|
 async test "cancel dispatch during resolver owns no admission and no identities" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -30,7 +30,7 @@ async test "cancel dispatch during resolver owns no admission and no identities"
 
 ///|
 async test "cancel dispatch during protected reservation cancels and joins exact owned run" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true, delay_gate=true)
     let journal = orch_journal(hold_at=1)
@@ -62,7 +62,7 @@ async test "cancel dispatch during protected reservation cancels and joins exact
 
 ///|
 async test "shutdown does not release ownership while resolver admission is in flight" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -88,7 +88,7 @@ async test "shutdown does not release ownership while resolver admission is in f
 
 ///|
 async test "policy gate rechecks stage changes during reservation before provider effect" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(delay_gate=true)
     let journal = orch_journal()
@@ -118,7 +118,7 @@ async test "policy gate rechecks stage changes during reservation before provide
 
 ///|
 async test "dependency changes after admission do not implicitly cancel owned execution" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     orch_command(backend, "board.task.create", {
       "id": "dependency",
@@ -157,7 +157,7 @@ async test "dependency changes after admission do not implicitly cancel owned ex
 
 ///|
 async test "dependency not Done blocks automation without prohibiting domain Ready" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     orch_command(backend, "board.task.create", {
       "id": "dependency",
@@ -206,7 +206,7 @@ async test "dependency not Done blocks automation without prohibiting domain Rea
 
 ///|
 async test "manual Finish racing execution settlement is never overwritten or retried" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true)
     let owner = @execution.BoardExecutionOwner(

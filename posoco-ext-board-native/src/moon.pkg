@@ -16,7 +16,7 @@ import {
 import {
   "moonbitlang/core/async/aqueue",
   "moonbitlang/core/async/socket",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "colmugx/posoco-ext-board/domain",
 } for "wbtest"

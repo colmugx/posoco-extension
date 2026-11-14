@@ -1,6 +1,6 @@
 ///|
 async test "typed headless preparation keeps legal transitions and optimistic revisions" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = backend_with_parent(group)
     assert_true(
       backend.submit(

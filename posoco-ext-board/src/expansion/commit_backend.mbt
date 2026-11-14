@@ -15,7 +15,7 @@ async fn settled_expansion_history(
 ) -> Result[Array[@domain.ExpansionRecord], ExpansionError] {
   for _ in 0..<recovery_poll_attempts {
     match backend.expansion_history() {
-      Err(@coordinator.Initializing) => @core_async.sleep(recovery_poll_ms)
+      Err(@coordinator.Initializing) => @async.sleep(recovery_poll_ms)
       result => return result.map_err(error => Backend(error))
     }
   }

@@ -14,7 +14,7 @@ fn enqueue_mutation(
 
 ///|
 async test "blocked persistence hides revision 6 and does not complete public submit" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let initial = snapshot_of(5L, [task_record("old", @domain.Created, 10L)], [])
     store.loads.push_back(LoadOk(load_of(initial)))
@@ -44,7 +44,7 @@ async test "blocked persistence hides revision 6 and does not complete public su
 
 ///|
 async test "blocked failed first transaction reproposes queued same-revision commands in FIFO" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let gate = new_gate()
@@ -74,7 +74,7 @@ async test "blocked failed first transaction reproposes queued same-revision com
 
 ///|
 async test "recovery persistence completes before startup exposes recovered revision" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let initial = snapshot_of(9L, [task_record("task", @domain.Running, 10L)], [
       attempt_record("attempt", "task", @domain.Running),
@@ -113,7 +113,7 @@ async test "recovery persistence completes before startup exposes recovered revi
 
 ///|
 async test "stale reload ticket cannot settle a later reconciliation" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     store.persists.push_back(StepUncertain("first"))
@@ -150,7 +150,7 @@ async test "shutdown before attach reports Stopped and subsequent attach restore
   coordinator.shutdown()
   assert_eq(coordinator.status(), Stopped)
   assert_rejected(coordinator.wait_ready(), Closed)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     coordinator.attach(group~)
     assert_true(coordinator.wait_ready() is Ok(_))
     coordinator.shutdown()
@@ -159,7 +159,7 @@ async test "shutdown before attach reports Stopped and subsequent attach restore
 
 ///|
 async test "cancelled ready waiter withdraws from actor while load remains blocked" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let gate = new_gate()
     store.loads.push_back(LoadGate(gate, load_of(@store.empty_snapshot())))
@@ -184,7 +184,7 @@ async test "cancelled ready waiter withdraws from actor while load remains block
 
 ///|
 async test "cancelled and concurrent shutdowns wait for active persistence before reattach" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let gate = new_gate()
@@ -218,7 +218,7 @@ async test "cancelled and concurrent shutdowns wait for active persistence befor
 
 ///|
 async test "shutdown waits for uncertainty reconciliation and settles caller explicitly" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
     let proposal = @domain.BoardDomain::propose(
@@ -282,7 +282,7 @@ impl @store.BoardStore for RaisingStore with fn persist(self, snapshot, events) 
 
 ///|
 async test "raised store error reconciles unknown write boundary without host fail-fast" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let store : RaisingStore = {
       inner: @store.MemoryBoardStore(),
       raise_once: true,

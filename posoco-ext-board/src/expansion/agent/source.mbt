@@ -97,7 +97,7 @@ pub impl @expansion.DynamicPlanSource for OwnedAgentPlanSource with fn generate(
   self.used = true
   let mut handle : @execution.BoardExecutionHandle? = None
   let mut joined = false
-  defer @core_async.protect_from_cancel(() => {
+  defer @async.protect_from_cancel(() => {
     if !joined {
       if handle is Some(active) {
         ignore(self.owner.cancel(active.execution_id()))
@@ -106,7 +106,7 @@ pub impl @expansion.DynamicPlanSource for OwnedAgentPlanSource with fn generate(
     }
     self.channel.discard()
   })
-  let admitted = @core_async.protect_from_cancel(() => {
+  let admitted = @async.protect_from_cancel(() => {
     let result = self.owner.execute(
       { ..self.request, timeout_ms: Some(timeout), },
       admission_guard=_ => {

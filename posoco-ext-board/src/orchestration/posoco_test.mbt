@@ -205,7 +205,7 @@ impl @orchestration.BoardExecutionInputResolver for RealHostResolver with fn res
 /// Attempts. The command IDs below are correlation data and never become
 /// execution or session identity.
 async fn real_ready_board(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   attempts~ : Int32 = 1,
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store=@store.MemoryBoardStore(), now_ms=() => {
@@ -264,7 +264,7 @@ async fn real_ready_board(
 /// One owner (attached to the host group) with the actual Posoco driver and the
 /// trusted host resolver behind an enabled Ready-stage policy.
 async fn real_orchestrator(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   backend : @backend.BoardBackend,
   model : RealOrchestrationModel,
   resolver : RealHostResolver,
@@ -286,7 +286,7 @@ async fn real_orchestrator(
 
 ///|
 async test "real orchestrator dispatch settles one scoped Agent run durably without moving the Ready task" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = real_ready_board(group)
     let model = real_model()
     let resolver = real_resolver(available=["task/attempt-1"])
@@ -377,7 +377,7 @@ async test "real orchestrator dispatch settles one scoped Agent run durably with
 
 ///|
 async test "two queued attempts get one explicit dispatch each with fresh host identity and no automatic next" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = real_ready_board(group, attempts=2)
     let model = real_model(hold=true)
     let resolver = real_resolver(available=["task/attempt-1", "task/attempt-2"])
@@ -458,7 +458,7 @@ async test "two queued attempts get one explicit dispatch each with fresh host i
 
 ///|
 async test "real orchestrator settles a model failure as Failed and leaves the Ready task untouched" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = real_ready_board(group)
     let model = real_model(fail=true)
     let resolver = real_resolver(available=["task/attempt-1"])
@@ -488,7 +488,7 @@ async test "real orchestrator settles a model failure as Failed and leaves the R
 
 ///|
 async test "exact execution identity cancels the scoped run while wrong and repeated requests stay harmless" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = real_ready_board(group)
     let model = real_model(hold=true)
     let resolver = real_resolver(available=["task/attempt-1"])
@@ -528,7 +528,7 @@ async test "exact execution identity cancels the scoped run while wrong and repe
 
 ///|
 async test "orchestrator shutdown while active cancels joins and settles before closing admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = real_ready_board(group)
     let model = real_model(hold=true)
     let resolver = real_resolver(available=["task/attempt-1"])

@@ -325,7 +325,7 @@ async fn parallel_task(
 /// Online Board with one Ready task and one queued Execute Attempt per given
 /// Task ID (or `attempts[i]` when given), driven through real commands only.
 async fn parallel_board(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   attempts~ : Array[Int32] = [],
 ) -> @backend.BoardBackend {
@@ -359,7 +359,7 @@ struct ParallelHarness {
 /// Attempt of every task; the trusted-host execution policy is always enabled
 /// here because the safe disabled default is covered by the S4C suite.
 async fn parallel_harness(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   tasks~ : Array[String],
   capacity~ : Int32 = 1,
   clock~ : ParallelClock = parallel_clock(),
@@ -447,7 +447,7 @@ async fn parallel_yield_until(what~ : String, check~ : () -> Bool) -> Unit {
     if check() {
       return
     }
-    @core_async.pause()
+    @async.pause()
   }
   fail("timed out waiting for \{what}")
 }

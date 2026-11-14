@@ -1,7 +1,7 @@
 ///|
 async test "MoonBack HTTP gates headers and metadata retain the localhost contract" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let backend = @backend.BoardBackend()
       let server = NativeBoardWebServer(backend=Some(backend))
       let endpoint = server.bind().unwrap()
@@ -88,8 +88,8 @@ async test "MoonBack HTTP gates headers and metadata retain the localhost contra
 
 ///|
 async test "backend binding is idempotent before bind and cannot hot swap bound or running streams" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let first = @backend.BoardBackend(now_ms=() => 1234L)
       let second = @backend.BoardBackend()
       first.attach(group)
@@ -144,8 +144,8 @@ async test "backend binding is idempotent before bind and cannot hot swap bound 
 
 ///|
 async test "runtime closes active MoonBack websocket and headless backend remains usable" {
-  @core_async.with_timeout(5000, () => {
-    @core_async.with_task_group(group => {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let backend = runtime.backend()
       let ws = @websocket.connect(board_native_url(runtime))
@@ -155,7 +155,7 @@ async test "runtime closes active MoonBack websocket and headless backend remain
         fail("expected bootstrap")
       }
       board_wait_clients(backend, 1)
-      @core_async.with_timeout(4000, () => runtime.close_server())
+      @async.with_timeout(4000, () => runtime.close_server())
       assert_eq(runtime.status(), @runtime.Stopped)
       assert_eq(backend.subscriber_count(), 0)
       let closed = Some(ws.recv()) catch { _ => None }

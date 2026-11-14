@@ -29,7 +29,7 @@ impl @orchestration.BoardExecutionInputResolver for HoldingWorkflowResolver with
 
 ///|
 async test "shutdown during cancellable resolution joins without hidden admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = workflow_board(group, tasks=["alpha"])
     let adapter = scripted_adapter()
     let owner = @execution.BoardExecutionOwner(
@@ -61,7 +61,7 @@ async test "shutdown during cancellable resolution joins without hidden admissio
 
 ///|
 async test "cancel before worker entry cannot strand the runner in Stopping" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = workflow_harness(group, tasks=["alpha"])
     assert_true(h.runner.start(workflow_spec()) is Ok(_))
     h.runner.cancel()
@@ -103,7 +103,7 @@ impl @execution.BoardExecutionStore for HoldingWorkflowJournal with fn persist(
 
 ///|
 async test "unconfirmed reservation IO prevents successful shutdown or further admission" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let journal : HoldingWorkflowJournal = {
       entered: @aqueue.Queue(kind=Unbounded),
       release: @aqueue.Queue(kind=Unbounded),
@@ -163,7 +163,7 @@ impl @execution.BoardExecutionAdapter for GatePausedWorkflowAdapter with fn run(
 
 ///|
 async test "pause after admission but before model gate allows the admitted run to settle" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = workflow_board(group, tasks=["alpha"])
     let adapter : GatePausedWorkflowAdapter = {
       entered: @aqueue.Queue(kind=Unbounded),

@@ -24,7 +24,7 @@ impl @orchestration.BoardExecutionInputResolver for HeldParallelInput with fn re
 
 ///|
 async fn cancel_during_parallel_resolution(deadline~ : Bool) -> Unit {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = parallel_board(group, tasks=["alpha"])
     let owner = @execution.BoardExecutionOwner::with_slots(
       backend~,

@@ -4,7 +4,7 @@
 /// internals. This instance is the sole durable writer for its namespace.
 pub struct BoardWorkflows {
   priv directory : String
-  priv group : @core_async.TaskGroup
+  priv group : @async.TaskGroup
   priv agents : &WorkflowAgentFactory
   priv policy : BoardWorkflowPolicy
   priv clock : () -> Int64
@@ -23,7 +23,7 @@ pub struct BoardWorkflows {
   priv mut initialized : Bool
   priv mut closed : Bool
   priv mut busy : Bool
-  priv mut operation : @core_async.Task[Unit]?
+  priv mut operation : @async.Task[Unit]?
   priv mut stopped : Bool
   priv mut paused : Bool
   priv mut unresolved : Bool
@@ -37,9 +37,9 @@ pub struct BoardWorkflows {
 pub fn BoardWorkflows::BoardWorkflows(
   directory~ : String,
   agents~ : &WorkflowAgentFactory,
-  group~ : @core_async.TaskGroup,
+  group~ : @async.TaskGroup,
   policy~ : BoardWorkflowPolicy = BoardWorkflowPolicy(),
-  now_ms~ : () -> Int64 = () => @core_async.now(),
+  now_ms~ : () -> Int64 = () => @async.now(),
   authorize~ : () -> Bool = () => true,
 ) -> BoardWorkflows {
   {
@@ -201,13 +201,13 @@ async fn[T] BoardWorkflows::perform(
     .unwrap_or(self.policy.max_elapsed_ms)
   let task = self.group.spawn(allow_failure=true, () => {
     result.val = Some(
-      Ok(@core_async.with_timeout(timeout, work)) catch {
+      Ok(@async.with_timeout(timeout, work)) catch {
         error => Err(safe_error(error))
       },
     )
   })
   self.operation = Some(task)
-  let waited = @core_async.handle_cancellation(() => {
+  let waited = @async.handle_cancellation(() => {
     task.wait()
     true
   }) catch {
@@ -215,7 +215,7 @@ async fn[T] BoardWorkflows::perform(
   }
   if waited != Some(true) {
     task.cancel()
-    if !@core_async.protect_from_cancel(() => settle_operation(task, 4000)) {
+    if !@async.protect_from_cancel(() => settle_operation(task, 4000)) {
       self.unresolved = true
       return Err(UnresolvedExecution)
     }
@@ -226,11 +226,8 @@ async fn[T] BoardWorkflows::perform(
 }
 
 ///|
-async fn settle_operation(
-  task : @core_async.Task[Unit],
-  timeout : Int32,
-) -> Bool {
-  @core_async.with_timeout(timeout, () => {
+async fn settle_operation(task : @async.Task[Unit], timeout : Int32) -> Bool {
+  @async.with_timeout(timeout, () => {
     task.wait() catch {
       _ => ()
     }
@@ -273,7 +270,7 @@ async fn BoardWorkflows::submit(
 ) -> Unit {
   self.check()
   self.uncertain = true
-  let result = @core_async.protect_from_cancel(() => self.board.submit(command))
+  let result = @async.protect_from_cancel(() => self.board.submit(command))
   match result {
     Ok(_) => self.uncertain = false
     Err(@coordinator.Rejected(@domain.RevisionConflict(..))) => {

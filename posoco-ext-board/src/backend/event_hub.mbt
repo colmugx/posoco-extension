@@ -108,8 +108,8 @@ pub struct BoardSubscription {
   /// Bootstrap boundary: events at or before it were already covered by the
   /// installed snapshot, so the sender drops their stale mailbox copies.
   priv mut baseline_seq : Int64
-  priv mailbox : @core_async.Queue[@protocol.BoardServerFrame]
-  priv overflow : @core_async.Queue[Unit]
+  priv mailbox : @async.Queue[@protocol.BoardServerFrame]
+  priv overflow : @async.Queue[Unit]
   priv mut dirty_seq : Int64?
   priv mut closed : Bool
 }
@@ -205,8 +205,8 @@ fn BoardEventHub::subscribe(
     plan,
     initial_frames,
     baseline_seq: last_seq,
-    mailbox: @core_async.Queue(kind=Blocking(self.client_queue_depth)),
-    overflow: @core_async.Queue(kind=Blocking(1)),
+    mailbox: @async.Queue(kind=Blocking(self.client_queue_depth)),
+    overflow: @async.Queue(kind=Blocking(1)),
     dirty_seq: None,
     closed: false,
   }
@@ -345,7 +345,7 @@ pub async fn BoardSubscription::pump(
   send : async (@protocol.BoardServerFrame) -> Unit,
 ) -> Unit {
   let mut writing = false
-  @core_async.any([
+  @async.any([
     () => {
       for frame in self.initial_frames {
         if self.dirty_seq is Some(_) {
@@ -371,7 +371,7 @@ pub async fn BoardSubscription::pump(
   // message. In that case close immediately; otherwise resync is best effort.
   if !writing {
     if self.resync_required() is Some(frame) {
-      @core_async.with_timeout(1000, () => send(frame)) catch {
+      @async.with_timeout(1000, () => send(frame)) catch {
         _ => ()
       }
     }

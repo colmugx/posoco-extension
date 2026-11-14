@@ -1,6 +1,6 @@
 ///|
 async test "fresh controller never reconstructs execution authority from graph history before or after prior scope approval" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     for approved in [false, true] {
       let storage = @store.MemoryBoardStore()
       let h = dynamic_harness(group, board_store=storage)

@@ -5,7 +5,7 @@
 
 ///|
 async test "two slots run two tasks simultaneously in deterministic admission order" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma"],
@@ -79,7 +79,7 @@ async test "two slots run two tasks simultaneously in deterministic admission or
 
 ///|
 async test "the default concurrency runs one execution at a time" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta", "gamma"])
     assert_eq(h.shared.slots, 1)
     assert_true(h.runner.start(parallel_spec()) is Ok(_))
@@ -101,7 +101,7 @@ async test "the default concurrency runs one execution at a time" {
 
 ///|
 async test "three slots bound five tasks to three simultaneous admissions" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["t1", "t2", "t3", "t4", "t5"],
@@ -175,7 +175,7 @@ async test "three slots bound five tasks to three simultaneous admissions" {
 
 ///|
 async test "the count budget bounds a wave below the free capacity" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["t1", "t2", "t3"], capacity=3, hold=[
       "attempt-t1-1", "attempt-t2-1",
     ])
@@ -210,7 +210,7 @@ async test "the count budget bounds a wave below the free capacity" {
 
 ///|
 async test "a wave above the owner capacity is an invalid specification" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(group, tasks=["alpha", "beta"], capacity=2, hold=[
       "attempt-alpha-1", "attempt-beta-1",
     ])
@@ -238,7 +238,7 @@ async test "a wave above the owner capacity is an invalid specification" {
 
 ///|
 async test "a slow member holds the wave barrier against settled siblings" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let h = parallel_harness(
       group,
       tasks=["alpha", "beta", "gamma", "delta"],
@@ -266,7 +266,7 @@ async test "a slow member holds the wave barrier against settled siblings" {
     // further authorization and no further entry beyond the held sibling.
     let authorized = h.resolver.resolved_attempts.length()
     for _ in 0..<64 {
-      @core_async.pause()
+      @async.pause()
       assert_eq(h.resolver.resolved_attempts.length(), authorized)
       assert_eq(h.shared.entered.length(), 2)
       assert_eq(h.runner.status().phase, @workflow.Running)

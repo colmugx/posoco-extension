@@ -28,7 +28,7 @@ async fn orch_queued_task(
 
 ///|
 async test "task scope skips a higher ranked outsider in plan status and dispatch" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="outsider", priority="critical")
     let adapter = orch_adapter()
@@ -67,7 +67,7 @@ async test "task scope skips a higher ranked outsider in plan status and dispatc
 
 ///|
 async test "a false dispatch admission guard stops before resolution or any effect" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -98,7 +98,7 @@ async test "a false dispatch admission guard stops before resolution or any effe
 
 ///|
 async test "admission guard withdrawal after resolution and at reservation stops before effects" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter()
     let journal = orch_journal()
@@ -142,7 +142,7 @@ async test "admission guard withdrawal after resolution and at reservation stops
 
 ///|
 async test "admission guard withdrawal at the model gate blocks provider effects" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(delay_gate=true)
     let journal = orch_journal()
@@ -177,7 +177,7 @@ async test "admission guard withdrawal at the model gate blocks provider effects
 
 ///|
 async test "execution timeout ceiling caps the resolver timeout and rejects nonpositive" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="task-a")
     orch_queued_task(backend, id="task-b")
@@ -239,7 +239,7 @@ async test "execution timeout ceiling caps the resolver timeout and rejects nonp
 
 ///|
 async test "defaults preserve S4B and scope arrays stay detached per call" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     orch_queued_task(backend, id="outsider", priority="critical")
     let adapter = orch_adapter()
@@ -279,7 +279,7 @@ async test "defaults preserve S4B and scope arrays stay detached per call" {
 
 ///|
 async test "scope filtering still evaluates dependencies outside the scope" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     // The dependency stays Created outside the scope and is never queued.
     orch_command(backend, "board.task.create", {
@@ -316,7 +316,7 @@ async test "scope filtering still evaluates dependencies outside the scope" {
 
 ///|
 async test "board_state exposes the same owner's detached snapshot" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let owner = @execution.BoardExecutionOwner(
       backend~,

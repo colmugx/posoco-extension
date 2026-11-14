@@ -378,13 +378,13 @@ async test "native request arrays detached before first suspension" {
   let request = fixture()
   let events = all_events()
   let started = Ref(false)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     group.spawn_bg(() => {
       started.val = true
       assert_eq(store.persist(request, events), Ok(()))
     })
     while !started.val {
-      @core_async.sleep(1)
+      @async.sleep(1)
     }
     request.tasks[0].dependencies.clear()
     request.tasks[0].definition_of_done.clear()

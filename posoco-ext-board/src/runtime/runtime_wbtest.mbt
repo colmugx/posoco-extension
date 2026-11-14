@@ -16,7 +16,7 @@ impl BoardWebServer for FakeBoardServer with fn bind(self) {
     return Err("board backend not installed")
   }
   self.binds += 1
-  @core_async.sleep(10)
+  @async.sleep(10)
   self.alive = true
   self.browser = Some("http://127.0.0.1:18080/?token=test-only")
   Ok({ host: "127.0.0.1", port: 18080, })
@@ -118,9 +118,9 @@ async test "ensure_server is idempotent under concurrent opens" {
     server~,
     opener~,
   )
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     runtime.attach(group)
-    let results = @core_async.all([
+    let results = @async.all([
       () => runtime.open_board(),
       () => runtime.open_board(),
     ])
@@ -148,7 +148,7 @@ async test "close is idempotent and later open rebinds" {
     server~,
     opener~,
   )
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     runtime.attach(group)
     assert_true(runtime.ensure_server() is Ok(_))
     runtime.close_server()
@@ -196,7 +196,7 @@ impl BoardWebServer for SlowStopServer with fn bind(self) {
 
 ///|
 impl BoardWebServer for SlowStopServer with fn run(_self) {
-  let _ = @core_async.protect_from_cancel(() => @core_async.sleep(200))
+  let _ = @async.protect_from_cancel(() => @async.sleep(200))
   Ok(())
 }
 
@@ -244,7 +244,7 @@ async test "runtime shutdown cleanup completes even when cancelled" {
     server~,
     opener~,
   )
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     runtime.attach(group)
     assert_true(
       runtime.backend().handle_command(wire_create("t1", "t1", 0L)).accepted,
@@ -254,7 +254,7 @@ async test "runtime shutdown cleanup completes even when cancelled" {
     // Cancel while the teardown is parked in settle_server_task's bounded
     // wait (the fake run resists cancellation for 200ms): the protected
     // cleanup must still close the listener and shut the backend down.
-    @core_async.sleep(10)
+    @async.sleep(10)
     task.cancel()
     let _ = task.wait() catch { _ => () }
     assert_eq(server.closes, 1)

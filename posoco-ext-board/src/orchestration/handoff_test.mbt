@@ -1,6 +1,6 @@
 ///|
 async test "exact handle handoff survives cancellation during protected reservation" {
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     let backend = orch_board(group)
     let adapter = orch_adapter(block=true, delay_gate=true)
     let journal = orch_journal(hold_at=1)

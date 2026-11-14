@@ -135,7 +135,7 @@ async fn orch_command(
 
 ///|
 async fn orch_board(
-  group : @core_async.TaskGroup,
+  group : @async.TaskGroup,
   store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)

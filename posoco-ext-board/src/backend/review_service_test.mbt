@@ -40,7 +40,7 @@ async test "review decisions persist full authoritative entities independently f
     let clock = Ref(100L)
     let store = @store.MemoryBoardStore()
     let backend = @backend.BoardBackend(store~, now_ms=() => clock.val)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       backend.attach(group)
       let replica = @client.BoardReplica::empty()
       review_service_seed(backend, replica, @client.Review)
@@ -133,7 +133,7 @@ async test "review decisions persist full authoritative entities independently f
 async test "review rejects wrong kind queued terminal missing and explicit pending without stream changes" {
   for kind in [@client.Discuss, @client.Execute, @client.Review] {
     let backend = @backend.BoardBackend(now_ms=() => 100L)
-    @core_async.with_task_group(group => {
+    @async.with_task_group(group => {
       backend.attach(group)
       let replica = @client.BoardReplica::empty()
       review_service_seed(backend, replica, kind)
@@ -239,7 +239,7 @@ async test "review previsibility persist failure emits nothing and uncertainty p
     landed: None,
   }
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     backend.attach(group)
     let replica = @client.BoardReplica::empty()
     review_service_seed(backend, replica, @client.Review)
@@ -298,7 +298,7 @@ async test "review previsibility persist failure emits nothing and uncertainty p
 async test "recovered Interrupted review remains pending but cannot accept a new decision" {
   let store = @store.MemoryBoardStore()
   let first = @backend.BoardBackend(store~, now_ms=() => 100L)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     first.attach(group)
     let replica = @client.BoardReplica::empty()
     review_service_seed(first, replica, @client.Review)
@@ -310,7 +310,7 @@ async test "recovered Interrupted review remains pending but cannot accept a new
     first.shutdown()
   })
   let recovered = @backend.BoardBackend(store~, now_ms=() => 200L)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     recovered.attach(group)
     let replica = @client.BoardReplica::empty()
     assert_true(
@@ -339,7 +339,7 @@ async test "request changes commits the decision and returns the ticket to ready
   let clock = Ref(100L)
   let store = @store.MemoryBoardStore()
   let backend = @backend.BoardBackend(store~, now_ms=() => clock.val)
-  @core_async.with_task_group(group => {
+  @async.with_task_group(group => {
     backend.attach(group)
     let replica = @client.BoardReplica::empty()
     review_service_seed(backend, replica, @client.Review)

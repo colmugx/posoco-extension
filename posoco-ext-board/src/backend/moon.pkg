@@ -3,7 +3,7 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
 }
 
@@ -12,12 +12,12 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 } for "test"
 
 import {
   "moonbitlang/core/async/aqueue",
-  "moonbitlang/core/async" @core_async,
+  "moonbitlang/core/async",
 } for "wbtest"
 
 // No transport imports and no per-target sources: the backend itself is
