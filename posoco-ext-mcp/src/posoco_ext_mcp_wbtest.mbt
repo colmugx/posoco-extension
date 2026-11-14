@@ -437,11 +437,6 @@ fn registry_test_bridge(
   routes : Array[(String, Int32)],
 ) -> MCPToolBridge {
   {
-    io_group: None,
-    io_task: None,
-    io_ready: None,
-    io_closed: false,
-    io_lock: @core_async.Mutex::Mutex(),
     connections: conns,
     tool_to_conn: Map::from_array(routes),
     mode: LoadMode::Eager,

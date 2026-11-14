@@ -203,10 +203,7 @@ priv struct ConnActor[ClientT] {
 /// generation 0, Fresh, empty in-flight. The mailbox is the default
 /// Unbounded: this round serializes state arbitration, not admission.
 ///
-/// The group is the host's `moonbitlang/core/async` `TaskGroup` — fuwaroid
-/// 0.4 spawns on posoco's core stack, while an MCP client's transport keeps
-/// running on the host's `moonbitlang/async` I/O group. The two stacks share
-/// one scheduler, so the actor loop and its transport stay in the same
+/// The actor loop and the client transport share the group's
 /// structured-concurrency lifetime.
 fn[ClientT] ConnActor::start(
   group~ : @core_async.TaskGroup,

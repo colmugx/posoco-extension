@@ -1,7 +1,7 @@
 ///|
 // Target-split file reading for mcp.json discovery.
 //
-// native reads through moonbitlang/async/fs; js reads through node:fs bound
+// native reads through moonbitlang/core/async/fs; js reads through node:fs bound
 // with `#module` (the compiler emits the static import — no per-call dynamic
 // import needed), with the bound function injected into the inline
 // `extern "js"` envelope.

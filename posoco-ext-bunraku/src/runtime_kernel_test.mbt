@@ -2,8 +2,8 @@
 /// Agent-level acceptance tests for the PTC advanced runtime. These drive a
 /// real kernel turn (`Agent::with_runtime`) through the BunrakuRuntime chain
 /// so the nested-dispatch seam is exercised exactly the way a host composes
-/// it. They pin the pre-migration behavior of the host-handed provider set:
-/// P2 (kernel sub-calls) intentionally changes the failure spelling.
+/// it. They pin the behavior of the host-handed provider set: kernel
+/// sub-calls intentionally change the failure spelling.
 
 ///|
 /// Shared fixture: one nested "read" tool owned by a recording provider,
@@ -107,7 +107,7 @@ fn kernel_agent(
 }
 
 ///|
-/// Pre-migration pin: a kernel turn drives run_code, the guest program
+/// A kernel turn drives run_code, the guest program
 /// reaches the handed-over provider through the scoped dispatch, and the
 /// structured guest return rides the tool result back to the model.
 async test "kernel turn runs a guest through the scoped nested dispatch" {

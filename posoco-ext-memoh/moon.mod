@@ -7,7 +7,7 @@ import {
   "colmugx/acp@0.3.0",
   "colmugx/posoco-ext-mcp@0.6.0",
   "colmugx/posoco-ext-permission@0.2.0",
-  "colmugx/mcp@0.18.2",
+  "colmugx/mcp@0.18.4",
   "posoco/devkit@0.4.1",
 }
 

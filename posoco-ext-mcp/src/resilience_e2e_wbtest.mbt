@@ -85,9 +85,8 @@ async fn e2e_fixture_cwd(
 
 ///|
 /// Run one e2e body inside the two host task groups production hands to the
-/// bridge: the core-async lifetime group every connection's fuwaroid actor
-/// loop spawns on, and the `moonbitlang/async` I/O group the stdio MCP child
-/// processes live on.
+/// bridge: the lifetime group every connection's fuwaroid actor loop spawns
+/// on, and the I/O group the stdio MCP child processes live on.
 async fn e2e_with_groups(
   body : async (@core_async.TaskGroup, @core_async.TaskGroup) -> Unit,
 ) -> Unit {

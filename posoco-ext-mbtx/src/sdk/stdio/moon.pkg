@@ -9,7 +9,7 @@ import {
 
 supported_targets = "native + wasm"
 
-// The registry loop is a fuwaroid actor: fuwaroid 0.4 spawns on posoco's
+// The registry loop is a fuwaroid actor: it spawns on posoco's
 // `moonbitlang/core/async` stack, so the invocation scope is a core task group.
 
 options(
