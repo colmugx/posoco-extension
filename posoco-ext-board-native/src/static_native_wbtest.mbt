@@ -67,7 +67,7 @@ fn board_bytes_text(bytes : Bytes) -> String {
 
 ///|
 async test "embedded static middleware cannot shadow control-plane routes" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let collisions : Map[String, Bytes] = {
         "/health": b"asset-health",
@@ -94,7 +94,7 @@ async test "embedded static middleware cannot shadow control-plane routes" {
         port: listener.addr.port(),
       }
       group.spawn_bg(no_wait=true, allow_failure=true, () => app.serve(listener))
-      @async.sleep(10)
+      @core_async.sleep(10)
 
       for
         (path, expected) in [
@@ -127,7 +127,7 @@ fn board_asset_by_suffix(suffix : String) -> (String, Bytes) raise {
 
 ///|
 async test "embedded root serves the manifest index only with the instance token" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
@@ -138,7 +138,7 @@ async test "embedded root serves the manifest index only with the instance token
       group.spawn_bg(no_wait=true, allow_failure=true, () => {
         let _ = web.run()
       })
-      @async.sleep(10)
+      @core_async.sleep(10)
       let token = board_query_param(web.browser_url().unwrap(), "token").unwrap()
       let index = web_assets().get("/index.html").unwrap()
       assert_true(index.length() > 0)
@@ -176,7 +176,7 @@ async test "embedded root serves the manifest index only with the instance token
 
 ///|
 async test "manifest js css resources are public exact bytes with stable MIME" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
@@ -187,7 +187,7 @@ async test "manifest js css resources are public exact bytes with stable MIME" {
       group.spawn_bg(no_wait=true, allow_failure=true, () => {
         let _ = web.run()
       })
-      @async.sleep(10)
+      @core_async.sleep(10)
 
       // Every manifest resource except the root document is public byte-for-byte.
       for path, content in web_assets() {
@@ -257,7 +257,7 @@ async test "manifest js css resources are public exact bytes with stable MIME" {
 
 ///|
 async test "unknown resources 404 with a token while health stays public and gates hold" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
@@ -268,7 +268,7 @@ async test "unknown resources 404 with a token while health stays public and gat
       group.spawn_bg(no_wait=true, allow_failure=true, () => {
         let _ = web.run()
       })
-      @async.sleep(10)
+      @core_async.sleep(10)
       let token = board_query_param(web.browser_url().unwrap(), "token").unwrap()
 
       // With a valid token an unknown path falls through the static

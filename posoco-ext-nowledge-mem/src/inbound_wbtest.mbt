@@ -51,7 +51,7 @@ async test "inbound: reads working memory into the nmem-context envelope" {
   )
   let ext = nmem_ext(mcp~)
   ext.config = Some(lane_config(space=Some("team")))
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     guard ext.inbound(
         session_id="s1",
@@ -92,7 +92,7 @@ async test "inbound: plain-text working memory degrades to the raw content" {
   )
   let ext = nmem_ext(mcp~)
   ext.config = Some(lane_config())
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     guard ext.inbound(session_id="s1", request="q") is Some(body) else {
       fail("expected an inbound body")
@@ -124,7 +124,7 @@ async test "inbound: failed read records last_error and raises Inbound" {
   )
   let ext = nmem_ext(mcp~)
   ext.config = Some(lane_config())
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     try ext.inbound(session_id="s1", request="q") catch {
       @posoco.MemoryError::Inbound(reason) =>
@@ -152,7 +152,7 @@ async test "inbound: a server-flagged error records detail and raises Inbound" {
     ),
   )
   ext.config = Some(lane_config())
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     try ext.inbound(session_id="s1", request="q") catch {
       @posoco.MemoryError::Inbound(reason) =>
@@ -182,7 +182,7 @@ async test "inbound: oversized working memory truncates with the host-labeled no
   )
   let ext = nmem_ext(mcp~)
   ext.config = Some(lane_config())
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     guard ext.inbound(session_id="s1", request="q") is Some(body) else {
       fail("expected an inbound body")

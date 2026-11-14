@@ -1,5 +1,5 @@
 ///|
-/// moonbitlang/async/http is unavailable on wasm-gc. Keep the public
+/// moonbitlang/core/async/http is unavailable on wasm-gc. Keep the public
 /// DecisionPort surface complete and fail as a typed transport limitation.
 pub impl @posoco.DecisionPort for TypesafeDecisionPort with fn evaluate(
   _self : TypesafeDecisionPort,

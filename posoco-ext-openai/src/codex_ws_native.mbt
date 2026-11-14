@@ -1,5 +1,5 @@
 ///|
-/// Native backend WebSocket transport over moonbitlang/async's RFC 6455
+/// Native backend WebSocket transport over moonbitlang/core/async's RFC 6455
 /// client (handshake with custom headers, message-framed reads).
 
 ///|

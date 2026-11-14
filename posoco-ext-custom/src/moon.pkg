@@ -27,7 +27,7 @@ options(
     "moonbitlang/core/async/http",
   ],
   targets: {
-    // HTTP-backed ports: native+wasm+js (moonbitlang/async/http is
+    // HTTP-backed ports: native+wasm+js (moonbitlang/core/async/http is
     // unavailable on wasm-gc). Config, protocol vocabulary, the chat-wire
     // codec, the responses/messages request shapes, header construction,
     // failure classification, the catalog/factory, and provider_config live

@@ -26,7 +26,7 @@ options(
   ],
   targets: {
     // HTTP-backed chat and compact impls: native+wasm+js
-    // (moonbitlang/async/http is unavailable on wasm-gc). The struct
+    // (moonbitlang/core/async/http is unavailable on wasm-gc). The struct
     // definition, config, encode/decode, SSE parsing, error classification,
     // provider_config, factory, and manifest all live in the unrestricted
     // core files and compile on every backend. There is no wasm-gc variant

@@ -64,7 +64,7 @@ async test "e2e A: first-turn inbound lands as a memory message before the real 
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = mem_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(
       agent.run_turn(
@@ -144,7 +144,7 @@ async test "e2e: same-turn second model call does not re-read and keeps the inje
     config=@tk.tk_config(),
     events=@posoco.EventSystem(),
   )
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("beta flags please"), "session_1"))
     inspect(model.received_messages.length(), content="2")
@@ -290,7 +290,7 @@ async test "e2e: a resumed process keeps the persisted injection and reads nothi
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent2 = mem_agent_store(ext2, model2, store)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext1.attach(group)
     ext2.attach(group)
     ignore(agent1.run_turn(@tk.tk_user_msg("first question"), "session_1"))
@@ -345,7 +345,7 @@ async test "e2e C: source_app propagates to thread ids, guidance, and markers" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     // The attached turn-end drain commits the create before run_turn

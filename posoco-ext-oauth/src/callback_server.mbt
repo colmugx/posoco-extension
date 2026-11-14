@@ -5,7 +5,7 @@
 /// IO seam; shared logic talks only to the trait; each target provides its own
 /// impl via .native.mbt / .js.mbt files.
 ///
-/// Native: @http.Server (moonbitlang/async)
+/// Native: @http.Server (moonbitlang/core/async)
 /// JS:     Bun.serve (extern "js")
 
 ///|

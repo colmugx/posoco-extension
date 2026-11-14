@@ -196,7 +196,7 @@ test "ownership follows the slot's provider prefix" {
 /// Build a companion with a scripted plane and a recording handle, run
 /// `on_start`, and hand the pieces back for assertions.
 async fn start_case(
-  group : @io.TaskGroup[Unit],
+  group : @async.TaskGroup,
   connected~ : Int32,
 ) -> (ZaiCodingPlanTools, FakeContributions, SegmentRecorder) {
   let system = @posoco.EventSystem()
@@ -224,7 +224,7 @@ async fn start_case(
 
 ///|
 async test "resuming on this provider announces the declared group" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let (tools, record, recorder) = start_case(group, connected=3)
     inspect(record.replaces.length(), content="1")
     inspect(
@@ -242,7 +242,7 @@ async test "resuming on this provider announces the declared group" {
 
 ///|
 async test "a partial connect is announced but never reads as success" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let (tools, record, recorder) = start_case(group, connected=2)
     inspect(record.replaces.length(), content="1")
     inspect(tools.state.to_repr(), content="Degraded(connected=2, total=3)")
@@ -255,7 +255,7 @@ async test "a partial connect is announced but never reads as success" {
 
 ///|
 async test "switching away withdraws softly and hides the segment" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let (tools, record, recorder) = start_case(group, connected=3)
     tools.deactivate()
     inspect(record.withdraws.join(","), content="Soft")
@@ -269,7 +269,7 @@ async test "switching away withdraws softly and hides the segment" {
 
 ///|
 async test "a resume on another provider starts idle" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let system = @posoco.EventSystem()
     let record = fake_contributions()
     let tools = ZaiCodingPlanTools(
@@ -295,7 +295,7 @@ async test "a resume on another provider starts idle" {
 
 ///|
 async test "an unusable host declares nothing and opens nothing" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let opened : Array[Int32] = [0]
     let tools = ZaiCodingPlanTools(
       config=@zai.ZaiConfig::for_model(
@@ -343,7 +343,7 @@ impl @posoco.LogPort for FakeLog with fn flush(_self : FakeLog) -> Unit {
 
 ///|
 async test "a plane that cannot open reports 0/3, publishes nothing, and says why" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let system = @posoco.EventSystem()
     let recorder : SegmentRecorder = { values: [], }
     recorder.bind(system)
@@ -440,7 +440,7 @@ async fn await_switch(ready : () -> Bool) -> Unit {
 
 ///|
 async test "a router selection drives the tool plane through the typed feed" {
-  @io.with_task_group(async fn(group) {
+  @async.with_task_group(async fn(group) {
     let (tools, record, recorder) = start_case(group, connected=3)
     inspect(
       recorder.values.join(" | "),

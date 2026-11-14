@@ -1,5 +1,5 @@
 ///|
-/// Live model discovery via moonbitlang/async/http: the Zen `/models`
+/// Live model discovery via moonbitlang/core/async/http: the Zen `/models`
 /// listing plus the models.dev reasoning surfaces that enrich it.
 ///
 /// Compiled on native, wasm, and js (`@http` is unavailable on wasm-gc).

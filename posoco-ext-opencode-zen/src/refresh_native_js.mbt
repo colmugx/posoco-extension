@@ -2,7 +2,7 @@
 /// RefreshableProviderFactory::refresh impl via @http.
 ///
 /// Compiled on native, wasm, and js: `fetch_zen_models` drives
-/// moonbitlang/async/http, which is unavailable on wasm-gc.
+/// moonbitlang/core/async/http, which is unavailable on wasm-gc.
 
 ///|
 /// Live catalog refresh. Performs one authenticated `/models` request against

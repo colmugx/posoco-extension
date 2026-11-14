@@ -1,5 +1,5 @@
 ///|
-/// Native adapter: run the CLI through `moonbitlang/async/process`.
+/// Native adapter: run the CLI through `moonbitlang/core/async/process`.
 
 ///|
 priv struct NativeCliIo {}

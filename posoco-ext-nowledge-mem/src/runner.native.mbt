@@ -7,7 +7,7 @@ pub fn runner_get_env(name : String) -> String? {
 }
 
 ///|
-/// Native `NmemPlatform`: home files via `moonbitlang/async/fs`.
+/// Native `NmemPlatform`: home files via `moonbitlang/core/async/fs`.
 pub(all) struct PlatformFs {
   // empty
 }

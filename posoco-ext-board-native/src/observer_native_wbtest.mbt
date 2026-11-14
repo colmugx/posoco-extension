@@ -1,6 +1,6 @@
 ///|
 async test "native observer projection stays sanitized through live and retained reset" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
       let server = NativeBoardWebServer(backend=Some(backend))

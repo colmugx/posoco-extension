@@ -1,5 +1,5 @@
 ///|
-// NativeWorkspaceFs — production implementation backed by moonbitlang/async/fs.
+// NativeWorkspaceFs — production implementation backed by moonbitlang/core/async/fs.
 //
 // `kind()` pattern-matches `@fs.FileKind` directly. The previous string
 // reflection (`@debug.to_string` + `contains`) was fragile and violated the

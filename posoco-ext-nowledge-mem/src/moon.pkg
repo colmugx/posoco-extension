@@ -5,7 +5,6 @@ import {
   "posoco/devkit",
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
-  "moonbitlang/async" @io,
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",

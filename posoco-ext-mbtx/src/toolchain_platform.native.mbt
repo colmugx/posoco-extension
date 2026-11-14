@@ -1,5 +1,5 @@
 ///|
-/// Native implementation uses moonbitlang/async/fs. The lock is a directory
+/// Native implementation uses moonbitlang/core/async/fs. The lock is a directory
 /// so JS/Bun and native builds coordinate on the same artifact.
 fn mbtx_is_windows() -> Bool {
   @async.platform is Windows

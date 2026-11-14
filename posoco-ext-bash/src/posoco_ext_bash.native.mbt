@@ -87,11 +87,14 @@ async fn ShellTools::bash_foreground(
           // Both streams share one sink: the process package's write end is
           // already a `&ProcessOutput`, and ordering between stdout and stderr
           // is what the model needs for interleaved shell output.
-          stdout=writer,
-          stderr=writer,
+          stdout=@process.ProcessOutput::Shared(writer),
+          stderr=@process.ProcessOutput::DuplicateStdout,
           cwd?,
           cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
         )
+        // The parent's copy of the pipe write end must go away: the child's
+        // exit only delivers EOF once every writer is gone.
+        writer.close()
         let handle : ShellChildHandle = { proc, exited: false, }
         self.in_flight[key] = handle
         let drain = group.spawn(async fn() {
@@ -193,7 +196,7 @@ async fn bash_drain_native(
   let mut pending : Array[Byte] = []
   let mut decode_failed = false
   for ;; {
-    let chunk = reader.read_some()
+    let chunk = reader.read()
     match chunk {
       None => break
       Some(data) => {

@@ -53,7 +53,7 @@ async test "turn_end: completed turn commits the create before run_turn returns"
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("hi")),
   ])
   let agent = turn_end_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     let result = agent.run_turn(@tk.tk_user_msg("hello"), "session_1")
     inspect(result.final_session_id, content="session_1")
@@ -95,7 +95,7 @@ async test "turn_end: second turn commits only the incremental append" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = turn_end_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
@@ -131,7 +131,7 @@ async test "turn_end: failed turn still commits before run_turn raises" {
     @tk.ScriptedModelStep::Fail(@posoco.ModelError::Transport("boom")),
   ])
   let agent = turn_end_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
@@ -179,7 +179,7 @@ async test "turn_end: queued memory write drains before run_turn returns" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("ok")),
   ])
   let agent = turn_end_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(ext.mem.queue.length(), content="0")
@@ -222,7 +222,7 @@ impl NmemTransport for HangingAppendTransport with fn post_json(
     })
   } else {
     if self.hang_ms > 0 {
-      @io.sleep(self.hang_ms)
+      @async.sleep(self.hang_ms)
     }
     Ok({
       status: 200,
@@ -255,7 +255,7 @@ async test "turn_end: drain timeout is bounded and stays silent" {
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
   let agent = turn_end_agent(ext, model)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
     inspect(transport.requests.length(), content="1")
@@ -391,7 +391,7 @@ async test "before_tool: mid-turn drain is throttled to one per interval" {
   let agent = turn_end_agent(ext, model, tools=[
     LogToolProvider::{ log, } as &@posoco.ToolProvider,
   ])
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     // Turn 1 (no tools): the create commits at turn end.
     ignore(agent.run_turn(@tk.tk_user_msg("hello"), "session_1"))
@@ -401,7 +401,7 @@ async test "before_tool: mid-turn drain is throttled to one per interval" {
     // with NO new POST from before_tool; both staged lanes commit at turn end.
     ignore(agent.run_turn(@tk.tk_user_msg("probe please"), "session_1"))
     // After the interval elapses, the next before_tool drains first.
-    @io.sleep(800)
+    @async.sleep(800)
     ext.stage_session_sync("session_3", "probe")
     ignore(agent.run_turn(@tk.tk_user_msg("again"), "session_1"))
     debug_inspect(

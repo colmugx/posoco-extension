@@ -111,7 +111,7 @@ fn board_native_url(runtime : BoardRuntime) -> String raise {
 
 ///|
 async test "native create stamps deterministic server time and answers event then result" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let url = board_native_url(runtime)
@@ -215,7 +215,7 @@ async test "native create stamps deterministic server time and answers event the
 
 ///|
 async test "native command chain covers all eight names with ordered events" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
@@ -314,7 +314,7 @@ async test "native command chain covers all eight names with ordered events" {
 
 ///|
 async test "native two clients conflict then fresh revision retry succeeds" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let url = board_native_url(runtime)
@@ -382,7 +382,7 @@ async test "native two clients conflict then fresh revision retry succeeds" {
 
 ///|
 async test "native invalid commands answer and keep the socket alive" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
@@ -462,7 +462,7 @@ async test "native invalid commands answer and keep the socket alive" {
 
 ///|
 async test "native command_id correlates twice without deduplication" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let runtime = board_native_runtime(group, now_ms=() => 1234L)
       let ws = @websocket.connect(board_native_url(runtime))
@@ -580,7 +580,7 @@ impl @store.BoardStore for CommandScriptStore with fn persist(
 
 ///|
 async test "native pre-visibility persistence failure mints no event and moves nothing" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let store = CommandScriptStore::CommandScriptStore()
       store.fail_persists = 1
@@ -632,7 +632,7 @@ async test "native pre-visibility persistence failure mints no event and moves n
 
 ///|
 async test "native uncertain durability reloads the candidate then answers false with the new revision" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let store = CommandScriptStore::CommandScriptStore()
       store.uncertain_persists = 1

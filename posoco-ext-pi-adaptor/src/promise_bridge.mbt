@@ -1,7 +1,7 @@
 ///| Minimal JS Promise bridge for the JS-only adaptor.
 
 ///|
-/// Posoco itself uses moonbitlang/async; this local primitive only adapts an
+/// Posoco itself uses moonbitlang/core/async; this local primitive only adapts an
 /// externally-owned JavaScript Promise into the active MoonBit coroutine.
 pub(all) suberror JsPromiseError {
   Rejected(String)
@@ -13,7 +13,7 @@ pub(all) suberror JsPromiseError {
 fn js_promise_as_async(promise : JsPromise) -> @js_async.Promise[String] = "%identity"
 
 ///|
-/// On the JS target nothing pumps moonbitlang/async's scheduler in the
+/// On the JS target nothing pumps moonbitlang/core/async's scheduler in the
 /// background, so a foreign-promise wait must perform wake + reschedule
 /// itself, which @js_async's Promise::wait does. A raw %async.suspend resumed
 /// straight from the settling JS microtask deadlocks any caller parked inside

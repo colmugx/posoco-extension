@@ -4,9 +4,9 @@ fn is_qwen_http_success(status : Int32) -> Bool {
 }
 
 ///|
-async fn read_qwen_error_body(client : @http.Client) -> String? {
+async fn read_qwen_error_body(client : @http.ClientConnection) -> String? {
   let data = client.read_all() catch { _ => return None }
-  let text = data.text() catch { _ => return None }
+  let text = @utf8enc.decode(data) catch { _ => return None }
   Some(text)
 }
 

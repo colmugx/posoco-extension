@@ -9,7 +9,6 @@ import {
   "posoco/kit-events" @kit_events,
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
-  "moonbitlang/async" @io,
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/string",

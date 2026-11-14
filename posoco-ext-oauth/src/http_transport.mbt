@@ -40,7 +40,7 @@ pub fn OAuthHttpResponse::OAuthHttpResponse(
 
 ///|
 /// HTTP POST seam. `DefaultOAuthHttpTransport` provides a native+js impl that
-/// calls `moonbitlang/async/http`; wasm/wasm-gc has no default (hosts supply
+/// calls `moonbitlang/core/async/http`; wasm/wasm-gc has no default (hosts supply
 /// their own transport or OAuth HTTP flows are unavailable on that target).
 pub(open) trait OAuthHttpTransport {
   async fn post(Self, request : OAuthHttpRequest) -> OAuthHttpResponse raise OAuthError

@@ -1,5 +1,5 @@
 ///|
-/// Live `GET /models` fetch via moonbitlang/async/http. Compiled on native,
+/// Live `GET /models` fetch via moonbitlang/core/async/http. Compiled on native,
 /// wasm, and js: `@http` is unavailable on wasm-gc.
 
 ///|

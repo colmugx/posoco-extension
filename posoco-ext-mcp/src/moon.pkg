@@ -8,6 +8,7 @@ import {
   "colmugx/mcp/protocol/types",
   "colmugx/fuwaroid",
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
   "moonbitlang/core/async" @core_async,
   "moonbitlang/core/env",
   "moonbitlang/core/json",

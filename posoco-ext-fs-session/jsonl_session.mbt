@@ -93,7 +93,7 @@ fn save_session_path(
 ///|
 /// root_dir may be a nested path (e.g. `<home>/.cetas/sessions/--proj--`);
 /// @xfs.create_dir is single-level on native, so missing parents are created
-/// with the recursive mkdir from moonbitlang/async/fs.
+/// with the recursive mkdir from moonbitlang/core/async/fs.
 async fn JsonlSessionStore::ensure_root_dir(
   self : JsonlSessionStore,
 ) -> Unit raise @posoco.SessionError {

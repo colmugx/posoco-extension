@@ -1,6 +1,6 @@
 // WebFetchTools' ToolProvider: the `webfetch` tool pipeline. Pinned to
 // [native, wasm, js] because it touches `default_http_io`
-// (moonbitlang/async/http has no network stack on wasm-gc) and `@async.now`;
+// (moonbitlang/core/async/http has no network stack on wasm-gc) and `@async.now`;
 // wasm-gc has no ToolProvider impl.
 
 ///|

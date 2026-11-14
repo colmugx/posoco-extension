@@ -643,12 +643,12 @@ async test "on_start with an attached group defers the fetch to the background" 
     model_metadata=Some(metadata),
   )
   assert_true(metadata.lookup("deepseek", "deepseek-flash").tokens == 500_000)
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     router.attach_background(group)
     @posoco.Lifecycle::on_start(router)
     // Inline execution would have started the fetch before returning.
     assert_eq(transport.calls, 0)
-    @io.sleep(200)
+    @async.sleep(200)
     assert_eq(transport.calls, 1)
     assert_true(
       metadata.lookup("deepseek", "deepseek-flash").tokens == 1_000_000,

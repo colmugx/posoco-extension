@@ -1,5 +1,5 @@
 // Default HttpIo transport backed by moonbitlang/core/async/http.
-// Target-gated to [native, wasm, js] via moon.pkg; moonbitlang/async has no
+// Target-gated to [native, wasm, js] via moon.pkg; moonbitlang/core/async has no
 // network stack on wasm-gc, so hosts there inject their own `HttpIo`.
 
 ///|

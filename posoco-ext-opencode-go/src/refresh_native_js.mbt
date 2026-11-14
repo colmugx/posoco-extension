@@ -1,5 +1,5 @@
 ///|
-/// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
+/// Native+wasm+js: moonbitlang/core/async/http (`@http`) is unavailable on wasm-gc.
 
 ///|
 /// Live refresh: `/models`, models.dev enrichment (best-effort), grant renewal

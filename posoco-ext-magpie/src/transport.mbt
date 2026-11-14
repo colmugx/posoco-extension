@@ -4,7 +4,7 @@
 /// The manager never performs I/O itself: it speaks to the gateway through
 /// this trait, so the whole control plane is testable against scripted
 /// responses without a running Magpie. The default implementation is the
-/// only place where `moonbitlang/async/http` is used.
+/// only place where `moonbitlang/core/async/http` is used.
 
 ///|
 /// One HTTP GET against the gateway. Implementations raise
@@ -42,7 +42,7 @@ priv enum HttpOutcome {
 }
 
 ///|
-/// Default transport over `moonbitlang/async/http`, applying the
+/// Default transport over `moonbitlang/core/async/http`, applying the
 /// configured connect timeout per request. Holds no state and no
 /// credentials: headers arrive with each call.
 pub struct HttpMagpieTransport {
@@ -150,7 +150,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
 }
 
 ///|
-/// Streaming HTTP response over `moonbitlang/async/http`: one client per
+/// Streaming HTTP response over `moonbitlang/core/async/http`: one client per
 /// request, `read_until("\n")` per line, closed exactly once on every exit
 /// path by the caller-facing handle.
 priv struct HttpEventStream {

@@ -1,5 +1,5 @@
 ///|
-/// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
+/// Native+wasm+js: moonbitlang/core/async/http (`@http`) is unavailable on wasm-gc.
 ///
 /// Live OpenCode Go reads: the `/models` listing (same envelope as the zen
 /// plane) and the `/usage` three-window quota, plus the pull-style

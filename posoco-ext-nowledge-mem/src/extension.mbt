@@ -39,7 +39,7 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 ///   connectivity).
 ///
 /// The background flusher is deliberately NOT spawned from `on_start`:
-/// `moonbitlang/async` has no detached spawn — every task lives in a
+/// `moonbitlang/core/async` has no detached spawn — every task lives in a
 /// host-owned `TaskGroup`. Hosts may call `attach` inside their
 /// `with_task_group` scope (mcp / ratelimit precedent); `flush_pending`
 /// serves hosts and tests that prefer explicit draining.
@@ -181,7 +181,7 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_shutdown(
 /// the engine, so the group must stay open for the agent's lifetime.
 pub fn NowledgeMem::attach(
   self : NowledgeMem,
-  group : @io.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> Unit {
   self.attached = true
   group.spawn_bg(() => self.run_flusher())

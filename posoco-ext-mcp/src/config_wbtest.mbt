@@ -415,6 +415,11 @@ async test "bridge_defaults_and_lazy_activate_without_group" {
 ///|
 fn bridge_with_mode(mode : LoadMode) -> MCPToolBridge {
   {
+    io_group: None,
+    io_task: None,
+    io_ready: None,
+    io_closed: false,
+    io_lock: @core_async.Mutex::Mutex(),
     connections: [],
     tool_to_conn: Map::from_array([]),
     mode,

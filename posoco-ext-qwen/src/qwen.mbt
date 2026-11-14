@@ -17,9 +17,9 @@ async fn QwenModelPort::post_chat_json(
   body : Json,
   stage : String,
 ) -> Json raise @posoco.ModelError {
-  let (response, body_data) = @http.post(
+  let (response, body_data) = @http.post_binary(
     chat_url(self.config),
-    body.stringify(),
+    @utf8enc.encode(body.stringify())[:],
     headers=build_headers(self.config),
   ) catch {
     err =>
@@ -27,10 +27,10 @@ async fn QwenModelPort::post_chat_json(
         "qwen transport failure (stage=post): " + err.to_string(),
       )
   }
-  let body_text = body_data.text() catch {
+  let body_text = @utf8enc.decode(body_data) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "qwen response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
+        "qwen response parse failure (stage=decode_utf8, body_bytes=\{body_data.length()})",
       )
   }
   if !is_qwen_http_success(response.code) {
@@ -86,7 +86,7 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
         options,
         true,
       )
-      let client = @http.post_stream(
+      let client = @http.post(
         chat_url(self.config),
         headers=build_headers(self.config),
       ) catch {
@@ -95,7 +95,7 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
             "qwen transport failure (stage=post_stream): " + err.to_string(),
           )
       }
-      client.write(body.stringify()) catch {
+      client.write(@utf8enc.encode(body.stringify())[:]) catch {
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
@@ -130,7 +130,7 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
       let mut saw_finish = false
       let mut last_yield = @async.now()
       while !done {
-        let line = client.read_until("\n") catch {
+        let line = client.read_until(b"\n") catch {
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
@@ -140,7 +140,13 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
         }
         match line {
           Some(data) => {
-            let trimmed = data.trim()
+            let text = @utf8enc.decode(data) catch {
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "qwen SSE chunk decode failure (stage=decode_utf8)",
+                )
+            }
+            let trimmed = text.trim()
             if trimmed.has_prefix("data:") {
               let payload = trimmed[5:].trim().to_owned()
               if payload.length() > 0 {

@@ -312,7 +312,7 @@ async test "/memory status: connectivity, lanes, queue, and the session inbound"
   @posoco.Observer::on_event(ext, Some(scope), @posoco.TurnEvent::TurnStarted)
   // The inbound read slot is attach-gated, so the test hands the extension
   // the host's task group (engine.stop() retires the flusher at the end).
-  @io.with_task_group(group => {
+  @async.with_task_group(group => {
     ext.attach(group)
     guard @posoco.MemoryPort::inbound(ext, session_id="s1", request="hi")
       is Some(body) else {

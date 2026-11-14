@@ -132,6 +132,11 @@ test "mcp_status_json carries per-server state and connection domain" {
 ///|
 async test "status_rows maps failures and pending before activation" {
   let bridge : MCPToolBridge = {
+    io_group: None,
+    io_task: None,
+    io_ready: None,
+    io_closed: false,
+    io_lock: @core_async.Mutex::Mutex(),
     connections: [],
     tool_to_conn: Map::from_array([]),
     mode: LoadMode::Lazy,
@@ -186,6 +191,11 @@ async test "status_rows displays retired slots as retired" {
 /// stay on the retired/pending display path instead of touching an ask.
 async test "status_rows on a never-attached bridge stays on retired paths" {
   let bridge : MCPToolBridge = {
+    io_group: None,
+    io_task: None,
+    io_ready: None,
+    io_closed: false,
+    io_lock: @core_async.Mutex::Mutex(),
     connections: [registry_test_conn("solo", [])],
     tool_to_conn: Map::from_array([]),
     mode: LoadMode::Eager,

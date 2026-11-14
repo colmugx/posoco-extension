@@ -11,7 +11,7 @@ pub struct NativeBoardWebServer {
   priv mut alive : Bool
   priv mut closing : Bool
   priv mut error : String?
-  priv stop : @async.CondVar
+  priv stop : @core_async.Cond
   priv mut serving : Bool
 }
 
@@ -28,7 +28,7 @@ pub fn NativeBoardWebServer::NativeBoardWebServer(
     alive: false,
     closing: false,
     error: None,
-    stop: @async.CondVar::Cond(),
+    stop: @core_async.Cond::Cond(),
     serving: false,
   }
 }
@@ -132,7 +132,7 @@ pub impl BoardWebServer for NativeBoardWebServer with fn run(self) {
   // protected WebSocket handlers must be drained too. MoonBack's 1s grace
   // remains below the runtime Supervisor's 5s cancel-and-wait bound.
   let outcome : Result[Unit, Error] = Ok(
-    @async.any([
+    @core_async.any([
       () => app.serve(listener),
       () => {
         while !self.closing {

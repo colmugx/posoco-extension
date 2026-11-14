@@ -20,7 +20,7 @@ async test "native server binds loopback random port and guards bootstrap" {
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let _ = web.run()
     })
-    @async.sleep(10)
+    @core_async.sleep(10)
 
     let (health_code, health_body) = board_http_get(
       endpoint.base_url() + "/health",
@@ -109,7 +109,7 @@ async test "native close is idempotent and rebind mints fresh secret" {
 
 ///|
 async test "native server refuses to bind until a backend is installed and then serves it" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let server = NativeBoardWebServer::NativeBoardWebServer()
       let web : &BoardWebServer = server
@@ -160,7 +160,7 @@ async test "native server refuses to bind until a backend is installed and then 
 
 ///|
 async test "native close_server keeps the backend and reopens with fresh ws state" {
-  @async.with_timeout(5000, () => {
+  @core_async.with_timeout(5000, () => {
     @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(now_ms=() => 1234L)
       let server = NativeBoardWebServer::NativeBoardWebServer()

@@ -1,5 +1,5 @@
 ///|
-/// ModelPort::chat impl via moonbitlang/async/http. Compiled on native,
+/// ModelPort::chat impl via moonbitlang/core/async/http. Compiled on native,
 /// wasm, and js: `@http` is unavailable on wasm-gc.
 
 ///|

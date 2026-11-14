@@ -1,5 +1,5 @@
 ///|
-/// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
+/// Native+wasm+js: moonbitlang/core/async/http (`@http`) is unavailable on wasm-gc.
 ///
 /// Anthropic Messages wire for models the gateway serves natively on
 /// `/messages` (Claude family, qwen3.7/3.8 flash-plus tiers, MiniMax M3 and

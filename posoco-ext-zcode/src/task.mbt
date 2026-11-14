@@ -18,7 +18,7 @@ pub extend ZcodeTaskResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// The target seam. Each backend file (task.native.mbt over
-/// moonbitlang/async process/fs, task.js.mbt over Bun) implements
+/// moonbitlang/core/async process/fs, task.js.mbt over Bun) implements
 /// `zcode_resolve_command_io`, `zcode_registry_io`, `zcode_cwd_default` and
 /// `zcode_session_run`; everything else — arg parsing, protocol codecs,
 /// registry building, result assembly, ToolProvider — stays in shared files.

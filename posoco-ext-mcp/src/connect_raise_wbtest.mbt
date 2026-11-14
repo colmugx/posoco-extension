@@ -35,6 +35,11 @@ fn raise_test_bridge(config : MCPServerConfig) -> MCPToolBridge {
     tool_to_conn: Map::from_array([]),
     mode: LoadMode::Eager,
     pending: [],
+    io_group: None,
+    io_task: None,
+    io_ready: None,
+    io_closed: false,
+    io_lock: @core_async.Mutex::Mutex(),
     group: None,
     lifetime: None,
     activated: true,
@@ -52,7 +57,7 @@ fn raise_test_bridge(config : MCPServerConfig) -> MCPToolBridge {
 
 ///|
 async test "connect_stdio_missing_command_fails_handshake_as_data" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let config = raise_test_stdio_config("gone")
     let bridge = raise_test_bridge(config)
     match bridge.connect(config, group) {
@@ -70,7 +75,7 @@ async test "connect_stdio_missing_command_fails_handshake_as_data" {
 
 ///|
 async test "connect_http_refused_endpoint_fails_handshake_as_data" {
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let config = raise_test_http_config("dead")
     let bridge = raise_test_bridge(config)
     match bridge.connect(config, group) {

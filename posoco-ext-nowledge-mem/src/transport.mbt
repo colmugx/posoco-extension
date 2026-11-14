@@ -27,7 +27,7 @@ pub(open) trait NmemTransport {
 }
 
 ///|
-/// Default `NmemTransport` backed by `moonbitlang/async/http`. Its js backend
+/// Default `NmemTransport` backed by `moonbitlang/core/async/http`. Its js backend
 /// is fetch-based with the same API, so this implementation is shared by the
 /// native and js targets; no per-target split is needed.
 pub(all) struct HttpNmemTransport {

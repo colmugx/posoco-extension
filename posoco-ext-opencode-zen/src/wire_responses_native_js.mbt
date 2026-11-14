@@ -1,5 +1,5 @@
 ///|
-/// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
+/// Native+wasm+js: moonbitlang/core/async/http (`@http`) is unavailable on wasm-gc.
 ///
 /// OpenAI Responses wire for models the gateway serves on `/responses`
 /// (GPT, Grok, Muse families). Encoding and SSE parsing come from

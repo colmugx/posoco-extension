@@ -1,5 +1,5 @@
 ///|
-/// Native backend of the task seam (moonbitlang/async process + fs): the
+/// Native backend of the task seam (moonbitlang/core/async process + fs): the
 /// ZcodeConn line protocol, reverse-request policy, event collection and
 /// teardown.
 
@@ -430,10 +430,14 @@ async fn zcode_delegated(
   ) catch {
     e => {
       raw_writer.close()
+      stdout_output.close()
       reader.close()
       raise ZcodeSpawnFailed(detail="zcode: cannot spawn app-server: \{e}")
     }
   }
+  // The parent's copy of the stdout write end must go away: the child's
+  // exit only delivers EOF once every writer is gone.
+  stdout_output.close()
   // Reader task: lines → responses / policy replies / events; EOF fails all
   // pending requests and closes the event stream.
   group.spawn_bg(() => {

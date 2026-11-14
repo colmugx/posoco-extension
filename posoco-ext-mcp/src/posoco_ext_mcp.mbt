@@ -547,10 +547,27 @@ pub(all) struct MCPToolBridge {
   mode : LoadMode
   /// Discovered-but-not-yet-connected server configs (mcp.json path).
   pending : Array[MCPServerConfig]
-  /// Host-provided long-lived task group. Every connection creation —
-  /// connect, reconnect, or probe — must hold one (stdio spawns its child
-  /// process on it). `None` until `attach`.
-  mut group : @async.TaskGroup[Unit]?
+  /// Host-provided long-lived task group (core-async). Connection creation
+  /// and probe retries spawn here, and stdio children are torn down against
+  /// it at `close`. `None` until `attach` (or a `connect` that supplies one).
+  mut group : @core_async.TaskGroup?
+  /// Internal old-async I/O group backing stdio transports: colmugx/mcp
+  /// 0.18's `connect_stdio` still takes `moonbitlang/async.TaskGroup[Unit]`,
+  /// so the bridge parks one of its own instead of leaking that type into
+  /// every host. Created lazily by `ensure_io_group`, drained by `close`;
+  /// disappears together with the colmugx/mcp alignment.
+  mut io_group : @async.TaskGroup[Unit]?
+  /// The session task itself (`no_wait` child of the host group: a group
+  /// exit cancels it even when the bridge is never closed). Cancelled by
+  /// `close` for immediate teardown.
+  mut io_task : @core_async.Task[Unit]?
+  /// Handshake for the I/O group session above (old-async queue: the session
+  /// closure runs inside a `moonbitlang/async` task group).
+  mut io_ready : @aqueue.Queue[@async.TaskGroup[Unit]]?
+  /// Set by `close`: the I/O group session is drained and must not respawn.
+  mut io_closed : Bool
+  /// Serializes I/O group creation across concurrent probe connects.
+  mut io_lock : @core_async.Mutex
   /// Host-provided lifetime task group on posoco's `moonbitlang/core/async`
   /// stack. Each connection's fuwaroid actor loop is spawned here (fuwaroid
   /// 0.4 spawns on core async), while the transport above keeps running on
@@ -594,6 +611,11 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
     mode: LoadMode::Eager,
     pending: [],
     group: None,
+    io_group: None,
+    io_task: None,
+    io_ready: None,
+    io_closed: false,
+    io_lock: @core_async.Mutex::Mutex(),
     lifetime: None,
     activated: false,
     catalog_revision: 0,
@@ -635,6 +657,11 @@ pub async fn MCPToolBridge::discover(
         mode,
         pending,
         group: None,
+        io_group: None,
+        io_task: None,
+        io_ready: None,
+        io_closed: false,
+        io_lock: @core_async.Mutex::Mutex(),
         lifetime: None,
         contributions: None,
         reserved_names: [],
@@ -653,17 +680,16 @@ pub async fn MCPToolBridge::discover(
 }
 
 ///|
-/// Hand the bridge the host's long-lived task groups. stdio servers spawn
-/// their child process on `group`, so it must outlive every connection —
-/// a temporary group would SIGTERM the children when it closes. `lifetime`
-/// is the host's `moonbitlang/core/async` group: every connection's fuwaroid
-/// actor loop is spawned there (fuwaroid 0.4 runs on posoco's core stack),
-/// and it must outlive the bridge just the same. Hosts that only probe
-/// unreachable servers may omit it; a connection that needs an actor fails
-/// honestly instead.
+/// Hand the bridge the host's long-lived task groups. `group` hosts the
+/// connection-creation and probe-retry tasks and must outlive every
+/// connection; stdio children ride the bridge's internal I/O group and are
+/// cancelled at `close`. `lifetime` is the host's core-async group for the
+/// fuwaroid actor loops (fuwaroid 0.4 runs on posoco's core stack) and must
+/// outlive the bridge just the same. Hosts that only probe unreachable
+/// servers may omit it; a connection that needs an actor fails honestly.
 pub fn MCPToolBridge::attach(
   self : MCPToolBridge,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   lifetime? : @core_async.TaskGroup,
 ) -> Unit {
   self.group = Some(group)
@@ -671,6 +697,57 @@ pub fn MCPToolBridge::attach(
     Some(lifetime) => self.lifetime = Some(lifetime)
     None => ()
   }
+}
+
+///|
+/// Lazily start the old-async I/O group session. The session closure runs
+/// inside a `moonbitlang/async` task group spawned on the host group and
+/// hands the group out through `io_ready`; it then sleeps in short slices
+/// until `closing` flips — the event loop always keeps a pending timer (an
+/// idle loop with a live coroutine reads as a deadlock), and `close` ends
+/// the session within one slice, letting the old task group cancel the
+/// stdio children riding on it. Serialized by `io_lock` so concurrent
+/// probes create exactly one session.
+async fn MCPToolBridge::ensure_io_group(
+  self : MCPToolBridge,
+) -> Result[@async.TaskGroup[Unit], String] {
+  match self.io_group {
+    Some(io) => return Ok(io)
+    None => ()
+  }
+  if self.io_closed {
+    return Err("MCP bridge is closed")
+  }
+  self.io_lock.acquire()
+  defer self.io_lock.release()
+  match self.io_group {
+    Some(io) => return Ok(io)
+    None => ()
+  }
+  let group = match self.group {
+    Some(group) => group
+    None => return Err("MCP bridge has no task group; attach or connect first")
+  }
+  let ready : @aqueue.Queue[@async.TaskGroup[Unit]] = @aqueue.Queue(
+    kind=Unbounded,
+  )
+  self.io_ready = Some(ready)
+  self.io_task = Some(
+    group.spawn(
+      async fn() {
+        @async.with_task_group(async fn(io) {
+          ready.put(io)
+          while !self.closing {
+            @core_async.sleep(100)
+          }
+        })
+      },
+      no_wait=true,
+    ),
+  )
+  let io = ready.get()
+  self.io_group = Some(io)
+  Ok(io)
 }
 
 ///|
@@ -701,6 +778,11 @@ pub fn MCPToolBridge::start_probes(
   self : MCPToolBridge,
   backoff_ms~ : Array[Int32] = probe_retry_backoff_ms,
 ) -> Unit {
+  // A closing bridge never starts new probe work: shutdown may race a
+  // composition-time start_probes, and the loser must be a silent no-op.
+  if self.closing {
+    return
+  }
   let claimed : Array[MCPServerConfig] = []
   for config in self.pending {
     claimed.push(config)
@@ -713,7 +795,7 @@ pub fn MCPToolBridge::start_probes(
         group.spawn_bg(() => {
           // The duplicate-name guard in connect_with_group keeps a probe
           // from double-connecting against any concurrent explicit connect.
-          match self.connect_with_group(config, group) {
+          match self.connect_with_group(config) {
             Ok(_) => self.bump_catalog_revision()
             Err(message) =>
               self.retry_startup_probe(config, message, backoff_ms)
@@ -736,9 +818,8 @@ async fn MCPToolBridge::sleep_backoff_or_close(
   self : MCPToolBridge,
   total_ms : Int32,
 ) -> Bool {
-  // Probe retries run on the bridge's I/O group (moonbitlang/async), so the
-  // backoff sleeps there too: a core-async sleep would outlive a group exit
-  // and keep the retry task alive after the host stopped waiting for it.
+  // Probe retries run on the host's core-async group, so the backoff sleeps
+  // there too: the retry task must die with the group exit, not outlive it.
   let slice_ms = 250
   let mut waited = 0
   while waited < total_ms {
@@ -747,7 +828,7 @@ async fn MCPToolBridge::sleep_backoff_or_close(
     } else {
       slice_ms
     }
-    @async.sleep(step)
+    @core_async.sleep(step)
     waited = waited + step
     if self.closing {
       return true
@@ -776,8 +857,8 @@ async fn MCPToolBridge::retry_startup_probe(
       return
     }
     match self.group {
-      Some(group) =>
-        match self.connect_with_group(config, group) {
+      Some(_) =>
+        match self.connect_with_group(config) {
           Ok(_) => {
             self.bump_catalog_revision()
             self.scrub_startup_failures(config.name)
@@ -831,8 +912,8 @@ pub async fn MCPToolBridge::activate(
   self.activated = true
   for config in self.pending {
     match self.group {
-      Some(group) =>
-        match self.connect_with_group(config, group) {
+      Some(_) =>
+        match self.connect_with_group(config) {
           Ok(_) => ()
           Err(message) => self.startup_failures.push((config.name, message))
         }
@@ -863,9 +944,13 @@ pub fn MCPToolBridge::failures(self : MCPToolBridge) -> Array[(String, String)] 
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Result[Unit, String] {
-  match self.connect_with_group(config, group) {
+  match self.group {
+    None => self.group = Some(group)
+    Some(_) => ()
+  }
+  match self.connect_with_group(config) {
     Ok(_) => {
       self.bump_catalog_revision()
       Ok(())
@@ -879,17 +964,20 @@ pub async fn MCPToolBridge::connect(
 /// handshake, with the http connect (era probe and legacy fallback) bounded
 /// by `timeout_ms` (0 disables it; stdio keeps the SDK's internal 3000ms era
 /// probe and is not double-wrapped). Auth challenges are captured from the
-/// raw connect error before it is discarded. The group contract requires a
-/// task group for every connection creation — the no-group guard lives with
-/// the callers.
+/// raw connect error before it is discarded. The stdio transport rides the
+/// bridge's internal old-async I/O group (`ensure_io_group`); the caller's
+/// group guard lives with the callers.
 async fn MCPToolBridge::open_client(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
 ) -> Result[@client.MCPClient, String] {
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
       let (cmd, args, extra_env) = stdio_cmd(t)
+      let io = match self.ensure_io_group() {
+        Ok(io) => io
+        Err(message) => return Err(message)
+      }
       try
         @client.MCPClient::connect_stdio(
           cmd~,
@@ -897,7 +985,7 @@ async fn MCPToolBridge::open_client(
           name=config.name,
           version="0.1.0",
           extra_env~,
-          group~,
+          group=io,
           era=config.era,
         )
       catch {
@@ -959,15 +1047,13 @@ async fn MCPToolBridge::open_client(
 }
 
 ///|
-/// Core connect: the caller must hold a task group — stdio spawns its child
-/// process on it, and under the group contract no connection creation
-/// proceeds without one. A retired slot for the same server name is refilled
-/// in place instead of appending a second slot, so slot indexes stay stable
-/// for the lifetime of the bridge.
+/// Core connect: the caller must hold a host task group — the group contract
+/// routes every connection creation through it. A retired slot for the same
+/// server name is refilled in place instead of appending a second slot, so
+/// slot indexes stay stable for the lifetime of the bridge.
 async fn MCPToolBridge::connect_with_group(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
   let mut refill_slot = -1
   let mut refill_epoch = 0
@@ -983,7 +1069,7 @@ async fn MCPToolBridge::connect_with_group(
       break
     }
   }
-  let client = match self.open_client(config, group) {
+  let client = match self.open_client(config) {
     Ok(client) => client
     Err(message) => return Err(message)
   }
@@ -1321,6 +1407,17 @@ pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
   // Flag first: background probe retries observe it between backoff slices
   // and stop, so a closed bridge never pins the host's task group.
   self.closing = true
+  // Wake the I/O group session: its sleep-poll observes `closing` within one
+  // slice (and the explicit cancel below makes teardown immediate), the old
+  // task group exits and cancels the stdio children riding on it.
+  self.io_closed = true
+  match self.io_task {
+    Some(task) => task.cancel()
+    None => ()
+  }
+  self.io_task = None
+  self.io_ready = None
+  self.io_group = None
   for conn in self.connections {
     match conn.client {
       Some(client) => client.close()
@@ -1447,7 +1544,7 @@ pub async fn MCPToolBridge::reconnect_server(
     }
     self.retire_slot(slot)
   }
-  match self.connect_with_group(config, group) {
+  match self.connect_with_group(config) {
     Ok(_) => {
       self.bump_catalog_revision()
       Ok(())
@@ -1483,9 +1580,8 @@ async fn MCPToolBridge::reconnect_one(
   let server = conn.name
   // Precondition before any destructive work: without a group the reconnect
   // cannot proceed, so the slot (and its live client) is left untouched.
-  let group = match self.group {
-    Some(group) => group
-    None => return Err(missing_task_group_message(server))
+  if self.group is None {
+    return Err(missing_task_group_message(server))
   }
   let actor = match conn.actor {
     Some(actor) => actor
@@ -1536,7 +1632,7 @@ async fn MCPToolBridge::reconnect_one(
     Some(old) => old.close()
     None => ()
   }
-  let client = match self.open_client(config, group) {
+  let client = match self.open_client(config) {
     Ok(client) => client
     Err(message) => return Err(message)
   }
