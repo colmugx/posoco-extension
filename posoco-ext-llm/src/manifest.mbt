@@ -55,21 +55,6 @@ pub extend RouterModelPort with @posoco.Lifecycle::{on_shutdown, on_start}
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_start(
   self : RouterModelPort,
 ) -> Unit {
-  // With an attached host group the metadata refresh rides the background:
-  // a blocked endpoint (models.dev unreachable, China/Russia networks) must
-  // not hold the startup lifecycle. The first session works from cache or
-  // the 500k fallback until the fetch lands; later readings pick up the
-  // real window. Without the seam (tests, hosts without attach) the refresh
-  // stays inline.
-  match self.background_group {
-    Some(group) => group.spawn_bg(() => self.refresh_model_metadata())
-    None => self.refresh_model_metadata()
-  }
-  // Announce the active provider once composition is over. Provider-scoped
-  // publishers register their listener from their own `on_compose` — after
-  // this router, which composes earlier, made its compose-time announcement.
-  // Republication is idempotent by contract: a listener that already saw the
-  // same provider re-applies the same state and publishes nothing new.
   self.publish_provider_event()
 }
 

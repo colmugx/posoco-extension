@@ -620,11 +620,11 @@ async test "metadata fetch fails only after every source failed" {
 }
 
 ///|
-/// Startup must not wait on the metadata fetch: with an attached group,
-/// `on_start` returns before the background fetch has even started, and the
-/// reading lands afterwards (first session falls back to 500k, later
-/// readings see the real window).
-async test "on_start with an attached group defers the fetch to the background" {
+/// Startup never touches the metadata network: `on_start` publishes without
+/// fetching (the lazy policy — the eager fetch cost ~12 MB resident per
+/// boot). The explicit background refresh is the seam that fetches, and it
+/// defers to the group: readings before it lands serve the 500k fallback.
+async test "on_start never fetches; the background refresh defers to the group" {
   let transport = MetadataTestTransport::{
     calls: 0,
     payload: metadata_fixture(),
@@ -646,7 +646,10 @@ async test "on_start with an attached group defers the fetch to the background" 
   @async.with_task_group(group => {
     router.attach_background(group)
     @posoco.Lifecycle::on_start(router)
-    // Inline execution would have started the fetch before returning.
+    // Lazy policy: the whole lifecycle ran, nothing fetched.
+    assert_eq(transport.calls, 0)
+    router.refresh_model_metadata_in_background()
+    // The group defers the fetch: it has not started inline.
     assert_eq(transport.calls, 0)
     @async.sleep(200)
     assert_eq(transport.calls, 1)

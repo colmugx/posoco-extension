@@ -71,6 +71,21 @@ pub async fn RouterModelPort::refresh_model_metadata(
 }
 
 ///|
+/// Lazily refresh models.dev metadata without blocking the caller: with an
+/// attached background group the fetch rides the group (the caller serves
+/// cache/fallback readings immediately; fresh windows land for later
+/// readings), without one (tests, hosts without attach) it stays a no-op —
+/// inline refresh remains available via refresh_model_metadata.
+pub fn RouterModelPort::refresh_model_metadata_in_background(
+  self : RouterModelPort,
+) -> Unit noraise {
+  match self.background_group {
+    Some(group) => group.spawn_bg(async fn() { self.refresh_model_metadata() })
+    None => ()
+  }
+}
+
+///|
 pub fn RouterModelPort::context_window_reading(
   self : RouterModelPort,
   slot : ModelSlot,
