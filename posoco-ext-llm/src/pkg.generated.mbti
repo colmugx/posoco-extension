@@ -94,6 +94,7 @@ pub async fn RouterModelPort::on_start(Self) -> Unit
 pub fn RouterModelPort::picker_catalog_json(Self) -> Array[@json.Json]
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub async fn RouterModelPort::refresh_model_metadata(Self) -> Unit noraise
+pub fn RouterModelPort::refresh_model_metadata_in_background(Self) -> Unit
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[@posoco-kit-provider.ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
 pub fn RouterModelPort::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
