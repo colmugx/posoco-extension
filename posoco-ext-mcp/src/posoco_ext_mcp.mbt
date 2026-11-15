@@ -1476,10 +1476,11 @@ pub async fn MCPToolBridge::reconnect_server(
 /// closed by this loser), redoes the connect handshake and tool fetch in
 /// this caller's task, and commits the refill in place before handing the
 /// fresh client to the actor's fold. A failed or cancelled attempt folds
-/// back to Fresh on the old (closed) client, so later calls fail fast
-/// instead of hanging — the deferred EndReconnect guarantees the
-/// Reconnecting fold is always exited, cancellation unwinding included, and
-/// its duplicate after a normal completion is a structural no-op.
+/// back to NeedsReconnect rather than handing out the old potentially
+/// closed client — the next call must try reconnecting again. The deferred
+/// EndReconnect guarantees the Reconnecting fold is always exited,
+/// cancellation unwinding included, and its duplicate after normal
+/// completion is a structural no-op.
 async fn MCPToolBridge::reconnect_one(
   self : MCPToolBridge,
   conn_idx : Int32,
@@ -1529,7 +1530,7 @@ async fn MCPToolBridge::reconnect_one(
       )
   }
   // Compensating report on every non-normal exit (failed IO, validation
-  // loss, cancellation): ok=false folds back to Fresh on the old client.
+  // loss, cancellation): ok=false marks NeedsReconnect, never Fresh.
   defer {
     let _ = actor.end_reconnect(generation~, ok=false, client=None)
   }

@@ -170,13 +170,13 @@ async test "conn_actor begin_reconnect has one winner and mints the next generat
       conn_view_is(actor, health=Reconnecting, generation=1, in_flight=0),
     )
     let _ = actor.end_reconnect(generation=1, ok=false, client=None)
-    // From NeedsReconnect the mint is the same +1 and still single-winner.
-    assert_true(
-      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(100, 1)),
-    )
-    let _ = actor.end_call(generation=1, outcome=TimedOut)
+    // The old client may have been closed. A failed reconnect must not hand
+    // it out to another tool call; another BeginReconnect is required.
     assert_true(
       conn_view_is(actor, health=NeedsReconnect, generation=1, in_flight=0),
+    )
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), Denied(ReconnectFirst)),
     )
     assert_true(
       conn_reply_is(
@@ -191,9 +191,9 @@ async test "conn_actor begin_reconnect has one winner and mints the next generat
 ///|
 /// EndReconnect ok=true installs the carried client and folds Fresh with
 /// in_flight zeroed (old-generation leftovers die with the counter);
-/// ok=false folds Fresh but keeps the old client (calls fail fast on the
-/// closed wire until a later reconnect succeeds), and a client payload on
-/// a failure report is never installed. Fold table rows EndReconnect.
+/// ok=false folds NeedsReconnect and never permits the old potentially
+/// closed client to be used; a client payload on a failure report is ignored.
+/// Fold table rows EndReconnect.
 async test "conn_actor end_reconnect swaps client on success keeps old on failure" {
   @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
@@ -222,9 +222,9 @@ async test "conn_actor end_reconnect swaps client on success keeps old on failur
       ),
     )
     let _ = actor.end_reconnect(generation=2, ok=false, client=None)
-    assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=0))
+    assert_true(conn_view_is(actor, health=NeedsReconnect, generation=2, in_flight=0))
     assert_true(
-      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(200, 2)),
+      conn_reply_is(actor.acquire(timeout_ms=10_000), Denied(ReconnectFirst)),
     )
     // Clients install on success reports only.
     assert_true(
@@ -235,7 +235,17 @@ async test "conn_actor end_reconnect swaps client on success keeps old on failur
     )
     let _ = actor.end_reconnect(generation=3, ok=false, client=Some(999))
     assert_true(
-      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(200, 3)),
+      conn_reply_is(actor.acquire(timeout_ms=10_000), Denied(ReconnectFirst)),
+    )
+    // A later successful reconnect installs the replacement and reopens
+    // admission. The failure's fake client value never becomes visible.
+    assert_true(
+      conn_reply_is(actor.begin_reconnect(timeout_ms=10_000), Granted(generation=4)),
+    )
+    let _ = actor.end_reconnect(generation=4, ok=true, client=Some(400))
+    assert_true(conn_view_is(actor, health=Fresh, generation=4, in_flight=0))
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(400, 4)),
     )
   })
 }
@@ -326,5 +336,50 @@ async test "conn_actor snapshot conserves accepted processed abandoned outstandi
     assert_eq(after_stop.processed, 3L)
     assert_eq(after_stop.abandoned, 0L)
     assert_eq(after_stop.outstanding, 0L)
+  })
+}
+
+
+///|
+/// Duplicate end-of-call notifications are not admissions. They cannot make
+/// in_flight negative, even if a timeout stigma is reported repeatedly.
+async test "conn_actor repeated completion never underflows in_flight" {
+  @core_async.with_task_group(group => {
+    let actor = ConnActor::start(group~, client=1)
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(1, 0)),
+    )
+    let _ = actor.end_call(generation=0, outcome=CallOk)
+    let _ = actor.end_call(generation=0, outcome=CallOk)
+    assert_true(conn_view_is(actor, health=Fresh, generation=0, in_flight=0))
+    let _ = actor.end_call(generation=0, outcome=TimedOut)
+    assert_true(
+      conn_view_is(actor, health=NeedsReconnect, generation=0, in_flight=0),
+    )
+  })
+}
+
+///|
+/// When reconnect fails, late EndCall from the old generation must not
+/// accidentally move the connection back to Fresh.
+async test "conn_actor failed reconnect keeps admission closed across stale reports" {
+  @core_async.with_task_group(group => {
+    let actor = ConnActor::start(group~, client=1)
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(1, 0)),
+    )
+    assert_true(
+      conn_reply_is(actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1)),
+    )
+    let _ = actor.end_reconnect(generation=1, ok=false, client=None)
+    let _ = actor.end_call(generation=0, outcome=CallOk)
+    let _ = actor.end_call(generation=0, outcome=TimedOut)
+    let _ = actor.end_reconnect(generation=1, ok=true, client=Some(99))
+    assert_true(
+      conn_view_is(actor, health=NeedsReconnect, generation=1, in_flight=0),
+    )
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), Denied(ReconnectFirst)),
+    )
   })
 }
