@@ -150,8 +150,9 @@ fn[ClientT] conn_fold_query(
 ///   additionally folds Fresh/NeedsReconnect -> NeedsReconnect, and never
 ///   regresses a Reconnecting connection.
 /// - `EndReconnect` fires only while Reconnecting on the matching
-///   generation: install the carried client (success reports only), fold
-///   to Fresh, and zero in_flight — every leftover report of older
+///   generation: install the carried client and mark Fresh on success;
+///   on failure remain NeedsReconnect so callers cannot acquire a closed
+///   client. Zero in_flight in either case — every leftover report of old
 ///   generations is thereby invalidated.
 fn[ClientT] conn_fold_cmd(
   _ctx : @fuwaroid.Ctx[ConnCmd[ClientT], ConnQuery, ConnReply[ClientT]],
@@ -161,7 +162,10 @@ fn[ClientT] conn_fold_cmd(
   match cmd {
     EndCall(generation=g, outcome~) => {
       if g == state.generation {
-        state.in_flight = state.in_flight - 1
+        // Duplicate completion reports must never drive the count below zero.
+        if state.in_flight > 0 {
+          state.in_flight = state.in_flight - 1
+        }
         // Only a timeout stigmatizes its connection (stale-response safety);
         // every observable outcome still returns its admission.
         let stigmatizes = match outcome {
@@ -177,10 +181,15 @@ fn[ClientT] conn_fold_cmd(
     EndReconnect(generation=g, ok~, client=maybe) => {
       if g == state.generation && state.health is Reconnecting {
         match (ok, maybe) {
-          (true, Some(replacement)) => state.client = replacement
-          _ => ()
+          (true, Some(replacement)) => {
+            state.client = replacement
+            state.health = Fresh
+          }
+          // The previous client may already have been closed by the
+          // reconnect attempt. Keep the generation unusable until a
+          // subsequent successful reconnect installs a live client.
+          _ => state.health = NeedsReconnect
         }
-        state.health = Fresh
         state.in_flight = 0
       }
       state
