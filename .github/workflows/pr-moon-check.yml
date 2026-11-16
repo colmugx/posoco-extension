@@ -52,3 +52,44 @@ jobs:
 
       - name: moon test (js)
         run: moon test --target js
+
+  pstack:
+    if: >-
+      contains(github.event.pull_request.changed_files, 'posoco-ext-pstack/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install moon (Unix)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon version
+        run: moon version --all
+
+      - name: moon update
+        run: moon update
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: validate PStack assets
+        run: node posoco-ext-pstack/scripts/check-assets.mjs
+
+      - name: moon check PStack (native)
+        run: moon check --target native posoco-ext-pstack/src
+
+      - name: moon check PStack (js)
+        run: moon check --target js posoco-ext-pstack/src
+
+      - name: moon test PStack (native)
+        run: moon test --target native posoco-ext-pstack/src
+
+      - name: moon test PStack (js)
+        run: moon test --target js posoco-ext-pstack/src
