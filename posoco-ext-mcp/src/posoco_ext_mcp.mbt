@@ -114,35 +114,39 @@ fn convert_tool_def(
 }
 
 ///|
-/// Render content as small fragments. Large text is retained by reference
-/// rather than interpolated into a second full-size string. In particular,
-/// embedded resource text is not concatenated with its prefix until it has
-/// passed the Agent-facing output budget.
-fn mcp_content_fragments(item : @types.ContentBlock) -> Array[String] {
-  match item {
-    @types.ContentBlock::Text(t, ..) => [t]
-    @types.ContentBlock::Image(data, mime_type~, ..) =>
-      ["[Image: \{mime_type}, \{data.length()} chars]"]
-    @types.ContentBlock::Audio(data, mime_type~, ..) =>
-      ["[Audio: \{mime_type}, \{data.length()} chars]"]
-    @types.ContentBlock::ResourceLink(data, ..) => ["[Resource: \{data.uri}]"]
-    @types.ContentBlock::EmbeddedResource(contents, ..) =>
-      match contents.data {
-        @types.ResourceData::Text(t) => ["[Resource \{contents.uri}]: ", t]
-        @types.ResourceData::Blob(b) =>
-          ["[Resource \{contents.uri}]: [blob \{b.length()} chars]"]
-      }
-    @types.ContentBlock::Unknown(_) => ["[Unknown content]"]
+/// Append a string fragment without first materializing a character array.
+/// Most MCP text fragments fit inside the remaining Agent output budget, so
+/// use StringBuilder.write_string for that common case. Only the final
+/// over-budget fragment is walked by Unicode scalar value.
+fn mcp_append_bounded_fragment(
+  out : StringBuilder,
+  fragment : String,
+  used : Int32,
+  limit : Int32,
+) -> (Int32, Bool) {
+  let remaining = limit - used
+  let length = fragment.length()
+  if length <= remaining {
+    out.write_string(fragment)
+    return (used + length, false)
   }
+  let mut appended = 0
+  for ch in fragment {
+    if appended >= remaining {
+      return (used + appended, true)
+    }
+    out.write_char(ch)
+    appended += 1
+  }
+  (used + appended, true)
 }
 
 ///|
-/// Render only the prefix the Agent may consume. Previously we joined every
-/// content block (including arbitrarily large text and embedded resources)
-/// before truncating the entire string. This bounds temporary output memory
-/// and work to the configured character budget, even when a remote tool
-/// returns megabytes of content. Count Unicode characters across fragments,
-/// including separators, to preserve the previous truncation contract.
+/// Render only the prefix the Agent may consume. Keep text blocks as strings
+/// and append them directly; do not allocate a per-block fragment array or
+/// visit every character when a whole fragment fits the remaining budget.
+/// Large trailing text is walked only until the configured character cap.
+/// Separators and truncation semantics match the previous renderer.
 fn mcp_content_model_text(
   items : Array[@types.ContentBlock],
   limit : Int32,
@@ -157,13 +161,82 @@ fn mcp_content_model_text(
       out.write_char('\n')
       used += 1
     }
-    for fragment in mcp_content_fragments(item) {
-      for ch in fragment {
-        if used >= limit {
+    match item {
+      @types.ContentBlock::Text(text, ..) => {
+        let (next, cut) = mcp_append_bounded_fragment(out, text, used, limit)
+        used = next
+        if cut {
           return (out.to_string() + "\n…[cut]", true)
         }
-        out.write_char(ch)
-        used += 1
+      }
+      @types.ContentBlock::Image(data, mime_type~, ..) => {
+        let placeholder = "[Image: \{mime_type}, \{data.length()} chars]"
+        let (next, cut) = mcp_append_bounded_fragment(
+          out, placeholder, used, limit,
+        )
+        used = next
+        if cut {
+          return (out.to_string() + "\n…[cut]", true)
+        }
+      }
+      @types.ContentBlock::Audio(data, mime_type~, ..) => {
+        let placeholder = "[Audio: \{mime_type}, \{data.length()} chars]"
+        let (next, cut) = mcp_append_bounded_fragment(
+          out, placeholder, used, limit,
+        )
+        used = next
+        if cut {
+          return (out.to_string() + "\n…[cut]", true)
+        }
+      }
+      @types.ContentBlock::ResourceLink(data, ..) => {
+        let placeholder = "[Resource: \{data.uri}]"
+        let (next, cut) = mcp_append_bounded_fragment(
+          out, placeholder, used, limit,
+        )
+        used = next
+        if cut {
+          return (out.to_string() + "\n…[cut]", true)
+        }
+      }
+      @types.ContentBlock::EmbeddedResource(contents, ..) =>
+        match contents.data {
+          @types.ResourceData::Text(text) => {
+            let prefix = "[Resource \{contents.uri}]: "
+            let (after_prefix, prefix_cut) = mcp_append_bounded_fragment(
+              out, prefix, used, limit,
+            )
+            used = after_prefix
+            if prefix_cut {
+              return (out.to_string() + "\n…[cut]", true)
+            }
+            let (next, cut) = mcp_append_bounded_fragment(
+              out, text, used, limit,
+            )
+            used = next
+            if cut {
+              return (out.to_string() + "\n…[cut]", true)
+            }
+          }
+          @types.ResourceData::Blob(blob) => {
+            let placeholder = "[Resource \{contents.uri}]: [blob \{blob.length()} chars]"
+            let (next, cut) = mcp_append_bounded_fragment(
+              out, placeholder, used, limit,
+            )
+            used = next
+            if cut {
+              return (out.to_string() + "\n…[cut]", true)
+            }
+          }
+        }
+      @types.ContentBlock::Unknown(_) => {
+        let (next, cut) = mcp_append_bounded_fragment(
+          out, "[Unknown content]", used, limit,
+        )
+        used = next
+        if cut {
+          return (out.to_string() + "\n…[cut]", true)
+        }
       }
     }
   }

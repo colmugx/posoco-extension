@@ -614,6 +614,30 @@ test "mcp bounded content stops before unneeded large tail" {
 }
 
 ///|
+test "mcp bounded renderer fast path preserves complete fragments" {
+  let items = [
+    @types.ContentBlock::text("first"),
+    @types.ContentBlock::text("second"),
+    @types.ContentBlock::text("third"),
+  ]
+  let (content, truncated) = mcp_content_model_text(items, 18)
+  assert_eq(content, "first\nsecond\nthird")
+  assert_true(!truncated)
+}
+
+///|
+test "mcp bounded renderer truncates only the final oversized fragment" {
+  let huge = "😀".repeat(100_000)
+  let items = [
+    @types.ContentBlock::text("head"),
+    @types.ContentBlock::text(huge),
+  ]
+  let (content, truncated) = mcp_content_model_text(items, 8)
+  assert_true(truncated)
+  assert_eq(content, "head\n😀😀😀\n…[cut]")
+}
+
+///|
 test "mcp_outcome_structured_only_marks_truncation" {
   assert_true(mcp_outcome_structured(false) is None)
   match mcp_outcome_structured(true) {
