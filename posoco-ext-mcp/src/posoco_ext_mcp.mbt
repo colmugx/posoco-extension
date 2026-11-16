@@ -1718,7 +1718,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   }
   let invoked_server = conn.name
   let original_name = strip_namespace(call_name, invoked_server)
-  let args = ctx.arguments.stringify()
+  let args = ctx.arguments
   let attempted = self.invoke_mcp_tool(conn_idx, original_name, args) catch {
     _ =>
       // invoke_mcp_tool raises only a propagated cancellation or a non-MCP
