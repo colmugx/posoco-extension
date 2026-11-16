@@ -89,13 +89,15 @@ async test "yielding factories cannot lease the same extension capability to par
       record.mapping.any(m => m.task_id.value == b.task_id)
     })
     assert_eq(executions.length(), 2)
-    assert_eq(
-      executions
-      .filter(b => {
+    // The slot that loses the lease never starts, so its record is an
+    // unresolved failure. The winning slot either settles or is withdrawn
+    // before admission by the loser's poisoning, and a withdrawn admission is
+    // also recorded as an unresolved failure: the failed count is therefore 1
+    // or 2 depending on whether admission beat the poisoning, never 0.
+    assert_true(
+      executions.any(b => {
         b.phase == @execution.Unresolved && b.outcome == Some(@execution.Failed)
-      })
-      .length(),
-      1,
+      }),
     )
     assert_true(settled.unresolved)
     assert_false(board.shutdown())

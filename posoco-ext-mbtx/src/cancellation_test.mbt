@@ -6,16 +6,18 @@ struct BlockingInvoker {
 
 ///|
 /// Test double whose call blocks until cancelled, recording settlement.
+/// Settlement must be a plain `defer`: a pending call unwinds in an already
+/// cancelled coroutine, and `TaskGroup::add_defer` aborts there.
 async fn BlockingInvoker::invoke(
   self : BlockingInvoker,
   _name : String,
   _arguments : Json,
 ) -> @protocol.Outcome {
-  @async.with_task_group(group => {
-    group.add_defer(() => self.settled = true)
-    self.entered.put(())
-    @async.sleep(60000)
-  })
+  defer {
+    self.settled = true
+  }
+  self.entered.put(())
+  @async.sleep(60000)
   @protocol.Success(content="unexpected completion", structured=None)
 }
 

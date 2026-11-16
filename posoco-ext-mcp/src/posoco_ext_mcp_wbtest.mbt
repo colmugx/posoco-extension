@@ -555,16 +555,15 @@ test "mcp bounded content caps success and error surfaces" {
   let raw = "HEAD-" + "x".repeat(MCP_SUCCESS_OUTPUT_CHARS + 500) + "-TAIL"
   let items = [@types.ContentBlock::text(raw)]
   let (success, success_cut) = mcp_content_model_text(
-    items, MCP_SUCCESS_OUTPUT_CHARS,
+    items,
+    MCP_SUCCESS_OUTPUT_CHARS,
   )
   assert_true(success_cut)
   assert_true(success.has_prefix("HEAD-"))
   assert_true(success.has_suffix("…[cut]"))
   assert_true(success.length() < raw.length())
 
-  let (error, error_cut) = mcp_content_model_text(
-    items, MCP_ERROR_OUTPUT_CHARS,
-  )
+  let (error, error_cut) = mcp_content_model_text(items, MCP_ERROR_OUTPUT_CHARS)
   assert_true(error_cut)
   assert_true(error.length() < success.length())
 }

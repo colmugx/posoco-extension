@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-pstack"
+
+import {
+  "colmugx/posoco-ext-kind",
+  "colmugx/posoco-ext-skills",
+  "colmugx/posoco-ext-workspace",
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn pstack_discovery_options(String, base? : @posoco-ext-skills.SkillDiscoveryOptions) -> @posoco-ext-skills.SkillDiscoveryOptions
+
+// Errors
+
+// Types and methods
+pub struct Pstack {
+  skills : @posoco-ext-skills.Skills
+}
+pub fn Pstack::catalog(Self) -> @posoco-ext-skills.SkillCatalog
+pub fn Pstack::commands(Self) -> Array[@port.CommandDef]
+pub async fn Pstack::discover(&@posoco-ext-workspace.WorkspaceFs, cwd~ : String, home~ : String, assets_root~ : String, discovery_options? : @posoco-ext-skills.SkillDiscoveryOptions, config? : @posoco-ext-skills.SkillsConfig) -> Self? noraise
+pub fn Pstack::extension_id(Self) -> String
+pub fn Pstack::from_skills(@posoco-ext-skills.Skills) -> Self?
+pub async fn Pstack::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
+pub async fn Pstack::load_kinds(&@posoco-ext-workspace.WorkspaceFs, String) -> Result[Array[@posoco-ext-kind.KindSpec], String] noraise
+pub fn Pstack::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.CommandPort for Pstack
+pub impl @port.Extension for Pstack
+
+// Type aliases
+
+// Traits

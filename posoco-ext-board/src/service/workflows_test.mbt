@@ -81,6 +81,14 @@ async test "one composed extension owns actual Agent planning graph approval sco
     let done = h.board.wait_boundary().checked()
     assert_eq(done.run.checked().runner.remaining_executions, 0)
     assert_eq(done.executions.length(), 3)
+    println(
+      "WFDBG run phase=\{done.run.checked().phase == @workflow.Stopped} stopped reason=\{done.run.checked().reason is Some(@workflow.DeadlineReached)} deadline reason=\{done.run.checked().reason is Some(@workflow.CancelRequested)} cancel reason=\{done.run.checked().reason is Some(@workflow.ExecutionFailed(@execution.Cancelled))} execfailed-cancelled",
+    )
+    for e in done.executions {
+      println(
+        "WFDBG task=\{e.task_id} exec=\{e.execution_id} attempt=\{e.attempt_id} phase=\{e.phase == @execution.Settled} settled phase=\{e.phase == @execution.Unresolved} unresolved outcome=\{e.outcome == Some(@execution.Completed)} completed outcome=\{e.outcome == Some(@execution.Failed)} failed outcome=\{e.outcome == Some(@execution.Cancelled)} cancelled outcome=\{e.outcome == Some(@execution.TimedOut)} timedout outcome=\{e.outcome == Some(@execution.Interrupted)} interrupted",
+      )
+    }
     assert_true(
       done.executions.all(e => {
         e.phase == @execution.Settled && e.outcome == Some(@execution.Completed)
