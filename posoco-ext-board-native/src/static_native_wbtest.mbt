@@ -68,7 +68,7 @@ fn board_bytes_text(bytes : Bytes) -> String {
 ///|
 async test "embedded static middleware cannot shadow control-plane routes" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let collisions : Map[String, Bytes] = {
         "/health": b"asset-health",
         "/ws": b"asset-ws",
@@ -128,7 +128,7 @@ fn board_asset_by_suffix(suffix : String) -> (String, Bytes) raise {
 ///|
 async test "embedded root serves the manifest index only with the instance token" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
       )
@@ -177,7 +177,7 @@ async test "embedded root serves the manifest index only with the instance token
 ///|
 async test "manifest js css resources are public exact bytes with stable MIME" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
       )
@@ -258,7 +258,7 @@ async test "manifest js css resources are public exact bytes with stable MIME" {
 ///|
 async test "unknown resources 404 with a token while health stays public and gates hold" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let server = NativeBoardWebServer(
         backend=Some(@backend.BoardBackend::BoardBackend()),
       )

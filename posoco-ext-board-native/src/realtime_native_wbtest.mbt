@@ -52,7 +52,7 @@ fn board_backend_tick(
 ///|
 async test "native shared runtime hello live reconnect two three and command rejection" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let runtime = default_board_runtime(8, client_queue_depth=2)
       runtime.attach(group)
       let endpoint = match runtime.ensure_server() {
@@ -134,7 +134,7 @@ async test "native shared runtime hello live reconnect two three and command rej
 ///|
 async test "native first command version cursor binary and oversized frames are rejected" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -196,7 +196,7 @@ async test "native first command version cursor binary and oversized frames are 
 ///|
 async test "native retained snapshot security gates and connection cleanup" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -268,7 +268,7 @@ async test "native retained snapshot security gates and connection cleanup" {
 ///|
 async test "native overflow sends resync closes and reset zero snapshots" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(client_queue_depth=2)
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -352,7 +352,7 @@ impl @store.BoardStore for GatedLoadStore with fn persist(
 ///|
 async test "native overflow during bootstrap await resyncs and never installs the snapshot" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let store : GatedLoadStore = {
         entered: @aqueue.Queue(kind=@aqueue.Blocking(1)),
         release: @aqueue.Queue(kind=@aqueue.Blocking(1)),
@@ -402,7 +402,7 @@ async test "native overflow during bootstrap await resyncs and never installs th
 ///|
 async test "native shutdown cancels a reader still waiting for Hello" {
   @async.with_timeout(2000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),
@@ -431,7 +431,7 @@ async test "native shutdown cancels a reader still waiting for Hello" {
 ///|
 async test "native Hello deadline closes without subscription" {
   @async.with_timeout(7000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend()
       let server = NativeBoardWebServer::NativeBoardWebServer(
         backend=Some(backend),

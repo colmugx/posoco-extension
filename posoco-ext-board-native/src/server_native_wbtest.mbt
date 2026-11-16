@@ -10,7 +10,7 @@ async test "native server binds loopback random port and guards bootstrap" {
     backend=Some(@backend.BoardBackend::BoardBackend()),
   )
   let web : &BoardWebServer = server
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let endpoint = match web.bind() {
       Ok(value) => value
       Err(error) => fail("unexpected bind error: \{error}")
@@ -82,7 +82,7 @@ async test "native close is idempotent and rebind mints fresh secret" {
     backend=Some(@backend.BoardBackend::BoardBackend()),
   )
   let web : &BoardWebServer = server
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let first = match web.bind() {
       Ok(value) => value
       Err(error) => fail("unexpected bind error: \{error}")
@@ -110,7 +110,7 @@ async test "native close is idempotent and rebind mints fresh secret" {
 ///|
 async test "native server refuses to bind until a backend is installed and then serves it" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let server = NativeBoardWebServer::NativeBoardWebServer()
       let web : &BoardWebServer = server
       // Presentation plumbing without a backend must not serve anything.
@@ -161,7 +161,7 @@ async test "native server refuses to bind until a backend is installed and then 
 ///|
 async test "native close_server keeps the backend and reopens with fresh ws state" {
   @async.with_timeout(5000, () => {
-    @async.with_task_group(group => {
+    @core_async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(now_ms=() => 1234L)
       let server = NativeBoardWebServer::NativeBoardWebServer()
       let opener : FakeBrowserOpener = { opened: [], }

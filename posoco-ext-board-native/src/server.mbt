@@ -11,7 +11,7 @@ pub struct NativeBoardWebServer {
   priv mut alive : Bool
   priv mut closing : Bool
   priv mut error : String?
-  priv stop : @async.Cond
+  priv stop : @core_async.Cond
   priv mut serving : Bool
 }
 
@@ -28,7 +28,7 @@ pub fn NativeBoardWebServer::NativeBoardWebServer(
     alive: false,
     closing: false,
     error: None,
-    stop: @async.Cond::Cond(),
+    stop: @core_async.Cond::Cond(),
     serving: false,
   }
 }
