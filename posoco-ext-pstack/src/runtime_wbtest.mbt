@@ -72,7 +72,7 @@ async test "statusbar: activation registers Mode On and shutdown unregisters it"
 
   ignore(@posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()))
   assert_eq(envelopes.length(), 3)
-  await pstack.on_shutdown()
+  pstack.on_shutdown()
   assert_true(!pstack.is_mode_active())
   assert_eq(envelopes.length(), 4)
   match @kit_events.status_changed_of(envelopes[3]) {
