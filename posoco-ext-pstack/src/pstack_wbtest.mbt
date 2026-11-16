@@ -164,7 +164,7 @@ fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
 
 ///|
 async test "discover: PStack bundle becomes a native skill catalog" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
@@ -176,7 +176,7 @@ async test "discover: PStack bundle becomes a native skill catalog" {
     cwd="/workspace",
     home="/home/test",
     assets_root="/bundle",
-    discovery_options~,
+    discovery_options=options,
   )
   match pstack {
     None => fail("expected the bundled poteto-mode skill to be discovered")
@@ -189,7 +189,7 @@ async test "discover: PStack bundle becomes a native skill catalog" {
 
 ///|
 async test "discover: missing bundle entry is not registered" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
     include_repository: false,
@@ -201,14 +201,14 @@ async test "discover: missing bundle entry is not registered" {
       cwd="/workspace",
       home="/home/test",
       assets_root="/bundle",
-      discovery_options~,
+      discovery_options=options,
     ) is None,
   )
 }
 
 ///|
 async test "manifest: native PStack extension forwards Skills tools and prompt" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
@@ -220,7 +220,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
     cwd="/workspace",
     home="/home/test",
     assets_root="/bundle",
-    discovery_options~,
+    discovery_options=options,
   ).unwrap()
   let manifest = @posoco.Extension::manifest(pstack)
   assert_eq(manifest.id, "posoco_ext_pstack")
@@ -245,7 +245,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
 
 ///|
 async test "command: poteto-mode returns the structured skill activation envelope" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
@@ -257,7 +257,7 @@ async test "command: poteto-mode returns the structured skill activation envelop
     cwd="/workspace",
     home="/home/test",
     assets_root="/bundle",
-    discovery_options~,
+    discovery_options=options,
   ).unwrap()
   match
     @posoco.CommandPort::invoke(
@@ -283,7 +283,7 @@ async test "command: poteto-mode returns the structured skill activation envelop
 
 ///|
 async test "kinds: packaged presets parse into native KindSpec values" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   fs.add_file(
     "/bundle/agents/poteto-agent.md",
     #|---
@@ -306,14 +306,14 @@ async test "kinds: packaged presets parse into native KindSpec values" {
   assert_eq(specs.length(), 2)
   assert_eq(specs[0].name, "poteto-agent")
   assert_eq(specs[1].name, "comment-sicko")
-  let catalog = @kind.KindCatalog::with_entries(specs).unwrap()
+  let catalog = @kind.KindCatalog::with_entries(specs)
   assert_true(catalog.get("poteto-agent") is Some(_))
   assert_true(catalog.get("comment-sicko") is Some(_))
 }
 
 ///|
 async test "kinds: missing preset fails loudly instead of silently dropping a role" {
-  let fs = PstackFakeFs()
+  let fs = PstackFakeFs::new()
   fs.add_file(
     "/bundle/agents/poteto-agent.md",
     #|---
