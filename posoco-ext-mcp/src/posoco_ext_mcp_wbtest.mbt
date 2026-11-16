@@ -449,7 +449,8 @@ fn registry_test_bridge(
     closing: false,
     contributions: None,
     reserved_names: [],
-    published_names: [],
+    published_defs: [],
+    publication_pending: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),
@@ -621,4 +622,46 @@ test "mcp_outcome_structured_only_marks_truncation" {
       assert_true(meta.get("truncated") is Some(Json::True))
     _ => fail("expected truncation metadata")
   }
+}
+
+///|
+test "MCP publisher preserves catalog order and excludes reserved names" {
+  let defs = [
+    catalog_test_tool("alpha__first"),
+    catalog_test_tool("beta__hidden"),
+    catalog_test_tool("alpha__last"),
+  ]
+  let published = publishable_mcp_tool_defs(defs, [
+    "beta__hidden", "beta__hidden", "not_present",
+  ])
+  assert_eq(published.length(), 2)
+  assert_eq(published[0].name.to_string(), "alpha__first")
+  assert_eq(published[1].name.to_string(), "alpha__last")
+  assert_eq(publishable_mcp_tool_defs(defs, []).length(), 3)
+}
+
+///|
+test "MCP publisher compares definitions, not only tool names" {
+  let original = catalog_test_tool("alpha__query")
+  let updated = @posoco.ToolDef(
+    name=original.name,
+    description="Updated schema and description",
+    input_schema={ "type": "object", "properties": { "q": { "type": "string" } } },
+    owner=original.owner,
+    policy=original.policy,
+    provenance=original.provenance,
+    exposure=original.exposure,
+  )
+  assert_eq(original.name, updated.name)
+  assert_true(original != updated)
+  assert_true([original] != [updated])
+}
+
+///|
+test "MCP publication bumps without host group do not hold pending state" {
+  let bridge = MCPToolBridge()
+  bridge.bump_catalog_revision()
+  bridge.bump_catalog_revision()
+  assert_eq(bridge.catalog_revision, 2)
+  assert_true(!bridge.publication_pending)
 }
