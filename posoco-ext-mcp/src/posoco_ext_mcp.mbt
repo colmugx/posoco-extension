@@ -450,10 +450,10 @@ async fn call_tool_attempt(
   client : @client.MCPClient,
   timeout_ms : Int32,
   tool_name : String,
-  args_str : String,
+  args : Json,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
   let attempt = async fn() {
-    try client.call_tool(tool_name, arguments=args_str) catch {
+    try client.call_tool_json(tool_name, arguments=args) catch {
       @types.MCPError::_ as e =>
         if is_connection_level_error(e) {
           Err(MCPCallFailure::TransportFailure)
@@ -1349,48 +1349,44 @@ async fn MCPToolBridge::refresh_fetch_one(
 }
 
 ///|
-/// Refresh cached tools from all connected MCP servers.
+/// Refresh cached tools from all connected MCP servers concurrently. Each
+/// task owns one slot's actor admission and fetch; results are joined in
+/// snapshot order and the catalog is committed once after all fetches settle.
+/// A slot retired while its request is in flight contributes an empty entry.
 pub async fn MCPToolBridge::refresh_tools(
   self : MCPToolBridge,
 ) -> Result[Unit, String] {
-  let fetches : Array[Result[CatalogEntry, String]] = []
+  let tasks : Array[async () -> Result[CatalogEntry, String]] = []
   for i, conn in self.connections {
-    // A retired slot is an absent server: contribute an empty entry (the
-    // catalog plan requires one entry per slot) and never touch the wire.
-    if conn.client is None {
-      fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
+    if conn.client is None || conn.actor is None {
+      tasks.push(async fn() {
+        Ok(CatalogEntry::{ connection_index: i, tools: [], })
+      })
       continue
     }
-    let actor = match conn.actor {
-      Some(actor) => actor
-      None => {
-        fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
-        continue
-      }
-    }
-    match self.refresh_fetch_one(i, actor, conn.name, conn.config.timeout_ms) {
-      Ok(tools) =>
-        fetches.push(Ok(CatalogEntry::{ connection_index: i, tools, }))
-      Err(message) => {
-        // The slot may have been retired while this task was suspended (a
-        // concurrent reconnect_server): an absent server contributes an
-        // empty entry exactly like a slot that was already retired at loop
-        // entry. Any other failure ends the refresh with the error.
-        let vanished = if i >= self.connections.length() {
-          true
-        } else {
-          let current = self.connections[i]
-          current.client is None || current.name != conn.name
-        }
-        if vanished {
-          fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
-        } else {
-          fetches.push(Err(message))
-          break
+    let actor = conn.actor.unwrap()
+    let server = conn.name
+    let timeout_ms = conn.config.timeout_ms
+    tasks.push(async fn() {
+      match self.refresh_fetch_one(i, actor, server, timeout_ms) {
+        Ok(tools) => Ok(CatalogEntry::{ connection_index: i, tools, })
+        Err(message) => {
+          let vanished = if i >= self.connections.length() {
+            true
+          } else {
+            let current = self.connections[i]
+            current.client is None || current.name != server
+          }
+          if vanished {
+            Ok(CatalogEntry::{ connection_index: i, tools: [], })
+          } else {
+            Err(message)
+          }
         }
       }
-    }
+    })
   }
+  let fetches = @core_async.all(tasks[:])
   let update = replace_catalog_from_fetches(
     fetches,
     self.connections.length(),
@@ -1398,8 +1394,6 @@ pub async fn MCPToolBridge::refresh_tools(
   )
   match update {
     Ok(_) => {
-      // A committed refresh changes the advertised tool set; bump the
-      // revision so a wired McpCatalogSource is re-read at the next turn.
       self.bump_catalog_revision()
       Ok(())
     }
@@ -1724,8 +1718,8 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   }
   let invoked_server = conn.name
   let original_name = strip_namespace(call_name, invoked_server)
-  let args_str = ctx.arguments.stringify()
-  let attempted = self.invoke_mcp_tool(conn_idx, original_name, args_str) catch {
+  let args = ctx.arguments.stringify()
+  let attempted = self.invoke_mcp_tool(conn_idx, original_name, args) catch {
     _ =>
       // invoke_mcp_tool raises only a propagated cancellation or a non-MCP
       // SDK raise (its timeout wrapper re-raises both untouched, and no
@@ -1819,13 +1813,13 @@ async fn call_under_permit(
   permit : ConnPermit[@client.MCPClient],
   timeout_ms : Int32,
   tool_name : String,
-  args_str : String,
+  args : Json,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
   let mut outcome : CallOutcome = CallOutcome::TransportFail
   defer {
     let _ = actor.end_call(generation=permit.generation, outcome~)
   }
-  match call_tool_attempt(permit.client, timeout_ms, tool_name, args_str) {
+  match call_tool_attempt(permit.client, timeout_ms, tool_name, args) {
     Ok(result) => {
       outcome = CallOutcome::CallOk
       Ok(result)
@@ -1857,7 +1851,7 @@ async fn MCPToolBridge::invoke_mcp_tool(
   self : MCPToolBridge,
   conn_idx : Int32,
   tool_name : String,
-  args_str : String,
+  args : Json,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
   // Capture the slot identity this call belongs to before any await: the
   // registry may retire, refill, or clear the slot while this task is
@@ -1878,7 +1872,7 @@ async fn MCPToolBridge::invoke_mcp_tool(
     conn_actor_acquire(actor, ask_ms) {
     Err(failure) => return Err(failure)
     Ok(Permit(permit)) =>
-      call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+      call_under_permit(actor, permit, timeout_ms, tool_name, args)
     Ok(Denied(ReconnectFirst)) =>
       match self.reconnect_one(conn_idx) {
         Err(_) => return Err(MCPCallFailure::TransportFailure)
@@ -1886,7 +1880,7 @@ async fn MCPToolBridge::invoke_mcp_tool(
           match conn_actor_acquire(actor, ask_ms) {
             Err(failure) => return Err(failure)
             Ok(Permit(permit)) =>
-              call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+              call_under_permit(actor, permit, timeout_ms, tool_name, args)
             Ok(_) => return Err(MCPCallFailure::TransportFailure)
           }
       }
@@ -1923,7 +1917,7 @@ async fn MCPToolBridge::invoke_mcp_tool(
           match conn_actor_acquire(actor, ask_ms) {
             Err(_) => Err(failure)
             Ok(Permit(permit)) =>
-              call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+              call_under_permit(actor, permit, timeout_ms, tool_name, args)
             Ok(_) => Err(failure)
           }
       }
