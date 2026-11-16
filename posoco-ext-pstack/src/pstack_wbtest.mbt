@@ -150,16 +150,14 @@ pub impl @workspace.WorkspaceFs for PstackFakeFs with fn walk(
 fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
   fs.add_dir("/bundle/skills", ["poteto-mode"])
   fs.add_dir("/bundle/skills/poteto-mode", ["SKILL.md"])
-  fs.add_file(
-    "/bundle/skills/poteto-mode/SKILL.md",
-    #|---
+  let skill_md = #|---
     #|name: poteto-mode
     #|description: PStack engineering workflow entry point
     #|---
     #|# Poteto Mode
     #|
     #|Use the engineering workflow and load the relevant playbook.
-  )
+  fs.add_file("/bundle/skills/poteto-mode/SKILL.md", skill_md)
 }
 
 ///|
@@ -271,7 +269,7 @@ async test "command: poteto-mode returns the structured skill activation envelop
         Some(payload) => {
           let rendered = payload.stringify()
           assert_true(rendered.contains("agent_skill_activation"))
-          assert_true(rendered.contains("PStack engineering workflow"))
+          assert_true(rendered.contains("Use the engineering workflow"))
         }
         None => fail("activation result must include structured instructions")
       }
@@ -284,24 +282,20 @@ async test "command: poteto-mode returns the structured skill activation envelop
 ///|
 async test "kinds: packaged presets parse into native KindSpec values" {
   let fs = PstackFakeFs::new()
-  fs.add_file(
-    "/bundle/agents/poteto-agent.md",
-    #|---
+  let poteto_agent = #|---
     #|name: poteto-agent
     #|description: General PStack engineering agent
     #|mode: workspace_write
     #|---
     #|Work on the assigned engineering task.
-  )
-  fs.add_file(
-    "/bundle/agents/comment-sicko.md",
-    #|---
+  let comment_sicko = #|---
     #|name: comment-sicko
     #|description: Adversarial code reviewer
     #|mode: readonly
     #|---
     #|Review code and report concrete findings.
-  )
+  fs.add_file("/bundle/agents/poteto-agent.md", poteto_agent)
+  fs.add_file("/bundle/agents/comment-sicko.md", comment_sicko)
   let specs = Pstack::load_kinds(fs, "/bundle").unwrap()
   assert_eq(specs.length(), 2)
   assert_eq(specs[0].name, "poteto-agent")
@@ -314,13 +308,26 @@ async test "kinds: packaged presets parse into native KindSpec values" {
 ///|
 async test "kinds: missing preset fails loudly instead of silently dropping a role" {
   let fs = PstackFakeFs::new()
-  fs.add_file(
-    "/bundle/agents/poteto-agent.md",
-    #|---
+  let poteto_agent = #|---
     #|name: poteto-agent
     #|description: General PStack engineering agent
     #|---
     #|Work on the assigned engineering task.
-  )
+  fs.add_file("/bundle/agents/poteto-agent.md", poteto_agent)
   assert_true(Pstack::load_kinds(fs, "/bundle") is Err(_))
+}
+
+///|
+pub extend PstackFakeFs with @workspace.WorkspaceFs::{
+  write_file_atomic,
+  walk,
+  realpath,
+  mkdir,
+  write_file,
+  kind,
+  remove,
+  rename,
+  exists,
+  read_file,
+  readdir,
 }
