@@ -222,7 +222,9 @@ async test "conn_actor end_reconnect swaps client on success keeps old on failur
       ),
     )
     let _ = actor.end_reconnect(generation=2, ok=false, client=None)
-    assert_true(conn_view_is(actor, health=NeedsReconnect, generation=2, in_flight=0))
+    assert_true(
+      conn_view_is(actor, health=NeedsReconnect, generation=2, in_flight=0),
+    )
     assert_true(
       conn_reply_is(actor.acquire(timeout_ms=10_000), Denied(ReconnectFirst)),
     )
@@ -240,7 +242,10 @@ async test "conn_actor end_reconnect swaps client on success keeps old on failur
     // A later successful reconnect installs the replacement and reopens
     // admission. The failure's fake client value never becomes visible.
     assert_true(
-      conn_reply_is(actor.begin_reconnect(timeout_ms=10_000), Granted(generation=4)),
+      conn_reply_is(
+        actor.begin_reconnect(timeout_ms=10_000),
+        Granted(generation=4),
+      ),
     )
     let _ = actor.end_reconnect(generation=4, ok=true, client=Some(400))
     assert_true(conn_view_is(actor, health=Fresh, generation=4, in_flight=0))
@@ -339,7 +344,6 @@ async test "conn_actor snapshot conserves accepted processed abandoned outstandi
   })
 }
 
-
 ///|
 /// Duplicate end-of-call notifications are not admissions. They cannot make
 /// in_flight negative, even if a timeout stigma is reported repeatedly.
@@ -369,7 +373,10 @@ async test "conn_actor failed reconnect keeps admission closed across stale repo
       conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(1, 0)),
     )
     assert_true(
-      conn_reply_is(actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1)),
+      conn_reply_is(
+        actor.begin_reconnect(timeout_ms=10_000),
+        Granted(generation=1),
+      ),
     )
     let _ = actor.end_reconnect(generation=1, ok=false, client=None)
     let _ = actor.end_call(generation=0, outcome=CallOk)
