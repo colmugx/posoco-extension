@@ -54,8 +54,6 @@ jobs:
         run: moon test --target js
 
   pstack:
-    if: >-
-      contains(github.event.pull_request.changed_files, 'posoco-ext-pstack/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
