@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-pstack"
 
-version = "0.1.0"
+version = "0.2.0"
 
 source = "src"
 
@@ -12,11 +12,12 @@ license = "Apache-2.0"
 
 keywords = [ "posoco", "agent-skills", "pstack", "poteto-mode", "coding-agent" ]
 
-description = "PStack engineering skills and native Posoco harness adapter"
+description = "PStack engineering method as a built-in native Posoco Skill"
 
 import {
   "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-skills@0.2.0",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-workspace@0.1.0",
+  "posoco/kit-events@0.1.0",
 }
