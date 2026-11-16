@@ -44,3 +44,23 @@ This change does not claim parity for Cursor cloud agents, cloud worktrees, Curs
 ## Verification
 
 This is a prompt/resource and kind-preset change. No MoonBit package source is changed. Runtime behavior depends on the host composing the listed extensions and capabilities. Validate the Markdown frontmatter and resource paths, then run the repository's normal MoonBit checks in CI.
+
+## Native MoonBit module (follow-up)
+
+`posoco-ext-pstack` turns the above repository-local assets into an installable
+MoonBit module. Its `Pstack::discover` factory attaches the bundled
+`assets/skills` root to the existing `posoco-ext-skills` runtime. The
+`Pstack` Extension contributes that one Skills runtime's tools, catalog
+prompt and `skills` command, plus a native `poteto-mode` command. Do not
+compose a second independent Skills extension, or its tool names will collide.
+
+The host supplies the resolved installed package's `assets` directory path
+and passes the same discovery root when composing child agents. Bundled agent
+kinds are exposed with `Pstack::load_kinds`, ready for
+`KindCatalog::load(home~, cwd~, extra=specs)`. This preserves per-kind
+permission postures and normal project-over-user precedence.
+
+See [the package README](../posoco-ext-pstack/README.mbt.md) for exact
+composition, installation and limitation details. This is still a host
+integration seam, not a claim that Cursor-only cloud or automation APIs are
+implemented. An end-to-end composed Posoco agent test remains required.

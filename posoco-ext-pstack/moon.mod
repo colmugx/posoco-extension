@@ -1,0 +1,22 @@
+name = "colmugx/posoco-ext-pstack"
+
+version = "0.1.0"
+
+source = "src"
+
+readme = "README.mbt.md"
+
+repository = "https://github.com/colmugx/posoco-extension"
+
+license = "Apache-2.0"
+
+keywords = [ "posoco", "agent-skills", "pstack", "poteto-mode", "coding-agent" ]
+
+description = "PStack engineering skills and native Posoco harness adapter"
+
+import {
+  "colmugx/posoco@0.24.2",
+  "colmugx/posoco-ext-skills@0.2.0",
+  "colmugx/posoco-ext-kind@0.1.0",
+  "colmugx/posoco-ext-workspace@0.1.0",
+}

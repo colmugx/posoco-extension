@@ -31,6 +31,9 @@ jobs:
         with:
           node-version: '22'
 
+      - name: validate PStack assets
+        run: node posoco-ext-pstack/scripts/check-assets.mjs
+
       - name: setup bun
         uses: oven-sh/setup-bun@v2
 
