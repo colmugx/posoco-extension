@@ -1,101 +1,50 @@
 # posoco-ext-pstack
 
-A native, installable [Posoco](https://github.com/colmugx/posoco)
-Extension adapter for [PStack](https://github.com/cursor/plugins/tree/main/pstack).
+A native, installable Posoco Extension that ports the core engineering method of [PStack](https://github.com/cursor/plugins/tree/main/pstack).
 
-PStack defines skills, principles, playbooks and agent roles. Posoco owns the
-runtime. This module **does not add a second agent loop or orchestration
-runtime**. It wraps the existing `posoco-ext-skills` implementation and exposes
-the native `/poteto-mode` CommandPort entry, with bundled Markdown resources
-and typed Kind presets for the host to load.
+PStack supplies the method; Posoco supplies the Agent runtime. The primary \`poteto-mode\` Skill is a true inline \`SkillDescriptor::builtin\`, compiled into this package. Activating it does not depend on finding an installed \`assets/\` directory.
 
 ## Install
 
-```sh
+\`\`\`sh
 moon add colmugx/posoco-ext-pstack
-```
+\`\`\`
 
-The module archives its Markdown assets under `assets/`. The host must resolve
-the installed module directory and pass the absolute path to its `assets`
-directory. The adapter does **not** guess a current working directory or
-reach through package-private module paths.
+## Compose
 
-## Host composition
+The host supplies its workspace filesystem and an owner-bound event publisher. Compose the normal StatusBar on the same EventSystem:
 
-```moonbit
-// moon.pkg imports posoco-ext-pstack @pstack, plus other extensions.
-// fs is a &@workspace.WorkspaceFs supplied by the host.
-// assets_root is the actual installed .../posoco-ext-pstack/assets directory.
+\`\`\`moonbit
+let events = @posoco.EventSystem()
+let statusbar = @statusbar.StatusBar(events=Some(events))
+let pstack_events = events.publisher(owner="posoco_ext_pstack").unwrap()
+let pstack = @pstack.Pstack::builtin(fs, events=Some(pstack_events)).unwrap()
+let agent = @posoco.Agent(exts=[pstack, statusbar, ..other_extensions], events~, config~)
+\`\`\`
 
-let pstack = @pstack.Pstack::discover(
-  fs, cwd~, home~, assets_root~,
-)
-let specs = @pstack.Pstack::load_kinds(fs, assets_root)
-// The host passes specs to @kind.KindCatalog::load(home~, cwd~, extra=specs)
-// and the resulting KindCatalog to @subagent.SubagentTools.
-//
-// Compose the returned Pstack extension and normal Posoco extensions.
-// Do NOT also compose a separate Skills extension: Pstack owns its Skills
-// runtime and contributes activate_skill, read_skill_resource, skill_search,
-// the 'skills' command, and the 'poteto-mode' command as one Extension.
-```
+Alternatively, \`Pstack::discover(fs, cwd~, home~, events~)\` discovers project/user Skills and merges the built-in method into the same catalog. A same-name project/user Skill intentionally overrides the built-in. Do not also compose a standalone Skills extension: PStack already owns the Skills tools and prompt contributor.
 
-`Pstack::discover` returns `None` if the bundle root is missing, no
-`poteto-mode` skill is found, or Skills configuration is invalid.
-`Pstack::load_kinds` returns an error if an agent file is missing or invalid.
-A host should report these failures instead of silently running without the
-required features.
+## Native behavior
 
-## Native tool and command mapping
+- **Built-in Skill:** \`poteto-mode\` is registered with \`SkillDescriptor::builtin\`; activation works without package assets on disk.
+- **Slash command:** \`/poteto-mode\` activates the Skill through the normal Skills activation path.
+- **Status bar:** successful activation publishes a segment with key \`🥔\`, value \`Mode On\`, and semantic color \`success\`. With \`posoco-ext-statusbar\` composed on the same EventSystem, it renders as **🥔 Mode On**.
+- **Deactivation:** \`/poteto-mode-off\` clears the segment.
+- **Lifecycle:** Agent shutdown clears an active segment. Repeated activation/deactivation is idempotent.
+- **Skills tools:** reuses \`activate_skill\`, \`read_skill_resource\`, and \`skill_search\` from \`posoco-ext-skills\`.
 
-| PStack requirement | Posoco mechanism |
-| --- | --- |
-| Invoke the workflow | `poteto-mode` CommandPort, or `activate_skill("poteto-mode")` |
-| Load a playbook or reference | `read_skill_resource(name="poteto-mode", path="resources/upstream/...")` |
-| Delegate or resume work | `posoco-ext-subagent` (ChildComposer + KindCatalog) |
-| Ask the user | `posoco-ext-askquestion` (UiPort) |
-| Track work | `posoco-ext-todo` |
-| Request plan approval | `posoco-ext-plan` |
-| Model routing | Host ModelManager/selected subagent slots |
-| Permission policy | Posoco permission extension and host tool governance |
+Without an event publisher, Skill activation still works but the status segment cannot be published. Status rendering also requires the host to compose \`posoco-ext-statusbar\` with the same EventSystem.
 
-The command returns the exact same structured
-`agent_skill_activation` result as `skills activate poteto-mode`. The
-product host is responsible for delivering that instruction payload to the
-Agent's next turn, as it is for normal Skills command activations.
+## Core method
 
-The parent's discovered skill root must also be supplied to subagent child
-compositions. Loading Kind presets alone does not automatically enable
-resources in the child context. The host must include the same bundle root
-when constructing child Skills instances.
+The built-in Skill captures the essential PStack engineering method: goal-first framing; evidence before questions; domain modeling and tracing before implementation; narrow workflows for investigation, bug fixes, features, refactors, and reviews; deliberate delegation; small verifiable units; root-cause fixes; behavioral verification; independent diff review; and honest reporting.
 
-## Precedence and trust
+The package does not emulate Cursor or Claude Code runtimes. It does not claim compatibility with Cursor Automations, Slack, Bugbot, cloud agents, Cursor-specific commands, hooks, or model slugs.
 
-`Pstack::discover` appends bundled skills as an extra discovery root, after
-project and user roots. Project/user skill overrides therefore have the
-existing Posoco precedence. `Pstack::load_kinds` returns `KindSpec` values
-for use as `KindCatalog::load(..., extra=specs)`; project and user Kind files
-still override them. No Skill metadata grants permission.
+## Upstream and license
 
-The bundle includes the original PStack MIT-licensed Markdown sources pinned
-to upstream commit `bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7`.
-See `assets/skills/poteto-mode/resources/upstream/LICENSE` and
-`assets/skills/poteto-mode/resources/UPSTREAM.md`.
-The Posoco-specific MoonBit adapter uses Apache-2.0.
+The imported upstream Markdown reference bundle is pinned to Cursor Plugins commit \`bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7\`. The original PStack MIT license and upstream README remain under \`assets/skills/poteto-mode/resources/upstream/\`; provenance is documented in \`resources/UPSTREAM.md\`. The built-in Skill body is the Posoco-oriented core-method adaptation. The MoonBit adapter is Apache-2.0; imported upstream material remains MIT-licensed.
 
-## Limits
+## Optional Kind presets
 
-This package does not implement Cursor cloud agents, Worktree isolation,
-Automations, Bugbot, the Cursor `/loop` command, or Cursor's built-in PR
-tool. Upstream executable scripts were not imported. Such steps require
-independently configured Posoco host integrations.
-
-## Verification
-
-The package is a native `Extension` with `CommandPort`, reusing
-`posoco-ext-skills` ToolProvider and SystemPromptContributor. Its pure
-discovery-options and command definitions are tested by `moon test`.
-
-The resource bundle is checked by
-`node posoco-ext-pstack/scripts/check-assets.mjs`. Running a real Feature
-playbook with a composed host remains a separate end-to-end requirement.
+The package still includes \`poteto-agent\` and \`comment-sicko\` Kind preset Markdown files. Hosts may call \`Pstack::load_kinds(fs, assets_root)\` and pass the returned specs to \`KindCatalog::load(..., extra=specs)\`. These optional roles are separate from the built-in \`poteto-mode\` Skill.
