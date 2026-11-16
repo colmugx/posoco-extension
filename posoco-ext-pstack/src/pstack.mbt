@@ -429,7 +429,7 @@ pub impl @posoco.CommandPort for Pstack with fn invoke(
 }
 
 ///|
-pub impl @posoco.Lifecycle for Pstack with async fn on_shutdown(
+pub impl @posoco.Lifecycle for Pstack with fn on_shutdown(
   self : Pstack,
 ) -> Unit {
   self.set_mode_active(false)
