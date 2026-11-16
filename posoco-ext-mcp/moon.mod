@@ -5,7 +5,7 @@ version = "0.6.0"
 import {
   "colmugx/posoco@0.24.2",
   "posoco/devkit@0.4.1",
-  "colmugx/mcp@0.18.4",
+  "colmugx/mcp@0.19.0",
   "colmugx/fuwaroid@0.4.0",
 }
 
