@@ -604,9 +604,11 @@ pub(all) struct MCPToolBridge {
   /// collides with one is dropped from the published group instead of
   /// rejecting the whole group. Mirrors the pi hidden-tools pattern.
   mut reserved_names : Array[String]
-  /// Name snapshot of the last accepted publication; suppresses identical
-  /// re-publications (a rejected group must not retry-loop on bumps).
-  mut published_names : Array[String]
+  /// Definition snapshot of the last accepted publication. Name-only
+  /// comparisons miss updated descriptions and schemas for existing tools.
+  mut published_defs : Array[@posoco.ToolDef]
+  /// A single publisher drains accumulated catalog revisions in order.
+  mut publication_pending : Bool
 }
 
 ///|
@@ -627,7 +629,8 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
     configs: Map::from_array([]),
     contributions: None,
     reserved_names: [],
-    published_names: [],
+    published_defs: [],
+    publication_pending: false,
   }
 }
 
@@ -661,7 +664,8 @@ pub async fn MCPToolBridge::discover(
         lifetime: None,
         contributions: None,
         reserved_names: [],
-        published_names: [],
+        published_defs: [],
+    publication_pending: false,
         activated: false,
         catalog_revision: 0,
         closing: false,
