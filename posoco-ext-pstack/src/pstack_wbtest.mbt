@@ -224,7 +224,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_eq(manifest.id, "posoco_ext_pstack")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
-  assert_eq(manifest.commands.length(), 2)
+  assert_eq(manifest.commands.length(), 3)
   let tools = @posoco.ToolProvider::list_tools(manifest.tools[0])
   assert_eq(
     tools.map(t => t.name.to_string()),
@@ -237,7 +237,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_true(prompt.contains("activate_skill"))
   assert_eq(
     @posoco.CommandPort::commands(pstack).map(c => c.id),
-    ["poteto-mode"],
+    ["poteto-mode", "poteto-mode-off"],
   )
 }
 
