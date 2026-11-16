@@ -50,13 +50,14 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
 }
 
 ///|
-test "convert_content_to_string_audio_and_unknown" {
+test "mcp bounded content renders audio and unknown blocks" {
   let items = [
     @types.ContentBlock::audio("0101", mime_type="audio/wav"),
     @types.ContentBlock::Unknown(Json::number(1)),
   ]
-  let result = convert_content_to_string(items)
+  let (result, truncated) = mcp_content_model_text(items, 100)
   assert_eq(result, "[Audio: audio/wav, 4 chars]\n[Unknown content]")
+  assert_true(!truncated)
 }
 
 ///|
@@ -550,17 +551,66 @@ test "http_connect_params_preserves_injected_header_order" {
 }
 
 ///|
-test "mcp_model_text_caps_success_and_error_surfaces" {
+test "mcp bounded content caps success and error surfaces" {
   let raw = "HEAD-" + "x".repeat(MCP_SUCCESS_OUTPUT_CHARS + 500) + "-TAIL"
-  let (success, success_cut) = mcp_model_text(raw, MCP_SUCCESS_OUTPUT_CHARS)
+  let items = [@types.ContentBlock::text(raw)]
+  let (success, success_cut) = mcp_content_model_text(
+    items, MCP_SUCCESS_OUTPUT_CHARS,
+  )
   assert_true(success_cut)
   assert_true(success.has_prefix("HEAD-"))
   assert_true(success.has_suffix("…[cut]"))
   assert_true(success.length() < raw.length())
 
-  let (error, error_cut) = mcp_model_text(raw, MCP_ERROR_OUTPUT_CHARS)
+  let (error, error_cut) = mcp_content_model_text(
+    items, MCP_ERROR_OUTPUT_CHARS,
+  )
   assert_true(error_cut)
   assert_true(error.length() < success.length())
+}
+
+///|
+test "mcp bounded content preserves separators and exact cutoff" {
+  let items = [
+    @types.ContentBlock::text("ab"),
+    @types.ContentBlock::text("cd"),
+    @types.ContentBlock::text("ef"),
+  ]
+  let (exact, exact_cut) = mcp_content_model_text(items, 5)
+  assert_eq(exact, "ab\ncd\n…[cut]")
+  assert_true(exact_cut)
+  let (complete, complete_cut) = mcp_content_model_text(items, 8)
+  assert_eq(complete, "ab\ncd\nef")
+  assert_true(!complete_cut)
+  let (empty, empty_cut) = mcp_content_model_text([], 8)
+  assert_eq(empty, "")
+  assert_true(!empty_cut)
+}
+
+///|
+test "mcp bounded content keeps Unicode codepoint boundaries" {
+  let items = [
+    @types.ContentBlock::text("😀é甲"),
+    @types.ContentBlock::text("z"),
+  ]
+  let (content, truncated) = mcp_content_model_text(items, 3)
+  assert_eq(content, "😀é甲\n…[cut]")
+  assert_true(truncated)
+}
+
+///|
+test "mcp bounded content stops before unneeded large tail" {
+  let huge = "x".repeat(1_000_000)
+  let items = [
+    @types.ContentBlock::text("prefix"),
+    @types.ContentBlock::text(huge),
+    @types.ContentBlock::text("NEVER_VISIBLE"),
+  ]
+  let (content, truncated) = mcp_content_model_text(items, 64)
+  assert_true(truncated)
+  assert_true(content.has_prefix("prefix\n"))
+  assert_true(!content.contains("NEVER_VISIBLE"))
+  assert_true(content.length() < 100)
 }
 
 ///|
