@@ -85,16 +85,6 @@ const MCP_SUCCESS_OUTPUT_CHARS = 40_000
 const MCP_ERROR_OUTPUT_CHARS = 8_000
 
 ///|
-fn mcp_model_text(text : String, limit : Int32) -> (String, Bool) {
-  let clipped = @devkit.truncate_chars(text, limit)
-  if clipped == text {
-    (clipped, false)
-  } else {
-    (clipped + "\n…[cut]", true)
-  }
-}
-
-///|
 fn mcp_outcome_structured(truncated : Bool) -> Json? {
   if truncated {
     Some(Json::object({ "truncated": Json::boolean(true) }))
@@ -124,27 +114,60 @@ fn convert_tool_def(
 }
 
 ///|
-/// Convert MCP ContentBlock array to a plain text string.
-fn convert_content_to_string(items : Array[@types.ContentBlock]) -> String {
-  items
-  .map(fn(item) {
-    match item {
-      @types.ContentBlock::Text(t, ..) => t
-      @types.ContentBlock::Image(data, mime_type~, ..) =>
-        "[Image: \{mime_type}, \{data.length()} chars]"
-      @types.ContentBlock::Audio(data, mime_type~, ..) =>
-        "[Audio: \{mime_type}, \{data.length()} chars]"
-      @types.ContentBlock::ResourceLink(data, ..) => "[Resource: \{data.uri}]"
-      @types.ContentBlock::EmbeddedResource(contents, ..) =>
-        match contents.data {
-          @types.ResourceData::Text(t) => "[Resource \{contents.uri}]: \{t}"
-          @types.ResourceData::Blob(b) =>
-            "[Resource \{contents.uri}]: [blob \{b.length()} chars]"
-        }
-      @types.ContentBlock::Unknown(_) => "[Unknown content]"
+/// Render content as small fragments. Large text is retained by reference
+/// rather than interpolated into a second full-size string. In particular,
+/// embedded resource text is not concatenated with its prefix until it has
+/// passed the Agent-facing output budget.
+fn mcp_content_fragments(item : @types.ContentBlock) -> Array[String] {
+  match item {
+    @types.ContentBlock::Text(t, ..) => [t]
+    @types.ContentBlock::Image(data, mime_type~, ..) =>
+      ["[Image: \{mime_type}, \{data.length()} chars]"]
+    @types.ContentBlock::Audio(data, mime_type~, ..) =>
+      ["[Audio: \{mime_type}, \{data.length()} chars]"]
+    @types.ContentBlock::ResourceLink(data, ..) => ["[Resource: \{data.uri}]"]
+    @types.ContentBlock::EmbeddedResource(contents, ..) =>
+      match contents.data {
+        @types.ResourceData::Text(t) => ["[Resource \{contents.uri}]: ", t]
+        @types.ResourceData::Blob(b) =>
+          ["[Resource \{contents.uri}]: [blob \{b.length()} chars]"]
+      }
+    @types.ContentBlock::Unknown(_) => ["[Unknown content]"]
+  }
+}
+
+///|
+/// Render only the prefix the Agent may consume. Previously we joined every
+/// content block (including arbitrarily large text and embedded resources)
+/// before truncating the entire string. This bounds temporary output memory
+/// and work to the configured character budget, even when a remote tool
+/// returns megabytes of content. Count Unicode characters across fragments,
+/// including separators, to preserve the previous truncation contract.
+fn mcp_content_model_text(
+  items : Array[@types.ContentBlock],
+  limit : Int32,
+) -> (String, Bool) {
+  let out = StringBuilder()
+  let mut used = 0
+  for index, item in items {
+    if index > 0 {
+      if used >= limit {
+        return (out.to_string() + "\n…[cut]", true)
+      }
+      out.write_char('\n')
+      used += 1
     }
-  })
-  .join("\n")
+    for fragment in mcp_content_fragments(item) {
+      for ch in fragment {
+        if used >= limit {
+          return (out.to_string() + "\n…[cut]", true)
+        }
+        out.write_char(ch)
+        used += 1
+      }
+    }
+  }
+  (out.to_string(), false)
 }
 
 ///|
@@ -1650,9 +1673,8 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       raise mcp_call_failure(failure, original_name)
   }
   let is_error = result.is_error.unwrap_or(false)
-  let raw = convert_content_to_string(result.content)
-  let (content, truncated) = mcp_model_text(
-    raw,
+  let (content, truncated) = mcp_content_model_text(
+    result.content,
     if is_error {
       MCP_ERROR_OUTPUT_CHARS
     } else {
