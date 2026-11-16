@@ -669,7 +669,10 @@ test "MCP publisher compares definitions, not only tool names" {
   let updated = @posoco.ToolDef(
     name=original.name,
     description="Updated schema and description",
-    input_schema={ "type": "object", "properties": { "q": { "type": "string" } } },
+    input_schema={
+      "type": "object",
+      "properties": { "q": { "type": "string" } },
+    },
     owner=original.owner,
     policy=original.policy,
     provenance=original.provenance,

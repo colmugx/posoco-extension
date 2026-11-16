@@ -738,7 +738,7 @@ pub async fn MCPToolBridge::discover(
         contributions: None,
         reserved_names: [],
         published_defs: [],
-    publication_pending: false,
+        publication_pending: false,
         activated: false,
         catalog_revision: 0,
         closing: false,
