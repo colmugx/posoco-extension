@@ -1689,6 +1689,19 @@ async fn MCPToolBridge::reconnect_runner(
 }
 
 ///|
+/// Explicit reconnects do not reserve tool-call admission. Keep the
+/// existing API for diagnostics, manual reconnect and resilience tests.
+async fn MCPToolBridge::reconnect_one(
+  self : MCPToolBridge,
+  conn_idx : Int32,
+) -> Result[Unit, String] {
+  match self.reconnect_runner(conn_idx, acquire_after=false) {
+    Ok(_) => Ok(())
+    Err(message) => Err(message)
+  }
+}
+
+///|
 /// A caller that needs the replacement client immediately atomically installs
 /// it and receives a permit from one actor query. The caller must pair the
 /// permit with EndCall on every exit, including cancellation.
