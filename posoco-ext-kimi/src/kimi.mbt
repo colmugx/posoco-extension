@@ -180,7 +180,7 @@ async fn KimiModelPort::chat_stream(
     err =>
       raise @posoco.ModelError::Transport(
         "kimi transport failure (stage=write_body): " +
-        err.to_repr().to_string(),
+        @debug.Repr(err).to_string(),
       )
   }
   let response = client.end_request() catch {
@@ -224,7 +224,7 @@ async fn KimiModelPort::chat_stream(
       err =>
         raise @posoco.ModelError::Transport(
           "Kimi transport failure (stage=read_stream): " +
-          err.to_repr().to_string(),
+          @debug.Repr(err).to_string(),
         )
     }
     match line {

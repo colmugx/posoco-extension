@@ -267,7 +267,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         err =>
           raise @posoco.ModelError::Transport(
             "zai transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
       }
       let response = client.end_request() catch {
@@ -302,7 +302,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           err =>
             raise @posoco.ModelError::Transport(
               "zai transport failure (stage=read_stream): " +
-              err.to_repr().to_string(),
+              @debug.Repr(err).to_string(),
             )
         }
         match line {

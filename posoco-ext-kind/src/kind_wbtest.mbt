@@ -246,7 +246,7 @@ async test "load_project_overrides_global_and_skips_bad_files" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="posoco-kind-load")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     let global_dir = root + "/home/.cetas/agents"
     let project_dir = root + "/cwd/.cetas/agents"
@@ -313,7 +313,7 @@ async test "load_without_directories_returns_clean_builtin" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="posoco-kind-empty")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     let cat = KindCatalog::load(home=root, cwd=root + "/nowhere")
     assert_eq(cat.names(), ["coder", "explore", "oracle", "reviewer"])
@@ -327,7 +327,7 @@ async test "load_rejects_name_stem_mismatch_with_diagnostic" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="posoco-kind-mismatch")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     let agents = root + "/.cetas/agents"
     @fs.mkdir(agents, recursive=true)
@@ -352,7 +352,7 @@ async test "load_global_directory_alone_overrides_builtin" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="posoco-kind-global")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     let global_dir = root + "/.cetas/agents"
     @fs.mkdir(global_dir, recursive=true)

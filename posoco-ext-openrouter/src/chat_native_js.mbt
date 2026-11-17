@@ -83,7 +83,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         err =>
           raise @posoco.ModelError::Transport(
             "openrouter transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
       }
       let response = client.end_request() catch {

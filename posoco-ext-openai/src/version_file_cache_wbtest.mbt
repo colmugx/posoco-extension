@@ -14,7 +14,7 @@ async fn version_cache_fixture_dir() -> String {
 /// Remove the whole fixture tree; cleanup failures never shadow the
 /// scenario's own result.
 async fn version_cache_fixture_cleanup(directory : String) -> Unit {
-  @fs.rmdir(directory, recursive=true) catch {
+  @fs.remove(directory, recursive=true) catch {
     _ => ()
   }
 }

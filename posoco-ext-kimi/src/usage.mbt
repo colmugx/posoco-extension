@@ -190,9 +190,7 @@ async fn fetch_kimi_usage(
       return Err("Kimi usage request timed out (timeout_ms=10000)")
     err => return Err("Kimi usage request failed: " + err.to_string())
   }
-  let body_bytes = conn.binary() catch {
-    err => return Err("Kimi usage body read failed: " + err.to_string())
-  }
+  let body_bytes = conn.binary()
   if response.code < 200 || response.code >= 300 {
     return Err(
       "Kimi usage HTTP status: " +

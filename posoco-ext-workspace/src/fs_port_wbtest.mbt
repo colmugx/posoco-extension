@@ -80,7 +80,7 @@ async test "native_workspace_fs_roundtrip_mkdir_write_read_readdir_rename_remove
   @async.with_task_group() <| group => {
     let base = @fs.tmpdir(prefix="posoco-ws-roundtrip")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(base, recursive=true))
     }
     let fs = NativeWorkspaceFs()
     // mkdir recursive, then a subdir.
@@ -117,7 +117,7 @@ async test "native_workspace_fs_walk_visits_each_directory" {
   @async.with_task_group() <| group => {
     let base = @fs.tmpdir(prefix="posoco-ws-walk")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(base, recursive=true))
     }
     let fs = NativeWorkspaceFs()
     fs.mkdir(base + "/a/b", recursive=true)
@@ -137,7 +137,7 @@ async test "read_file_result_missing_content_failed" {
   @async.with_task_group() <| group => {
     let base = @fs.tmpdir(prefix="posoco-ws-readresult")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(base, recursive=true))
     }
     let fs = NativeWorkspaceFs()
     // Missing: absent optional source.
@@ -166,7 +166,7 @@ async test "native_write_file_atomic_replaces_destination" {
   @async.with_task_group() <| group => {
     let base = @fs.tmpdir(prefix="posoco-ws-atomic")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(base, recursive=true))
     }
     let fs = NativeWorkspaceFs()
     fs.write_file_atomic(base + "/cred.json", "v1")

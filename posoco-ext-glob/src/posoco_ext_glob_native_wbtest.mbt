@@ -70,7 +70,7 @@ async test "glob_rejects_malformed_optional_path" {
 ///|
 async test "glob_missing_base_is_loud_without_os_error" {
   let dir = @fs.tmpdir(prefix="posoco-glob-missing")
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
   let outcome = Ok(
     GlobTools::GlobTools().execute(
       test_ctx(glob_call("*.mbt", Some(Json::string(dir)))),
@@ -102,7 +102,7 @@ async test "glob_zero_matches_fills_structured_summary" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-zero")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
@@ -130,7 +130,7 @@ async test "glob_multi_file_fills_structured_summary" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-multi")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
@@ -166,7 +166,7 @@ async test "glob_anchored_base_resolves_and_stays_base_relative" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-anchor")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(dir + "/a.txt", "x", create_mode=CreateNew)
     @fs.mkdir(dir + "/sub")
@@ -210,7 +210,7 @@ async test "glob_limit_caps_output_with_footer" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-limit")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
@@ -277,7 +277,7 @@ async test "glob_returns_files_only_and_prunes_ignores_and_hidden" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-prune")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/top.mbt", "// top\n", create_mode=CreateNew)
     @fs.mkdir("\{dir}/sub")
@@ -321,7 +321,7 @@ async test "glob_directory_pattern_yields_no_results" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-dironly")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.mkdir("\{dir}/sub")
     @fs.write_text("\{dir}/sub/keep.txt", "x", create_mode=CreateNew)
@@ -355,7 +355,7 @@ async test "glob_sorts_newest_first" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-glob-mtime")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/older.mbt", "// older\n", create_mode=CreateNew)
     @async.sleep(60)

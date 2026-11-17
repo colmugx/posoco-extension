@@ -133,7 +133,7 @@ async test "edit_directory_is_loud_without_os_error" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-directory")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let outcome = Ok(
       EditTools::EditTools().execute(test_ctx(edit_call(dir, None))),
@@ -202,7 +202,7 @@ async test "edit_unique_match_reports_line" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-unique")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/u.txt"
     write_file_native(path, "alpha\nbeta\ngamma\n")
@@ -227,7 +227,7 @@ async test "edit_ambiguous_match_lists_lines_and_is_rejected" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-ambig")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/a.txt"
     write_file_native(path, "x\nfoo\ny\nfoo\nz\n")
@@ -248,7 +248,7 @@ async test "edit_replace_all_replaces_every_occurrence" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-all")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/r.txt"
     write_file_native(path, "x\nfoo\ny\nfoo\nz\n")
@@ -272,7 +272,7 @@ async test "edit_not_found_guides_reread" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-miss")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/m.txt"
     write_file_native(path, "alpha\n")
@@ -293,7 +293,7 @@ async test "edit_strips_line_number_prefixes_from_old_text" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-strip")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/p.txt"
     write_file_native(path, "alpha\nbeta\ngamma\n")
@@ -324,7 +324,7 @@ async test "edit_freshness_gate_rejects_unread_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-unread")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/g.txt"
     write_file_native(path, "alpha\n")
@@ -344,7 +344,7 @@ async test "edit_fresh_file_succeeds_and_ledger_stays_fresh" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-fresh")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/f.txt"
     write_file_native(path, "alpha\n")
@@ -376,7 +376,7 @@ async test "edit_anchored_relative_path_resolves" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-anchor")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     write_file_native(dir + "/u.txt", "alpha\nbeta\ngamma\n")
     let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)

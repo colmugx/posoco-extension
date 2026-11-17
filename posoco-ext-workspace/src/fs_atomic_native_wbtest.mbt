@@ -6,7 +6,7 @@ extern "C" fn workspace_test_file_mode(fd : @types.Fd) -> Int32 = "cetas_workspa
 async fn with_atomic_test_dir(body : async (String) -> Unit) -> Unit {
   @async.with_task_group() <| group => {
     let base = @fs.tmpdir(prefix="workspace-atomic-test-")
-    group.add_defer(() => @fs.rmdir(base, recursive=true))
+    group.add_defer(() => @fs.remove(base, recursive=true))
     body(base)
   }
 }

@@ -36,8 +36,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
 /// reason so a directory read stays diagnosable ("Is a directory").
 fn edit_io_error_text(error : Error) -> String {
   match error {
-    @io.ReaderError::TransportError(inner, ..) =>
-      @debug.to_repr(inner).to_string()
+    @io.ReaderError::TransportError(inner, ..) => @debug.Repr(inner).to_string()
     _ => error.to_string()
   }
 }

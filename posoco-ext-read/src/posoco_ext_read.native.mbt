@@ -63,7 +63,7 @@ async fn native_read_lines(
     let chunk = file.read_until(@utf8.encode("\n")[:]) catch {
       e => {
         file.close()
-        raise read_failure("read", path, e.to_repr().to_string())
+        raise read_failure("read", path, @debug.Repr(e).to_string())
       }
     }
     match chunk {
@@ -103,7 +103,7 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
     let n = file.read_into(buf, offset=filled, max_len=size - filled) catch {
       error => {
         file.close()
-        raise read_failure("read", path, error.to_repr().to_string())
+        raise read_failure("read", path, @debug.Repr(error).to_string())
       }
     }
     if n <= 0 {

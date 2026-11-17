@@ -178,7 +178,7 @@ async test "grep_zero_matches_is_success" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-zero")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       "\{dir}/searchable.txt",
@@ -211,7 +211,7 @@ async test "grep_multi_match_groups_by_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-multi")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       "\{dir}/hits.txt",
@@ -247,7 +247,7 @@ async test "grep_max_matches_caps_output_with_footer" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-cap")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/hits.txt", "n1\nn2\nn3\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
@@ -282,7 +282,7 @@ async test "grep_files_with_matches_mode_lists_paths_only" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-files")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.txt", "x needle y\n", create_mode=CreateNew)
@@ -321,7 +321,7 @@ async test "grep_count_mode_reports_matches_per_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-count")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
@@ -356,7 +356,7 @@ async test "grep_case_insensitive_flag_broadens_matching" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-case")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
     let plain = GrepTools::GrepTools().execute(
@@ -385,7 +385,7 @@ async test "grep_case_insensitive_flag_broadens_matching" {
 ///|
 async test "grep_missing_base_is_loud" {
   let dir = @fs.tmpdir(prefix="posoco-grep-missing")
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
   let result = Ok(
     GrepTools::GrepTools().execute(test_ctx(grep_call("anything", dir))),
   ) catch {
@@ -405,7 +405,7 @@ async test "grep_skips_binary_and_unreadable_files_without_failing" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-skip")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_binary("\{dir}/invalid.bin", b"\xff", create_mode=CreateNew)
     @fs.write_binary("\{dir}/image.png", b"\x89PNG", create_mode=CreateNew)
@@ -446,7 +446,7 @@ async test "grep_prunes_ignores_and_hidden_entries" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-ignore")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/top.txt", "needle\n", create_mode=CreateNew)
     @fs.mkdir("\{dir}/node_modules")
@@ -486,7 +486,7 @@ async test "grep_glob_filter_narrows_searched_files" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-glob")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.mbt", "needle\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
@@ -515,7 +515,7 @@ async test "grep_long_line_is_truncated_with_marker" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-long")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       "\{dir}/long.txt",
@@ -543,7 +543,7 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-anchor")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       dir + "/a.txt",
@@ -610,7 +610,7 @@ async test "grep_regex_alternation_matches_and_literal_pipe_does_not" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-regex")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       "\{dir}/model.txt",
@@ -657,7 +657,7 @@ async test "grep_invalid_regex_fails_loudly" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-badre")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
     let result = Ok(
@@ -686,7 +686,7 @@ async test "grep_regex_case_insensitive_combo" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-re-ci")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text(
       "\{dir}/a.txt",
@@ -718,7 +718,7 @@ async test "grep_regex_respects_glob_filter" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-re-glob")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/a.txt", "alpha\n", create_mode=CreateNew)
     @fs.write_text("\{dir}/b.md", "gamma\n", create_mode=CreateNew)
@@ -747,7 +747,7 @@ async test "grep_literal_case_insensitive_folds_unicode_like_regex" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-fold")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     @fs.write_text("\{dir}/umlaut.txt", "Über alles\n", create_mode=CreateNew)
     let literal = GrepTools::GrepTools().execute(

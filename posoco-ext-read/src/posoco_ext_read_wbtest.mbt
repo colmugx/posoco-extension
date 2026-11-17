@@ -67,7 +67,7 @@ async test "read_directory_is_loud_without_os_error" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-directory")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let outcome = Ok(ReadTools::ReadTools().execute(test_ctx(read_call(dir)))) catch {
       error => Err(error)
@@ -91,7 +91,7 @@ async test "read_invalid_utf8_names_binary_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-decode")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/invalid.bin"
     @fs.write_binary(path, b"\xff", create_mode=CreateNew)
@@ -167,7 +167,7 @@ async test "read_pages_with_line_numbers_and_footer" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-page")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
     let outcome = run_read(
@@ -193,7 +193,7 @@ async test "read_offset_starts_at_requested_line" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-offset")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
     let outcome = run_read(
@@ -214,7 +214,7 @@ async test "read_negative_offset_returns_tail_without_footer" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-tail")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
     let outcome = run_read(
@@ -235,7 +235,7 @@ async test "read_offset_past_end_names_total_lines" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-past")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
     let outcome = run_read(
@@ -258,7 +258,7 @@ async test "read_empty_file_is_a_notice" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-empty")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/empty.txt"
     @fs.write_text(path, "", create_mode=CreateNew)
@@ -277,7 +277,7 @@ async test "read_truncates_long_lines_with_marker" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-longline")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/long.txt"
     @fs.write_text(path, "a".repeat(3000) + "\n", create_mode=CreateNew)
@@ -299,7 +299,7 @@ async test "read_byte_cap_cuts_implicit_page_with_footer" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-bytecap")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/wide.txt"
     let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
@@ -327,7 +327,7 @@ async test "read_explicit_range_over_byte_cap_returns_partial_page" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-explicit-cap")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/wide2.txt"
     let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
@@ -356,7 +356,7 @@ async test "read_rejects_zero_offset_and_nonpositive_limit" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-zero")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
     let zero_offset = Ok(
@@ -388,7 +388,7 @@ async test "read_normalizes_crlf" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-crlf")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/crlf.txt"
     @fs.write_text(path, "alpha\r\nbeta\r\n", create_mode=CreateNew)
@@ -407,7 +407,7 @@ async test "read_records_freshness_stamp_and_detects_change" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-fresh")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/fresh.txt"
     @fs.write_text(path, "one\ntwo\n", create_mode=CreateNew)
@@ -436,7 +436,7 @@ async test "read_anchored_relative_path_resolves_and_keys_canonically" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-anchor")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let abs = write_ten_lines(dir)
     let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
@@ -605,7 +605,7 @@ async test "read_delegated_fs_serves_buffer_and_records_reads" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-delegate")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     // Disk bytes deliberately differ from the injected buffer.
     let path = dir + "/buffer.txt"
@@ -644,7 +644,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-delegate-fresh")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/fresh.txt"
     @fs.write_text(path, "one\n", create_mode=CreateNew)
@@ -680,7 +680,7 @@ async test "read_attaches_image_files_whole_for_vision" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-image")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/shot.png"
     @fs.write_text(path, "png-bytes-here", create_mode=CreateNew)

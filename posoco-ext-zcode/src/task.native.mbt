@@ -413,7 +413,7 @@ async fn zcode_delegated(
   let conn : ZcodeConn = {
     pending: Map::from_array([]),
     events: @aqueue.Queue(kind=Unbounded),
-    writer: @io.BufferedWriter::new(raw_writer, size=8192),
+    writer: @io.BufferedWriter(raw_writer, size=8192),
     raw_writer,
     write_lock: @async.Mutex::Mutex(),
     next_id: 0,

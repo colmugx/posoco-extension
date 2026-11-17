@@ -15,7 +15,7 @@ async fn write_text(path : String, text : String) -> Unit {
 
 ///|
 async fn remove_directory(path : String) -> Unit nocancel {
-  @fs.rmdir(path, recursive=true)
+  @fs.remove(path, recursive=true)
 }
 
 ///|

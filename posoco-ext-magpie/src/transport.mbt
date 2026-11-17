@@ -164,7 +164,7 @@ impl MagpieEventStream for HttpEventStream with fn next_line(
   let bytes = self.client.read_until(@utf8.encode("\n")[:]) catch {
     err =>
       raise MagpieGatewayError::Offline(
-        "stream read failed: \{err.to_repr().to_string()}",
+        "stream read failed: \{@debug.Repr(err).to_string()}",
       )
   }
   match bytes {
@@ -206,7 +206,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
     err => {
       client.close()
       raise MagpieGatewayError::Offline(
-        "stream write failed: \{err.to_repr().to_string()}",
+        "stream write failed: \{@debug.Repr(err).to_string()}",
       )
     }
   }

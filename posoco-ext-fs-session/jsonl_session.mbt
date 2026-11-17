@@ -284,7 +284,10 @@ pub impl @posoco.SessionPort for JsonlSessionStore with fn append_messages(
       e => {
         file.close()
         raise @posoco.SessionError::Save(
-          "jsonl: failed to append to " + path + ": " + e.to_repr().to_string(),
+          "jsonl: failed to append to " +
+          path +
+          ": " +
+          @debug.Repr(e).to_string(),
         )
       }
     }

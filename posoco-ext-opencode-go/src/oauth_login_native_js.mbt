@@ -73,12 +73,7 @@ async fn go_console_get_json(
         "OpenCode Console request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.binary() catch {
-    err =>
-      raise @oauth.OAuthError::HttpError(
-        "OpenCode Console response read failed: " + err.to_string(),
-      )
-  }
+  let body_bytes = conn.binary()
 
   let text = @utf8.decode(body_bytes) catch {
     _ =>

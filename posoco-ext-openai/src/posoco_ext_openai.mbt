@@ -641,7 +641,7 @@ async fn OpenAIModelPort::chat_stream(
         err =>
           raise @posoco.ModelError::Transport(
             "OpenAI transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
       }
     Plain(text) =>
@@ -649,7 +649,7 @@ async fn OpenAIModelPort::chat_stream(
         err =>
           raise @posoco.ModelError::Transport(
             "OpenAI transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
       }
   }

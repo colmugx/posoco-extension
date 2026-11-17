@@ -82,7 +82,7 @@ async test "write_creates_missing_parents" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-parents")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/missing-parent/output.txt"
     let outcome = WriteTools::WriteTools().execute(
@@ -118,7 +118,7 @@ async test "write_freshness_gate_rejects_unread_existing_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-unread")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/target.txt"
     @fs.write_text(path, "old", create_mode=CreateNew)
@@ -140,7 +140,7 @@ async test "write_freshness_gate_rejects_modified_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-modified")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/target.txt"
     @fs.write_text(path, "old", create_mode=CreateNew)
@@ -166,7 +166,7 @@ async test "write_allows_fresh_file_and_updates_ledger" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-fresh")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/target.txt"
     @fs.write_text(path, "old", create_mode=CreateNew)
@@ -190,7 +190,7 @@ async test "write_without_ledger_allows_blind_overwrite" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-blind")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/target.txt"
     @fs.write_text(path, "old", create_mode=CreateNew)
@@ -207,7 +207,7 @@ async test "write_reports_utf8_bytes_in_structured_metadata" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-bytes")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/utf8.txt"
     // 5 chars, 6 UTF-8 bytes (é is two bytes).
@@ -231,7 +231,7 @@ async test "write_size_cap_is_a_reported_error" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-cap")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let path = dir + "/big.txt"
     let huge = "x".repeat(1_000_001)
@@ -275,7 +275,7 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-anchor")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     }
     let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
     let fresh = @devkit.FreshnessGuard::FreshnessGuard()

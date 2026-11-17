@@ -84,7 +84,7 @@ async fn CustomModelPort::chat_responses(
           client.close()
           raise @posoco.ModelError::Transport(
             "custom provider transport failure (wire=responses, stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
         }
       }
@@ -124,7 +124,7 @@ async fn CustomModelPort::chat_responses(
             client.close()
             raise @posoco.ModelError::Transport(
               "custom provider transport failure (wire=responses, stage=read_stream): " +
-              err.to_repr().to_string(),
+              @debug.Repr(err).to_string(),
             )
           }
         }

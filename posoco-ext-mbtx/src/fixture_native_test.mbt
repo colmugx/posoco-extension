@@ -20,7 +20,7 @@ async fn fixture_write(path : String, text : String) -> Unit {
 
 ///|
 async fn fixture_remove(path : String) -> Unit nocancel {
-  @fs.rmdir(path, recursive=true)
+  @fs.remove(path, recursive=true)
 }
 
 ///|

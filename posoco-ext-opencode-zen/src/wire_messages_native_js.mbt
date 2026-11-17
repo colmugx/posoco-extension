@@ -253,7 +253,7 @@ async fn OpenCodeZenModelPort::chat_messages(
           client.close()
           raise @posoco.ModelError::Transport(
             "opencode-zen transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
         }
       }
@@ -293,7 +293,7 @@ async fn OpenCodeZenModelPort::chat_messages(
             client.close()
             raise @posoco.ModelError::Transport(
               "opencode-zen transport failure (stage=read_stream): " +
-              err.to_repr().to_string(),
+              @debug.Repr(err).to_string(),
             )
           }
         }

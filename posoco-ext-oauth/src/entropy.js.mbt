@@ -26,7 +26,7 @@ fn oauth_random_bytes_probe(n : Int32) -> Bytes {
 /// Decode lowercase/uppercase hex to Bytes; empty Bytes on malformed input.
 fn bytes_from_hex(hex : String) -> Bytes {
   if hex.length() == 0 || hex.length() % 2 != 0 {
-    return Bytes::new(0)
+    return Bytes::make(0, b'\x00')
   }
   let buf : Array[Byte] = []
   let mut hi = -1
@@ -39,11 +39,11 @@ fn bytes_from_hex(hex : String) -> Bytes {
           buf.push(((hi << 4) | value).to_byte())
           hi = -1
         }
-      None => return Bytes::new(0)
+      None => return Bytes::make(0, b'\x00')
     }
   }
   if hi >= 0 {
-    return Bytes::new(0)
+    return Bytes::make(0, b'\x00')
   }
   Bytes::from_array(buf)
 }

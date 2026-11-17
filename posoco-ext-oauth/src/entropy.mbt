@@ -9,7 +9,7 @@
 ///|
 fn oauth_random_bytes(n : Int32) -> Bytes {
   if n <= 0 {
-    return Bytes::new(0)
+    return Bytes::make(0, b'\x00')
   }
   let probed = oauth_random_bytes_probe(n)
   if probed.length() == n {
@@ -42,5 +42,5 @@ fn lcg_random_bytes(n : Int32) -> Bytes {
 /// the LCG fallback.
 #cfg(not(any(target="native", target="js")))
 fn oauth_random_bytes_probe(_n : Int32) -> Bytes {
-  Bytes::new(0)
+  Bytes::make(0, b'\x00')
 }

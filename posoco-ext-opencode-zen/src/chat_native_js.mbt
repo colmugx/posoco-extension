@@ -135,7 +135,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
           client.close()
           raise @posoco.ModelError::Transport(
             "\{self.config.client_id} transport failure (stage=write_body): " +
-            err.to_repr().to_string(),
+            @debug.Repr(err).to_string(),
           )
         }
       }

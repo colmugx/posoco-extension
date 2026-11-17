@@ -36,7 +36,7 @@ async fn DeepSeekModelPort::chat_stream(
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=write_body): " +
-        err.to_repr().to_string(),
+        @debug.Repr(err).to_string(),
       )
   }
   let response = client.end_request() catch {
@@ -71,7 +71,7 @@ async fn DeepSeekModelPort::chat_stream(
       err =>
         raise @posoco.ModelError::Transport(
           "DeepSeek transport failure (stage=read_stream): " +
-          err.to_repr().to_string(),
+          @debug.Repr(err).to_string(),
         )
     }
     match line {

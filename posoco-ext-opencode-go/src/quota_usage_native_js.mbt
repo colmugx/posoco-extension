@@ -38,9 +38,7 @@ pub async fn fetch_go_usage(
       return Err("OpenCode Go usage request timed out (timeout_ms=10000)")
     err => return Err("OpenCode Go usage request failed: " + err.to_string())
   }
-  let body_bytes = conn.binary() catch {
-    err => return Err("OpenCode Go usage body read failed: " + err.to_string())
-  }
+  let body_bytes = conn.binary()
 
   if response.code < 200 || response.code >= 300 {
     let detail = @utf8.decode(body_bytes) catch {

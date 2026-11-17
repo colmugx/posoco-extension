@@ -45,7 +45,7 @@ async fn WsTransport::next_text(
     err => return Err(err.to_string())
   }
   let data = message.read_all() catch {
-    err => return Err(err.to_repr().to_string())
+    err => return Err(@debug.Repr(err).to_string())
   }
   let text = @utf8.decode(data) catch {
     _ => return Err("websocket frame is not valid UTF-8")

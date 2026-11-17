@@ -10,6 +10,7 @@ import {
 #cfg(not(target = "js"))
 import {
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/debug",
   "moonbitlang/core/encoding/base64",
 }
 
