@@ -1677,7 +1677,10 @@ async fn MCPToolBridge::reconnect_runner(
         Err(_) => {
           // The fold may have accepted the permit before the reply timed out.
           // This tell follows the query and only releases that fused permit.
-          let _ = actor.abandon_finish_reconnect_acquire(generation~, attempt_id~)
+          let _ = actor.abandon_finish_reconnect_acquire(
+            generation~,
+            attempt_id~,
+          )
           Err("MCP reconnect admission failed")
         }
         _ => Err("MCP reconnect admission failed")
@@ -1687,19 +1690,6 @@ async fn MCPToolBridge::reconnect_runner(
       client.close()
       Err(message)
     }
-  }
-}
-
-///|
-/// Explicit reconnects do not reserve tool-call admission. Keep the
-/// existing API for diagnostics, manual reconnect and resilience tests.
-async fn MCPToolBridge::reconnect_one(
-  self : MCPToolBridge,
-  conn_idx : Int32,
-) -> Result[Unit, String] {
-  match self.reconnect_runner(conn_idx, acquire_after=false) {
-    Ok(_) => Ok(())
-    Err(message) => Err(message)
   }
 }
 

@@ -61,7 +61,11 @@ priv struct ConnView {
 priv enum ConnQuery[ClientT] {
   Acquire
   BeginReconnect
-  FinishReconnectAcquire(generation~ : Int32, client~ : ClientT, attempt_id~ : Int32)
+  FinishReconnectAcquire(
+    generation~ : Int32,
+    client~ : ClientT,
+    attempt_id~ : Int32
+  )
   Inspect
 }
 
@@ -200,7 +204,8 @@ fn[ClientT] conn_fold_cmd(
       state
     }
     AbandonFinishReconnectAcquire(generation=g, attempt_id~) => {
-      if g == state.generation && state.fused_admission_pending &&
+      if g == state.generation &&
+        state.fused_admission_pending &&
         attempt_id == state.fused_admission_attempt_id {
         state.fused_admission_pending = false
         state.fused_admission_attempt_id = 0
@@ -298,7 +303,9 @@ async fn[ClientT] ConnActor::begin_reconnect(
 /// Generate a distinct token for each attempted fused admission, including
 /// attempts whose reply is lost. Cancellation compensation must target only
 /// the query that originally reserved the permit.
-fn[ClientT] ConnActor::next_finish_attempt_id(self : ConnActor[ClientT]) -> Int32 {
+fn[ClientT] ConnActor::next_finish_attempt_id(
+  self : ConnActor[ClientT],
+) -> Int32 {
   self.finish_attempt_counter.val = self.finish_attempt_counter.val + 1
   self.finish_attempt_counter.val
 }
@@ -313,7 +320,10 @@ async fn[ClientT] ConnActor::finish_reconnect_acquire(
   attempt_id~ : Int32,
   timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
-  self.actor.ask(FinishReconnectAcquire(generation~, client~, attempt_id~), timeout_ms~)
+  self.actor.ask(
+    FinishReconnectAcquire(generation~, client~, attempt_id~),
+    timeout_ms~,
+  )
 }
 
 ///|
