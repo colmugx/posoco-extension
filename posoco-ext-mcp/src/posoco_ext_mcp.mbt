@@ -1193,6 +1193,14 @@ fn MCPToolBridge::commit_connection(
     Ok(plan) => plan
     Err(message) => return Err(message)
   }
+  // A bridge that began closing may not install a connection actor: close()
+  // drains the existing loops and the host's core-async lifetime group can
+  // terminate right after, and TaskGroup::spawn aborts the process on a
+  // terminated group. Nothing suspends between this check and the spawn, so
+  // no close can slip past it. The caller closes the fresh client on refusal.
+  if self.closing {
+    return Err("MCP bridge is closing; connection not installed")
+  }
   // No fallible operation remains after this point.
   let conn : MCPServerConn = {
     name: config.name,

@@ -100,6 +100,10 @@ pub struct AcpBridge {
   mut used_tokens : Int32
   mut last_finish : @posoco.FinishReason?
   mut last_failure : String?
+  /// The turn's own terminal said cancelled. `FinishReason` has no cancelled
+  /// variant (cancellation is its own terminal since Posoco 0.24.1), so this
+  /// is tracked beside it and cleared at the next turn.
+  mut cancelled : Bool
 }
 
 ///|
@@ -136,6 +140,7 @@ pub fn AcpBridge::AcpBridge(
     used_tokens: 0,
     last_finish: None,
     last_failure: None,
+    cancelled: false,
   }
 }
 
@@ -161,8 +166,9 @@ pub fn AcpBridge::set_context_window(
 /// explicit teardown after which a bridge may be rebound). Updates queued
 /// before `attach` are stamped with the session id at send time, so a host
 /// that attaches first and runs the turn second needs no extra ordering
-/// care. Each attach clears `last_failure` and the in-round streaming
-/// state; `used_tokens` and `message_seq` persist (see the struct doc).
+/// care. Each attach clears `last_failure`, the cancelled flag and the
+/// in-round streaming state; `used_tokens` and `message_seq` persist (see the
+/// struct doc).
 pub fn AcpBridge::attach(
   self : AcpBridge,
   context~ : @acp.AgentContext,
@@ -186,6 +192,7 @@ pub fn AcpBridge::attach(
   self.context = Some(context)
   self.session_id = Some(session_id)
   self.last_failure = None
+  self.cancelled = false
   self.reset_round()
 }
 
@@ -341,10 +348,15 @@ pub async fn AcpBridge::push_agent_thought_chunk(
 }
 
 ///|
-/// ACP stop reason for the turn that just ran, derived from the last
-/// assistant finish reason the bridge observed.
+/// ACP stop reason for the turn that just ran. A turn whose own terminal was
+/// `TurnCancelled` answers `cancelled`; every other turn is derived from the
+/// last assistant finish reason the bridge observed.
 pub fn AcpBridge::stop_reason(self : AcpBridge) -> @acp.StopReason {
-  acp_stop_reason(self.last_finish)
+  if self.cancelled {
+    @acp.StopReason::Cancelled
+  } else {
+    acp_stop_reason(self.last_finish)
+  }
 }
 
 ///|
@@ -447,6 +459,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
   match event {
     TurnStarted => {
       self.last_failure = None
+      self.cancelled = false
       self.reset_round()
     }
     ToolCallPending(call) =>
@@ -493,6 +506,11 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     StreamChunkReceived(chunk~) => self.ingest_stream_chunk(chunk, event)
     TurnFailed(message) => self.last_failure = Some(message)
     ContextStateUpdated(state~) => self.context_window = state.window_tokens
+    // The turn's own terminal is the authority on cancellation: a soft
+    // cancellation, a hard one that unwound outside every catch, and Agent
+    // shutdown all project exactly this event, and none of them raise a
+    // `TurnFailed` any more (Posoco 0.24.1).
+    TurnCancelled => self.cancelled = true
     TurnCompleted
     | ToolCallApproved(..)
     | ToolCallStarted(..)
@@ -510,8 +528,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | ToolChildDeclared(..)
     | ToolCatalogChanged(..)
     | MessageApplied(..)
-    | MessageUndelivered(..)
-    | TurnCancelled => ()
+    | MessageUndelivered(..) => ()
   }
 }
 

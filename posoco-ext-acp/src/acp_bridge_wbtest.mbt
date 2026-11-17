@@ -755,6 +755,28 @@ async test "stop reason follows the last observed finish reason" {
 }
 
 ///|
+async test "turn cancellation is its own stop reason" {
+  let bridge = AcpBridge()
+  bridge.ingest(TurnStarted)
+  // Cancellation is a turn terminal, not a finish reason: it outranks the
+  // last assistant message, which finished on length here.
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[], finish=Length),
+      usage=None,
+    ),
+  )
+  bridge.ingest(TurnCancelled)
+  assert_true(bridge.stop_reason() is Cancelled)
+  // The next turn starts clean.
+  bridge.ingest(TurnStarted)
+  match bridge.stop_reason() {
+    Cancelled => fail("cancellation leaked into the next turn")
+    _ => ()
+  }
+}
+
+///|
 async test "flush before attach sends nothing and keeps items queued" {
   let bridge = AcpBridge()
   bridge.ingest(ToolCallPending(tk_call("read")))

@@ -1,19 +1,18 @@
 ///|
-// Runtime-seam pieces for the Lazy load mode.
+// Runtime-seam piece for MCP effect execution.
 //
-// A lazily-activated bridge contributes its tools through the catalog seam,
-// not through composition-time ToolProvider declarations (the catalog
-// snapshot is frozen before the first turn). Two small types close the loop:
+// A lazily-activated bridge publishes its tools through the dynamic tool
+// channel, not through composition-time ToolProvider declarations (the
+// catalog snapshot is frozen before the first turn): `Lifecycle::on_compose`
+// claims `CompositionView::tool_contributions()`, and every activation or
+// catalog revision republishes the bridge's own owner-bound group. The
+// kernel adopts a replacement at the next operation boundary.
 //
-//   McpCatalogSource — the Agent-wide catalog: static base tools plus the
-//     bridge's live defs; `revision()` advances on activation/refresh.
-//   McpRuntime — effect execution: MCP-namespaced names route to the
-//     bridge, everything else delegates to the fallback runtime.
-//
-// Wire them together in the host:
+// McpRuntime is the other half: effect execution routes MCP-namespaced names
+// to the bridge and delegates everything else to the fallback runtime. Wire
+// it in the host:
 //   Agent::with_runtime(exts~, config~,
-//     runtime=McpRuntime(bridge~, fallback~),
-//     catalog_source=McpCatalogSource(bridge~, base_tools~))
+//     runtime=McpRuntime(bridge~, fallback~))
 
 ///|
 /// Runtime decorator that executes MCP-namespaced tool effects on the
