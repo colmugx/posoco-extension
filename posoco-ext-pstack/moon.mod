@@ -12,7 +12,7 @@ license = "Apache-2.0"
 
 keywords = [ "posoco", "agent-skills", "pstack", "poteto-mode", "coding-agent" ]
 
-description = "PStack engineering method as a built-in native Posoco Skill"
+description = "PStack engineering workflows via file-backed native Posoco Skills"
 
 import {
   "colmugx/posoco@0.24.2",

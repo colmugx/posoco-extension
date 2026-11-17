@@ -22,8 +22,19 @@ for (const file of required) {
 
 const rootSkill = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 assert.match(rootSkill, /^---\nname: poteto-mode\n/m);
-for (const path of ["resources/upstream/skills/poteto-mode/SKILL.md", "resources/posoco-harness.md"]) {
+const corePlaybooks = ["investigation", "bug-fix", "feature", "refactoring", "perf-issue", "prototype"];
+const adapterPaths = [
+  "resources/upstream/skills/poteto-mode/SKILL.md",
+  "resources/posoco-harness.md",
+  ...corePlaybooks.map(name => `resources/upstream/skills/poteto-mode/playbooks/${name}.md`),
+];
+for (const path of adapterPaths) {
   assert(existsSync(join(skillDir, path)), `Missing adapter reference: ${path}`);
+}
+assert.match(rootSkill, /read_skill_resource/);
+assert.match(rootSkill, /resources\/posoco-harness\.md/);
+for (const name of corePlaybooks) {
+  assert(rootSkill.includes(`playbooks/${name}.md`), `Unrouted core workflow: ${name}`);
 }
 
 for (const name of ["poteto-agent", "comment-sicko"]) {

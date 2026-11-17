@@ -1,50 +1,53 @@
 # posoco-ext-pstack
 
-A native, installable Posoco Extension that ports the core engineering method of [PStack](https://github.com/cursor/plugins/tree/main/pstack).
+PStack's original engineering workflow adapted to Posoco. The module uses PStack's bundled Markdown playbooks, principles and helper skills, while the Posoco Agent supplies the existing tools, model selection, permissions and lifecycle. No Cursor runtime emulator is added.
 
-PStack supplies the method; Posoco supplies the Agent runtime. The primary `poteto-mode` Skill is a true inline `SkillDescriptor::builtin`, compiled into this package. Activating it does not depend on finding an installed `assets/` directory.
-
-## Install
+## Install and compose
 
 ```sh
 moon add colmugx/posoco-ext-pstack
 ```
 
-## Compose
-
-The host supplies its workspace filesystem and an owner-bound event publisher. Compose the normal StatusBar on the same EventSystem:
+Resolve the installed module's `assets` directory and pass it explicitly. An inline built-in Skill cannot read the original playbooks with `read_skill_resource`, so the main workflow is file-backed.
 
 ```moonbit
 let events = @posoco.EventSystem()
 let statusbar = @statusbar.StatusBar(events=Some(events))
-let pstack_events = events.publisher(owner="posoco_ext_pstack").unwrap()
-let pstack = @pstack.Pstack::builtin(fs, events=Some(pstack_events)).unwrap()
+let publisher = events.publisher(owner="posoco_ext_pstack").unwrap()
+let pstack = @pstack.Pstack::discover(
+  fs, cwd~, home~, assets_root~, events=Some(publisher),
+).unwrap()
 let agent = @posoco.Agent(exts=[pstack, statusbar, ..other_extensions], events~, config~)
 ```
 
-Alternatively, `Pstack::discover(fs, cwd~, home~, events~)` discovers project/user Skills and merges the built-in method into the same catalog. A same-name project/user Skill intentionally overrides the built-in. Do not also compose a standalone Skills extension: PStack already owns the Skills tools and prompt contributor.
+`Pstack::discover` returns `None` when the required bundle files are missing or Skills configuration/discovery fails. Report that error instead of silently activating a partial workflow. Project/user Skills retain normal precedence. Do **not** also compose a standalone Skills extension: PStack owns one Skills catalog, command and tool provider.
 
-## Native behavior
+## Workflow execution
 
-- **Built-in Skill:** `poteto-mode` is registered with `SkillDescriptor::builtin`; activation works without package assets on disk.
-- **Slash command:** `/poteto-mode` toggles the session mode. The first invocation activates the Skill; the next deactivates the mode without re-injecting Skill instructions.
-- **Status bar:** successful activation publishes a segment with key `🥔`, value `Mode On`, and semantic color `success`. With `posoco-ext-statusbar` composed on the same EventSystem, it renders as **🥔 Mode On**.
-- **Toggle off:** invoking `/poteto-mode` again clears the status segment.
-- **Lifecycle:** Agent shutdown clears an active segment. Repeated shutdown cleanup is idempotent.
-- **Skills tools:** reuses `activate_skill`, `read_skill_resource`, and `skill_search` from `posoco-ext-skills`.
+On first `/poteto-mode`, the native Skills activation returns the file-backed `poteto-mode` instructions to the Agent. Those instructions tell the Agent to read the Posoco harness mapping, upstream root Skill, and matching original playbook before acting, using `read_skill_resource`.
 
-Without an event publisher, Skill activation still works but the status segment cannot be published. Status rendering also requires the host to compose `posoco-ext-statusbar` with the same EventSystem.
+Supported workflow routes: Investigation, Bug fix, Feature, Refactoring, Perf issue and Prototype. The original playbooks are under `assets/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/`. Linked principles and helper Markdown are loaded on demand, not rewritten as a generic prompt.
 
-## Core method
+The second `/poteto-mode` toggles off the session status, unregistering the `🥔 Mode On` status segment. Agent shutdown also unregisters it. The host must compose `posoco-ext-statusbar` on the same EventSystem for the display. Turning off cannot retract instructions already included in conversation history.
 
-The built-in Skill captures the essential PStack engineering method: goal-first framing; evidence before questions; domain modeling and tracing before implementation; narrow workflows for investigation, bug fixes, features, refactors, and reviews; deliberate delegation; small verifiable units; root-cause fixes; behavioral verification; independent diff review; and honest reporting.
-
-The package does not emulate Cursor or Claude Code runtimes. It does not claim compatibility with Cursor Automations, Slack, Bugbot, cloud agents, Cursor-specific commands, hooks, or model slugs.
-
-## Upstream and license
-
-The imported upstream Markdown reference bundle is pinned to Cursor Plugins commit `bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7`. The original PStack MIT license and upstream README remain under `assets/skills/poteto-mode/resources/upstream/`; provenance is documented in `resources/UPSTREAM.md`. The built-in Skill body is the Posoco-oriented core-method adaptation. The MoonBit adapter is Apache-2.0; imported upstream material remains MIT-licensed.
+Posoco's composed `subagent`, `todo_write`, `ask_question`, planning, search, filesystem and shell tools replace corresponding Cursor primitives only where available. Unsupported Cursor Automations, cloud agents, `/loop`, Bugbot, plugin commands/hooks, provider model slugs, worktree orchestration and external services are not implemented. PR creation, babysitting, shipping and orchestration are not automatic.
 
 ## Optional Kind presets
 
-The package still includes `poteto-agent` and `comment-sicko` Kind preset Markdown files. Hosts may call `Pstack::load_kinds(fs, assets_root)` and pass the returned specs to `KindCatalog::load(..., extra=specs)`. These optional roles are separate from the built-in `poteto-mode` Skill.
+The bundle includes `poteto-agent` and `comment-sicko` Markdown presets. Use `Pstack::load_kinds(fs, assets_root)` and pass the entries into `KindCatalog::load(..., extra=specs)` where needed. A child must independently discover the same Skill resources if it needs the original workflow; Kind presets alone do not propagate them.
+
+## Verification
+
+```sh
+node posoco-ext-pstack/scripts/check-assets.mjs
+moon check --target native posoco-ext-pstack/src
+moon check --target js posoco-ext-pstack/src
+moon test --target native posoco-ext-pstack/src
+moon test --target js posoco-ext-pstack/src
+```
+
+Package tests cover file-backed discovery, missing-file rejection, native resource loading, and the toggle lifecycle. A real host Agent smoke test still depends on its separately composed tools.
+
+## Upstream and license
+
+The source Markdown is pinned to `cursor/plugins` commit `bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7`; imported material and license remain under `resources/upstream/` (MIT). The MoonBit adapter is Apache-2.0.
