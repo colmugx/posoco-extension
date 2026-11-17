@@ -186,22 +186,21 @@ async test "discover: PStack bundle becomes a native skill catalog" {
 }
 
 ///|
-async test "discover: missing bundle entry is not registered" {
+async test "discover: missing bundle entry still registers the built-in skill" {
   let fs = PstackFakeFs::new()
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
     include_repository: false,
     include_user: false,
   }
-  assert_true(
-    Pstack::discover(
-      fs,
-      cwd="/workspace",
-      home="/home/test",
-      assets_root="/bundle",
-      discovery_options=options,
-    ) is None,
-  )
+  let pstack = Pstack::discover(
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    discovery_options=options,
+  ).unwrap()
+  assert_true(pstack.catalog().find("poteto-mode") is Some(_))
 }
 
 ///|
@@ -224,7 +223,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_eq(manifest.id, "posoco_ext_pstack")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
-  assert_eq(manifest.commands.length(), 3)
+  assert_eq(manifest.commands.length(), 2)
   let tools = @posoco.ToolProvider::list_tools(manifest.tools[0])
   assert_eq(
     tools.map(t => t.name.to_string()),
@@ -237,7 +236,7 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_true(prompt.contains("activate_skill"))
   assert_eq(
     @posoco.CommandPort::commands(pstack).map(c => c.id),
-    ["poteto-mode", "poteto-mode-off"],
+    ["poteto-mode"],
   )
 }
 
