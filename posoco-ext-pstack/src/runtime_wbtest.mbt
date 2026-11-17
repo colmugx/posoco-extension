@@ -4,7 +4,7 @@ async test "builtin: poteto-mode is compiled into PStack without asset files" {
   let skill = pstack.catalog().find("poteto-mode").unwrap()
   assert_true(skill.body is Some(_))
   assert_true(skill.skill_md_path.has_prefix("builtin/"))
-  assert_true(skill.body.unwrap().contains("Root-cause bug fixing"))
+  assert_true(skill.body.unwrap().contains("### Bug fix"))
   assert_true(skill.body.unwrap().contains("Investigation"))
   assert_true(!pstack.is_mode_active())
 }
@@ -59,10 +59,14 @@ async test "statusbar: activation registers Mode On and shutdown unregisters it"
     _ => fail("expected PStack Mode On registration")
   }
 
-  ignore(@posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()))
-  assert_eq(envelopes.length(), 1)
-
-  ignore(@posoco.CommandPort::invoke(pstack, "poteto-mode-off", Json::null()))
+  match @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()) {
+    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
+      assert_true(feedback.contains("Poteto Mode Off"))
+      assert_true(structured is None)
+    }
+    @posoco.CommandOutcome::Failure(reason~) => fail(reason)
+    @posoco.CommandOutcome::NeedsInput(prompt~) => fail(prompt)
+  }
   assert_true(!pstack.is_mode_active())
   assert_eq(envelopes.length(), 2)
   match @kit_events.status_changed_of(envelopes[1]) {

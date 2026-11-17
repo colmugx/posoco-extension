@@ -1,6 +1,6 @@
 ///|
 //// A native Posoco extension that owns one Skills runtime, ships the
-//// poteto-mode Skill as an inline built-in, and exposes its slash commands.
+//// poteto-mode Skill as an inline built-in, and exposes its slash command.
 pub struct Pstack {
   skills : @skills.Skills
   events : @posoco.Events?
@@ -289,7 +289,7 @@ fn Pstack::publish_mode_status(self : Pstack, active : Bool) -> Unit {
 
 ///|
 //// Idempotent session status transition. Status is session-scoped and is
-//// cleared by /poteto-mode-off or Agent shutdown.
+//// toggled by /poteto-mode and cleared by Agent shutdown.
 fn Pstack::set_mode_active(self : Pstack, active : Bool) -> Unit {
   if self.mode_active == active {
     return
@@ -356,24 +356,7 @@ fn poteto_mode_command_def() -> @posoco.CommandDef {
   @posoco.CommandDef::{
     id: "poteto-mode",
     label: "Poteto Mode",
-    description: "Activate PStack's rigorous engineering method for this task",
-    category: "workflow",
-    ctype: @posoco.CommandType::Action,
-    params: [],
-    aliases: [],
-    shortcut: None,
-    icon: Some("🥔"),
-    visible: true,
-    metadata: None,
-  }
-}
-
-///|
-fn poteto_mode_off_command_def() -> @posoco.CommandDef {
-  @posoco.CommandDef::{
-    id: "poteto-mode-off",
-    label: "Poteto Mode Off",
-    description: "Deactivate the PStack status indicator for this session",
+    description: "Toggle PStack's rigorous engineering method for this session",
     category: "workflow",
     ctype: @posoco.CommandType::Action,
     params: [],
@@ -389,7 +372,7 @@ fn poteto_mode_off_command_def() -> @posoco.CommandDef {
 pub impl @posoco.CommandPort for Pstack with fn commands(
   _self : Pstack,
 ) -> Array[@posoco.CommandDef] {
-  [poteto_mode_command_def(), poteto_mode_off_command_def()]
+  [poteto_mode_command_def()]
 }
 
 ///|
@@ -401,29 +384,29 @@ pub impl @posoco.CommandPort for Pstack with fn invoke(
   _args : Json,
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
   match id {
-    "poteto-mode" => {
-      let outcome = @posoco.CommandPort::invoke(
-        self.skills,
-        "skills",
-        Json::object({
-          "action": Json::string("activate"),
-          "name": Json::string("poteto-mode"),
-        }),
-      )
-      match outcome {
-        @posoco.CommandOutcome::Success(..) => self.set_mode_active(true)
-        _ => ()
+    "poteto-mode" =>
+      if self.mode_active {
+        self.set_mode_active(false)
+        @posoco.CommandOutcome::Success(
+          feedback="🥔 Poteto Mode Off",
+          structured=None,
+          ui_hint=Some(@posoco.UiHint::None),
+        )
+      } else {
+        let outcome = @posoco.CommandPort::invoke(
+          self.skills,
+          "skills",
+          Json::object({
+            "action": Json::string("activate"),
+            "name": Json::string("poteto-mode"),
+          }),
+        )
+        match outcome {
+          @posoco.CommandOutcome::Success(..) => self.set_mode_active(true)
+          _ => ()
+        }
+        outcome
       }
-      outcome
-    }
-    "poteto-mode-off" => {
-      self.set_mode_active(false)
-      @posoco.CommandOutcome::Success(
-        feedback="🥔 Poteto Mode Off",
-        structured=None,
-        ui_hint=Some(@posoco.UiHint::None),
-      )
-    }
     other => raise @posoco.CommandError::NotFound(other)
   }
 }
