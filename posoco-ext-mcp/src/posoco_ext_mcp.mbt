@@ -1325,21 +1325,19 @@ async fn MCPToolBridge::refresh_fetch_one(
     Err(_) => return Err(admission_failed)
     Ok(Permit(permit)) => (permit, timeout_ms)
     Ok(Denied(ReconnectFirst)) =>
-      match self.reconnect_one(conn_idx) {
+      match self.reconnect_one_admitted(conn_idx) {
         Err(_) => return Err(admission_failed)
-        Ok(_) =>
+        Ok(permit) =>
           match self.live_slot_for(conn_idx, server) {
-            Some(current) =>
-              match
-                conn_actor_acquire(
-                  actor,
-                  conn_ask_timeout(current.config.timeout_ms),
-                ) {
-                Err(_) => return Err(admission_failed)
-                Ok(Permit(permit)) => (permit, current.config.timeout_ms)
-                Ok(_) => return Err(admission_failed)
-              }
-            None => return Err(admission_failed)
+            Some(current) => (permit, current.config.timeout_ms)
+            None => {
+              // If this slot was retired after the query, release the
+              // acquired permit; stale generations are ignored by the fold.
+              let _ = actor.end_call(
+                generation=permit.generation, outcome=TransportFail,
+              )
+              return Err(admission_failed)
+            }
           }
       }
     Ok(_) => return Err(admission_failed)
@@ -1573,10 +1571,11 @@ pub async fn MCPToolBridge::reconnect_server(
 /// EndReconnect guarantees the Reconnecting fold is always exited,
 /// cancellation unwinding included, and its duplicate after normal
 /// completion is a structural no-op.
-async fn MCPToolBridge::reconnect_one(
+async fn MCPToolBridge::reconnect_runner(
   self : MCPToolBridge,
   conn_idx : Int32,
-) -> Result[Unit, String] {
+  acquire_after~ : Bool,
+) -> Result[ConnPermit[@client.MCPClient]?, String] {
   if conn_idx >= self.connections.length() {
     return Err("MCP connection is no longer present")
   }
@@ -1657,13 +1656,56 @@ async fn MCPToolBridge::reconnect_one(
   match
     self.commit_reconnect_fill(client, tools, conn_idx, expect_epoch=epoch) {
     Ok(_) => {
-      let _ = actor.end_reconnect(generation~, ok=true, client=Some(client))
-      Ok(())
+      if !acquire_after {
+        let _ = actor.end_reconnect(generation~, ok=true, client=Some(client))
+        return Ok(None)
+      }
+      // Protect the ask from host cancellation: it must either yield a
+      // permit that the caller pairs with EndCall, or report a refusal.
+      let answered = @core_async.protect_from_cancel(() => {
+        actor.finish_reconnect_acquire(
+          generation~,
+          client~,
+          timeout_ms=conn_ask_timeout(config.timeout_ms),
+        )
+      })
+      match answered {
+        Ok(Permit(permit)) => Ok(Some(permit))
+        _ => Err("MCP reconnect admission failed")
+      }
     }
     Err(message) => {
       client.close()
       Err(message)
     }
+  }
+}
+
+///|
+/// The explicit reconnect path finishes the generation but does not reserve
+/// a tool call. The actor's existing EndReconnect fold remains unchanged.
+async fn MCPToolBridge::reconnect_one(
+  self : MCPToolBridge,
+  conn_idx : Int32,
+) -> Result[Unit, String] {
+  match self.reconnect_runner(conn_idx, acquire_after=false) {
+    Ok(_) => Ok(())
+    Err(message) => Err(message)
+  }
+}
+
+///|
+/// A caller that needs the replacement client immediately atomically installs
+/// it and receives a permit from one actor query. The caller must pair the
+/// permit with EndCall on every exit, including cancellation.
+async fn MCPToolBridge::reconnect_one_admitted(
+  self : MCPToolBridge,
+  conn_idx : Int32,
+) -> Result[ConnPermit[@client.MCPClient], String] {
+  match self.reconnect_runner(conn_idx, acquire_after=true) {
+    Ok(Some(permit)) => Ok(permit)
+    Ok(None) => Err("MCP reconnect admission failed")
+    Err(message) => Err(message)
   }
 }
 
@@ -1872,15 +1914,10 @@ async fn MCPToolBridge::invoke_mcp_tool(
     Ok(Permit(permit)) =>
       call_under_permit(actor, permit, timeout_ms, tool_name, args)
     Ok(Denied(ReconnectFirst)) =>
-      match self.reconnect_one(conn_idx) {
+      match self.reconnect_one_admitted(conn_idx) {
         Err(_) => return Err(MCPCallFailure::TransportFailure)
-        Ok(_) =>
-          match conn_actor_acquire(actor, ask_ms) {
-            Err(failure) => return Err(failure)
-            Ok(Permit(permit)) =>
-              call_under_permit(actor, permit, timeout_ms, tool_name, args)
-            Ok(_) => return Err(MCPCallFailure::TransportFailure)
-          }
+        Ok(permit) =>
+          call_under_permit(actor, permit, timeout_ms, tool_name, args)
       }
     Ok(Denied(ReconnectInProgress)) =>
       return Err(MCPCallFailure::TransportFailure)
@@ -1909,15 +1946,10 @@ async fn MCPToolBridge::invoke_mcp_tool(
       // the failed attempt is already folded by its deferred EndCall; the
       // runner closes the slot's current-generation client and hands the
       // fresh one to the actor's fold before this re-acquire.
-      match self.reconnect_one(conn_idx) {
+      match self.reconnect_one_admitted(conn_idx) {
         Err(_) => Err(failure)
-        Ok(_) =>
-          match conn_actor_acquire(actor, ask_ms) {
-            Err(_) => Err(failure)
-            Ok(Permit(permit)) =>
-              call_under_permit(actor, permit, timeout_ms, tool_name, args)
-            Ok(_) => Err(failure)
-          }
+        Ok(permit) =>
+          call_under_permit(actor, permit, timeout_ms, tool_name, args)
       }
     }
   }
