@@ -61,7 +61,7 @@ priv struct ConnView {
 priv enum ConnQuery[ClientT] {
   Acquire
   BeginReconnect
-  FinishReconnectAcquire(generation~ : Int32, client~ : ClientT)
+  FinishReconnectAcquire(generation~ : Int32, client~ : ClientT, attempt_id~ : Int32)
   Inspect
 }
 
@@ -73,7 +73,7 @@ priv enum ConnQuery[ClientT] {
 priv enum ConnCmd[ClientT] {
   EndCall(generation~ : Int32, outcome~ : CallOutcome)
   EndReconnect(generation~ : Int32, ok~ : Bool, client~ : ClientT?)
-  AbandonFinishReconnectAcquire(generation~ : Int32)
+  AbandonFinishReconnectAcquire(generation~ : Int32, attempt_id~ : Int32)
 }
 
 ///|
@@ -99,6 +99,7 @@ priv struct ConnState[ClientT] {
   mut in_flight : Int32
   // An uncertain reply may need to release this one reserved admission.
   mut fused_admission_pending : Bool
+  mut fused_admission_attempt_id : Int32
 }
 
 ///|
@@ -134,17 +135,19 @@ fn[ClientT] conn_fold_query(
         state.generation = state.generation + 1
         state.health = Reconnecting
         state.fused_admission_pending = false
+        state.fused_admission_attempt_id = 0
         (state, Granted(generation=state.generation))
       }
     // Installing the replacement and reserving a permit happen in one fold;
     // a stale or repeated finish can neither overwrite a newer connection
     // nor inflate its in_flight counter.
-    FinishReconnectAcquire(generation=g, client=replacement) =>
+    FinishReconnectAcquire(generation=g, client=replacement, attempt_id~) =>
       if g == state.generation && state.health is Reconnecting {
         state.client = replacement
         state.health = Fresh
         state.in_flight = 1
         state.fused_admission_pending = true
+        state.fused_admission_attempt_id = attempt_id
         (state, Permit({ client: state.client, generation: state.generation, }))
       } else {
         (state, Denied(ReconnectInProgress))
@@ -196,9 +199,11 @@ fn[ClientT] conn_fold_cmd(
       }
       state
     }
-    AbandonFinishReconnectAcquire(generation=g) => {
-      if g == state.generation && state.fused_admission_pending {
+    AbandonFinishReconnectAcquire(generation=g, attempt_id~) => {
+      if g == state.generation && state.fused_admission_pending &&
+        attempt_id == state.fused_admission_attempt_id {
         state.fused_admission_pending = false
+        state.fused_admission_attempt_id = 0
         if state.in_flight > 0 {
           state.in_flight = state.in_flight - 1
         }
@@ -219,6 +224,7 @@ fn[ClientT] conn_fold_cmd(
         }
         state.in_flight = 0
         state.fused_admission_pending = false
+        state.fused_admission_attempt_id = 0
       }
       state
     }
@@ -236,6 +242,7 @@ priv struct ConnActor[ClientT] {
     ConnQuery[ClientT],
     ConnReply[ClientT],
   ]
+  finish_attempt_counter : Ref[Int32]
 }
 
 ///|
@@ -256,6 +263,7 @@ fn[ClientT] ConnActor::start(
     health: Fresh,
     in_flight: 0,
     fused_admission_pending: false,
+    fused_admission_attempt_id: 0,
   }
   {
     actor: @fuwaroid.Fuwaroid::spawn(
@@ -264,6 +272,7 @@ fn[ClientT] ConnActor::start(
       on_cmd=conn_fold_cmd,
       on_query=conn_fold_query,
     ),
+    finish_attempt_counter: Ref(0),
   }
 }
 
@@ -286,15 +295,25 @@ async fn[ClientT] ConnActor::begin_reconnect(
 }
 
 ///|
+/// Generate a distinct token for each attempted fused admission, including
+/// attempts whose reply is lost. Cancellation compensation must target only
+/// the query that originally reserved the permit.
+fn[ClientT] ConnActor::next_finish_attempt_id(self : ConnActor[ClientT]) -> Int32 {
+  self.finish_attempt_counter.val = self.finish_attempt_counter.val + 1
+  self.finish_attempt_counter.val
+}
+
+///|
 /// Finish a successful reconnect and reserve the caller's first admission in
 /// the same mailbox query, instead of EndReconnect tell followed by Acquire.
 async fn[ClientT] ConnActor::finish_reconnect_acquire(
   self : ConnActor[ClientT],
   generation~ : Int32,
   client~ : ClientT,
+  attempt_id~ : Int32,
   timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
-  self.actor.ask(FinishReconnectAcquire(generation~, client~), timeout_ms~)
+  self.actor.ask(FinishReconnectAcquire(generation~, client~, attempt_id~), timeout_ms~)
 }
 
 ///|
@@ -336,8 +355,9 @@ fn[ClientT] ConnActor::end_reconnect(
 fn[ClientT] ConnActor::abandon_finish_reconnect_acquire(
   self : ConnActor[ClientT],
   generation~ : Int32,
+  attempt_id~ : Int32,
 ) -> Result[Unit, @fuwaroid.SendRefusal] {
-  self.actor.tell(AbandonFinishReconnectAcquire(generation~))
+  self.actor.tell(AbandonFinishReconnectAcquire(generation~, attempt_id~))
 }
 
 ///|

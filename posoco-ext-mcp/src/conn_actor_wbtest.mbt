@@ -406,6 +406,7 @@ async test "conn_actor finish reconnect acquire is atomic and single-use" {
     let first = actor.finish_reconnect_acquire(
       generation=1,
       client=200,
+        attempt_id=1,
       timeout_ms=10_000,
     )
     assert_true(conn_reply_is(first, conn_permit_reply(200, 1)))
@@ -415,6 +416,7 @@ async test "conn_actor finish reconnect acquire is atomic and single-use" {
         actor.finish_reconnect_acquire(
           generation=1,
           client=300,
+          attempt_id=2,
           timeout_ms=10_000,
         ),
         Denied(ReconnectInProgress),
@@ -455,6 +457,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=1,
           client=900,
+        attempt_id=1,
           timeout_ms=10_000,
         ),
         Denied(ReconnectInProgress),
@@ -468,6 +471,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=2,
           client=200,
+        attempt_id=1,
           timeout_ms=10_000,
         ),
         conn_permit_reply(200, 2),
@@ -479,6 +483,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=2,
           client=300,
+        attempt_id=1,
           timeout_ms=10_000,
         ),
       ),
@@ -496,7 +501,7 @@ async test "fused admission timeout compensation releases only its permit" {
     ))
     assert_true(conn_reply_is(
       actor.finish_reconnect_acquire(
-        generation=1, client=20, timeout_ms=10_000,
+        generation=1, client=20, attempt_id=1, timeout_ms=10_000,
       ),
       conn_permit_reply(20, 1),
     ))
@@ -505,9 +510,9 @@ async test "fused admission timeout compensation releases only its permit" {
     ))
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=2))
     let _ = actor.end_call(generation=1, outcome=CallOk)
-    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1, attempt_id=1)
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
-    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1, attempt_id=1)
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
     assert_true(conn_reply_is(
       actor.acquire(timeout_ms=10_000), conn_permit_reply(20, 1),
@@ -530,7 +535,7 @@ async test "concurrent fused completion grants exactly one admission" {
       for i in 0..<64 {
         workers.spawn_bg(() => {
           match actor.finish_reconnect_acquire(
-            generation=1, client=100 + i, timeout_ms=10_000,
+            generation=1, client=100 + i, attempt_id=i + 1, timeout_ms=10_000,
           ) {
             Ok(Permit(permit)) => accepted.push(permit.client)
             Ok(Denied(ReconnectInProgress)) => denied.push(i)
@@ -561,7 +566,7 @@ async test "stale fused compensation leaves successor admission intact" {
     ))
     assert_true(conn_reply_is(
       actor.finish_reconnect_acquire(
-        generation=1, client=20, timeout_ms=10_000,
+        generation=1, client=20, attempt_id=1, timeout_ms=10_000,
       ),
       conn_permit_reply(20, 1),
     ))
@@ -570,11 +575,11 @@ async test "stale fused compensation leaves successor admission intact" {
     ))
     assert_true(conn_reply_is(
       actor.finish_reconnect_acquire(
-        generation=2, client=30, timeout_ms=10_000,
+        generation=2, client=30, attempt_id=1, timeout_ms=10_000,
       ),
       conn_permit_reply(30, 2),
     ))
-    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1, attempt_id=1)
     let _ = actor.end_call(generation=1, outcome=TimedOut)
     assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=1))
     let _ = actor.end_call(generation=2, outcome=CallOk)
