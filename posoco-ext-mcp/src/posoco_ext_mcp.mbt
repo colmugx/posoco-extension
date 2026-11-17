@@ -1359,9 +1359,7 @@ pub async fn MCPToolBridge::refresh_tools(
   let tasks : Array[async () -> Result[CatalogEntry, String]] = []
   for i, conn in self.connections {
     if conn.client is None || conn.actor is None {
-      tasks.push(async fn() {
-        Ok(CatalogEntry::{ connection_index: i, tools: [], })
-      })
+      tasks.push(fn() { Ok(CatalogEntry::{ connection_index: i, tools: [], }) })
       continue
     }
     let actor = conn.actor.unwrap()
