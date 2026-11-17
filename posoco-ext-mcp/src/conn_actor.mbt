@@ -135,19 +135,15 @@ fn[ClientT] conn_fold_query(
     // Installing the replacement and reserving a permit happen in one fold;
     // a stale or repeated finish can neither overwrite a newer connection
     // nor inflate its in_flight counter.
-    FinishReconnectAcquire(generation=g, client=replacement) => {
+    FinishReconnectAcquire(generation=g, client=replacement) =>
       if g == state.generation && state.health is Reconnecting {
         state.client = replacement
         state.health = Fresh
         state.in_flight = 1
-        (
-          state,
-          Permit({ client: state.client, generation: state.generation, }),
-        )
+        (state, Permit({ client: state.client, generation: state.generation, }))
       } else {
         (state, Denied(ReconnectInProgress))
       }
-    }
     Inspect =>
       (
         state,
@@ -220,7 +216,11 @@ fn[ClientT] conn_fold_cmd(
 /// classify (never swallowed into success), and the ask timeout stays the
 /// caller's decision.
 priv struct ConnActor[ClientT] {
-  actor : @fuwaroid.Fuwaroid[ConnCmd[ClientT], ConnQuery[ClientT], ConnReply[ClientT]]
+  actor : @fuwaroid.Fuwaroid[
+    ConnCmd[ClientT],
+    ConnQuery[ClientT],
+    ConnReply[ClientT],
+  ]
 }
 
 ///|

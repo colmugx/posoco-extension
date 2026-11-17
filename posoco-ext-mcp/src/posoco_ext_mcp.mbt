@@ -1334,7 +1334,8 @@ async fn MCPToolBridge::refresh_fetch_one(
               // If this slot was retired after the query, release the
               // acquired permit; stale generations are ignored by the fold.
               let _ = actor.end_call(
-                generation=permit.generation, outcome=TransportFail,
+                generation=permit.generation,
+                outcome=TransportFail,
               )
               return Err(admission_failed)
             }
@@ -1678,19 +1679,6 @@ async fn MCPToolBridge::reconnect_runner(
       client.close()
       Err(message)
     }
-  }
-}
-
-///|
-/// The explicit reconnect path finishes the generation but does not reserve
-/// a tool call. The actor's existing EndReconnect fold remains unchanged.
-async fn MCPToolBridge::reconnect_one(
-  self : MCPToolBridge,
-  conn_idx : Int32,
-) -> Result[Unit, String] {
-  match self.reconnect_runner(conn_idx, acquire_after=false) {
-    Ok(_) => Ok(())
-    Err(message) => Err(message)
   }
 }
 

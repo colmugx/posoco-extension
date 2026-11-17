@@ -397,28 +397,37 @@ async test "conn_actor failed reconnect keeps admission closed across stale repo
 async test "conn_actor finish reconnect acquire is atomic and single-use" {
   @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
-    assert_true(conn_reply_is(
-      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
-    ))
+    assert_true(
+      conn_reply_is(
+        actor.begin_reconnect(timeout_ms=10_000),
+        Granted(generation=1),
+      ),
+    )
     let first = actor.finish_reconnect_acquire(
-      generation=1, client=200, timeout_ms=10_000,
+      generation=1,
+      client=200,
+      timeout_ms=10_000,
     )
     assert_true(conn_reply_is(first, conn_permit_reply(200, 1)))
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=1))
-    assert_true(conn_reply_is(
-      actor.finish_reconnect_acquire(
-        generation=1, client=300, timeout_ms=10_000,
+    assert_true(
+      conn_reply_is(
+        actor.finish_reconnect_acquire(
+          generation=1,
+          client=300,
+          timeout_ms=10_000,
+        ),
+        Denied(ReconnectInProgress),
       ),
-      Denied(ReconnectInProgress),
-    ))
+    )
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=1))
     let _ = actor.end_call(generation=0, outcome=TimedOut)
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=1))
     let _ = actor.end_call(generation=1, outcome=CallOk)
     assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
-    assert_true(conn_reply_is(
-      actor.acquire(timeout_ms=10_000), conn_permit_reply(200, 1),
-    ))
+    assert_true(
+      conn_reply_is(actor.acquire(timeout_ms=10_000), conn_permit_reply(200, 1)),
+    )
   })
 }
 
@@ -428,32 +437,52 @@ async test "conn_actor finish reconnect acquire is atomic and single-use" {
 async test "conn_actor finish reconnect acquire rejects stale generation" {
   @core_async.with_task_group(group => {
     let actor = ConnActor::start(group~, client=100)
-    assert_true(conn_reply_is(
-      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
-    ))
+    assert_true(
+      conn_reply_is(
+        actor.begin_reconnect(timeout_ms=10_000),
+        Granted(generation=1),
+      ),
+    )
     let _ = actor.end_reconnect(generation=1, ok=false, client=None)
-    assert_true(conn_reply_is(
-      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=2),
-    ))
-    assert_true(conn_reply_is(
-      actor.finish_reconnect_acquire(
-        generation=1, client=900, timeout_ms=10_000,
+    assert_true(
+      conn_reply_is(
+        actor.begin_reconnect(timeout_ms=10_000),
+        Granted(generation=2),
       ),
-      Denied(ReconnectInProgress),
-    ))
-    assert_true(conn_view_is(actor, health=Reconnecting, generation=2, in_flight=0))
-    assert_true(conn_reply_is(
-      actor.finish_reconnect_acquire(
-        generation=2, client=200, timeout_ms=10_000,
+    )
+    assert_true(
+      conn_reply_is(
+        actor.finish_reconnect_acquire(
+          generation=1,
+          client=900,
+          timeout_ms=10_000,
+        ),
+        Denied(ReconnectInProgress),
       ),
-      conn_permit_reply(200, 2),
-    ))
+    )
+    assert_true(
+      conn_view_is(actor, health=Reconnecting, generation=2, in_flight=0),
+    )
+    assert_true(
+      conn_reply_is(
+        actor.finish_reconnect_acquire(
+          generation=2,
+          client=200,
+          timeout_ms=10_000,
+        ),
+        conn_permit_reply(200, 2),
+      ),
+    )
     actor.close()
-    assert_true(conn_ask_refused_closed(
-      actor.finish_reconnect_acquire(
-        generation=2, client=300, timeout_ms=10_000,
+    assert_true(
+      conn_ask_refused_closed(
+        actor.finish_reconnect_acquire(
+          generation=2,
+          client=300,
+          timeout_ms=10_000,
+        ),
       ),
-    ))
+    )
     let _ = actor.join()
   })
 }
