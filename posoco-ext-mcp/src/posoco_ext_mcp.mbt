@@ -1663,10 +1663,12 @@ async fn MCPToolBridge::reconnect_runner(
       }
       // Protect the ask from host cancellation: it must either yield a
       // permit that the caller pairs with EndCall, or report a refusal.
+      let attempt_id = actor.next_finish_attempt_id()
       let answered = @core_async.protect_from_cancel(() => {
         actor.finish_reconnect_acquire(
           generation~,
           client~,
+          attempt_id~,
           timeout_ms=conn_ask_timeout(config.timeout_ms),
         )
       })
@@ -1675,7 +1677,7 @@ async fn MCPToolBridge::reconnect_runner(
         Err(_) => {
           // The fold may have accepted the permit before the reply timed out.
           // This tell follows the query and only releases that fused permit.
-          let _ = actor.abandon_finish_reconnect_acquire(generation~)
+          let _ = actor.abandon_finish_reconnect_acquire(generation~, attempt_id~)
           Err("MCP reconnect admission failed")
         }
         _ => Err("MCP reconnect admission failed")
