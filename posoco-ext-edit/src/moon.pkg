@@ -32,6 +32,7 @@ options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/io",
   ],
   targets: {
     "posoco_ext_edit.js.mbt": [ "js" ],
