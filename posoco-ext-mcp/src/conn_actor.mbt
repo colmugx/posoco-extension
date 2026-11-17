@@ -73,6 +73,7 @@ priv enum ConnQuery[ClientT] {
 priv enum ConnCmd[ClientT] {
   EndCall(generation~ : Int32, outcome~ : CallOutcome)
   EndReconnect(generation~ : Int32, ok~ : Bool, client~ : ClientT?)
+  AbandonFinishReconnectAcquire(generation~ : Int32)
 }
 
 ///|
@@ -96,6 +97,8 @@ priv struct ConnState[ClientT] {
   mut generation : Int32
   mut health : ConnHealth
   mut in_flight : Int32
+  // An uncertain reply may need to release this one reserved admission.
+  mut fused_admission_pending : Bool
 }
 
 ///|
@@ -130,6 +133,7 @@ fn[ClientT] conn_fold_query(
       } else {
         state.generation = state.generation + 1
         state.health = Reconnecting
+        state.fused_admission_pending = false
         (state, Granted(generation=state.generation))
       }
     // Installing the replacement and reserving a permit happen in one fold;
@@ -140,6 +144,7 @@ fn[ClientT] conn_fold_query(
         state.client = replacement
         state.health = Fresh
         state.in_flight = 1
+        state.fused_admission_pending = true
         (state, Permit({ client: state.client, generation: state.generation, }))
       } else {
         (state, Denied(ReconnectInProgress))
@@ -191,6 +196,15 @@ fn[ClientT] conn_fold_cmd(
       }
       state
     }
+    AbandonFinishReconnectAcquire(generation=g) => {
+      if g == state.generation && state.fused_admission_pending {
+        state.fused_admission_pending = false
+        if state.in_flight > 0 {
+          state.in_flight = state.in_flight - 1
+        }
+      }
+      state
+    }
     EndReconnect(generation=g, ok~, client=maybe) => {
       if g == state.generation && state.health is Reconnecting {
         match (ok, maybe) {
@@ -204,6 +218,7 @@ fn[ClientT] conn_fold_cmd(
           _ => state.health = NeedsReconnect
         }
         state.in_flight = 0
+        state.fused_admission_pending = false
       }
       state
     }
@@ -240,6 +255,7 @@ fn[ClientT] ConnActor::start(
     generation: 0,
     health: Fresh,
     in_flight: 0,
+    fused_admission_pending: false,
   }
   {
     actor: @fuwaroid.Fuwaroid::spawn(
@@ -311,6 +327,17 @@ fn[ClientT] ConnActor::end_reconnect(
   client~ : ClientT?,
 ) -> Result[Unit, @fuwaroid.SendRefusal] {
   self.actor.tell(EndReconnect(generation~, ok~, client~))
+}
+
+///|
+/// Compensate for an uncertain ask reply. The ask enqueues its query before
+/// waiting, so this tell follows the query in FIFO order. It releases the
+/// fused admission only if the query actually installed it.
+fn[ClientT] ConnActor::abandon_finish_reconnect_acquire(
+  self : ConnActor[ClientT],
+  generation~ : Int32,
+) -> Result[Unit, @fuwaroid.SendRefusal] {
+  self.actor.tell(AbandonFinishReconnectAcquire(generation~))
 }
 
 ///|

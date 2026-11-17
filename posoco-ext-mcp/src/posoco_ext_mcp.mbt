@@ -1672,6 +1672,12 @@ async fn MCPToolBridge::reconnect_runner(
       })
       match answered {
         Ok(Permit(permit)) => Ok(Some(permit))
+        Err(_) => {
+          // The fold may have accepted the permit before the reply timed out.
+          // This tell follows the query and only releases that fused permit.
+          let _ = actor.abandon_finish_reconnect_acquire(generation~)
+          Err("MCP reconnect admission failed")
+        }
         _ => Err("MCP reconnect admission failed")
       }
     }
