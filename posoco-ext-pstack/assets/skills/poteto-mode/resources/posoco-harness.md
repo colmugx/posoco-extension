@@ -1,58 +1,43 @@
-# Posoco harness mapping
+# PStack workflow to Posoco runtime contract
 
-This document is the runtime contract for the imported PStack Markdown. When an upstream file names a Cursor primitive, translate it using this table. Do not infer that a similarly named feature has identical semantics.
+Read this before executing an upstream PStack playbook. Preserve the original task-specific workflow and substitute only existing Posoco primitives. Do not invent a Cursor emulator.
 
-## Primitive mapping
-
-| PStack / Cursor concept | Posoco primitive | Contract and limits |
+| PStack/Cursor primitive | Posoco primitive | Execution boundary |
 | --- | --- | --- |
-| Activate a skill or invoke `/name` | `activate_skill`; `read_skill_resource`; `skills` command | Skill activation loads instructions. Resource reads are relative to the activated skill root. There is no automatic Cursor slash-command registry. |
-| `Task` | `subagent` | Pass the task in `task`. Select a preset with `kind`. Use `instructions` only for trusted supplemental instructions. |
-| `subagent_type: poteto-agent` | `kind: poteto-agent` | Project kind is defined in `.cetas/agents/poteto-agent.md`. It uses workspace-write mode and loads `poteto-mode`. |
-| `subagent_type: comment-sicko` | `kind: comment-sicko` | Project kind is read-only and reports comment deletions and refactor targets. |
-| `subagent_type: generalPurpose` | Choose a Posoco kind | Use `explore` for read-only investigation, `coder` for implementation, or a project kind. These are presets, not a generic Task API. |
-| `readonly: true` | Kind `mode: readonly` | Permission posture is declared by the kind. Do not emulate read-only by merely asking a writable child not to edit. |
-| `readonly: false` | Kind `mode: workspace_write` or `interactive` | Choose the permission posture deliberately. The host permission layer remains authoritative. |
-| `run_in_background: true` | `subagent.background` | Background is already the default. Omit the argument or pass `true`. |
-| `resume` | `subagent.resume` | Pass the child session id. Resume only when the child owns state that is expensive to transfer. |
-| `model` / `effort` | `subagent.model` / `subagent.effort`; `SubagentConfig`; model manager | Values must be configured Posoco model-slot ids and advertised effort levels. Omit to inherit. Upstream provider slugs are not portable. |
-| `tools` whitelist | `KindSpec.tools` or `subagent.tools` | The tool face is intersected with the kind whitelist. It does not grant permission. |
-| Skill allow-list | `KindSpec.skills` or `subagent.skills` | Pass skill names. `true` loads all discovered skills; `false` or omission loads none. |
-| Context files | `subagent.context_files` | Explicitly opt into inherited project context files. |
-| `AskQuestion` | `ask_question` | Blocking human input through the composed `UiPort`. |
-| Non-blocking question | `notify_user` | Submits a question without blocking the current turn. The host must render and route the answer. |
-| Answer a child question | `answer_question` | Use the question id and the matching text, confirm, or option-index field. |
-| Open/update a todolist | `todo_write`; inspect with `todo_read` | Full replacement writes. Use statuses `pending`, `in_progress`, and `completed`. |
-| Plan mode | `plan`, `enter_plan_mode`, `exit_plan_mode`, `plan.approve`, `plan.reject`, `plan.dismiss` | The host's `PlanMode` gate controls writes until approval. |
-| `Grep`, `Glob` | `grep`, `glob` | Use the installed Posoco tools. |
-| `Bash` | Host-configured shell tool, commonly `bash` | Tool names are host-configured. Respect the permission layer and plan-mode shell gate. |
-| Cursor `/setup-pstack` | Host configuration | Configure `SubagentConfig`, `KindSpec`, and model slots in the Posoco host. No setup command is registered here. |
-| Cursor cloud agent / cloud worktree | No core equivalent | Posoco subagents are embedded child agents. Background execution is not cloud isolation or a separate worktree. |
-| Cursor `/loop` and Automations | No core equivalent | Use a separately configured scheduler or automation integration. Otherwise run a bounded manual loop and report the limit. |
-| Bugbot | No core equivalent | Use configured review tooling. Do not claim Bugbot ran. |
-| Cursor built-in PR tool | Host GitHub integration or configured CLI | Use the connected forge integration when available. Otherwise report that PR creation is unavailable. |
+| Activate a skill or read a playbook/principle | `activate_skill` and `read_skill_resource(name="poteto-mode", path="resources/upstream/...")` | Leaf Markdown is a resource unless installed separately as a Posoco Skill. |
+| `Task`, `subagent_type` | `subagent` with `task`, `kind` and `instructions` | Parent owns workflow; child is depth-one, not a workflow coordinator. |
+| `run_in_background`, `resume` | `subagent.background`, `subagent.resume` | Background is default; resume only for costly child-local state. |
+| Named provider model/effort | Host-configured `subagent.model` / `subagent.effort` | Omit if unconfigured; Cursor model slugs are not portable. |
+| `AskQuestion` | `ask_question` or `notify_user` | Ask product choices, not empirically observable questions. |
+| `TodoWrite` | `todo_write`, `todo_read` | Keep the playbook's ordered steps and skipped-step reasons. |
+| Plan and approval | `plan`, `enter_plan_mode`, `exit_plan_mode` | Obey Posoco permission and approval gates. |
+| Grep, Glob, Bash, editor | Composed Posoco filesystem/search/shell tools | Test on the matching surface when available. |
+| Independent code review | Read-only kind or parent review and tests | Do not claim an unavailable reviewer panel ran. |
 
-## Composition requirements
+## Workflow-specific translations
 
-The bundle is data and prompt content. It relies on existing Posoco packages and host composition.
+**Investigation:** inspect source and evidence, keep the read-only throughput checkpoint, and return the original structured explanation; do not change code.
 
-- `posoco-ext-skills` discovers this skill from the project `.agents/skills` root. The host must compose `Skills::discover(fs, cwd~, home~)`.
-- `posoco-ext-kind` loads project agent presets from `.cetas/agents`. The host must load `KindCatalog::load(home~, cwd~)` and pass it to `SubagentTools`.
-- `posoco-ext-subagent` requires the host's `ChildComposer`, `SubagentConfig`, and composed task/wakeup capabilities. It provides `subagent`, `answer_question`, and `stop_subagent`.
-- `posoco-ext-askquestion` requires a composed `UiPort` for human-facing questions.
-- `posoco-ext-todo` consumes the composed UI and provides `todo_write` / `todo_read`.
-- `posoco-ext-plan` provides the plan gate and approval flow. The host must wire its permission and review surfaces as appropriate.
+**Bug fix:** reproduce the original symptom, eliminate hypotheses using runtime evidence, confirm the root cause, implement the minimal fix and replay the reproduction. A Cursor UI control skill is not required when Posoco's available tools can reproduce it directly.
 
-The bundle does not change MoonBit package code or create host composition automatically. A host that omits one of these extensions will not have that primitive. In particular, the presence of a skill file does not grant tools or permissions.
+**Feature:** read the affected subsystem, identify the model/data shape, explore viable designs if needed, record the four-part throughput checkpoint, implement in ordered verified steps and review the diff.
 
-## Agent preset semantics
+**Refactoring:** pin the old behavior, define the target shape, subtract obsolete code, migrate callers, and prove equivalence.
 
-`.cetas/agents/poteto-agent.md` and `.cetas/agents/comment-sicko.md` are loaded by `KindCatalog::load`. Their `mode` fields select the permission posture. The `skills` field is a loading allow-list. The `tools` field, when present, is a tool-face whitelist and is not an authorization grant.
+**Perf issue:** capture baseline measurements, trace actual bottlenecks, test changes and compare like-for-like results with units.
 
-The parent agent owns the plan, todo list, child lifecycle, and final review. A child never spawns another child because the Posoco subagent tool is structurally depth-one.
+**Prototype:** create a disposable experiment, observe the decision-driving behavior and report the tradeoffs. Do not ship the throwaway as production code.
 
-## Source import boundary
+## Host composition
 
-This port vendors upstream Markdown under `resources/upstream`, preserving the original relative directory layout. It includes the skill definitions, playbooks, principles, Markdown references, agent prompts, and guide pages. It does not import TypeScript, shell, Java, TLA+, model-specific configuration, Cursor plugin metadata, or Cursor automation assets. Where an upstream Markdown file references an omitted executable asset, treat that step as unavailable until a Posoco-native replacement is added.
+The installed `posoco-ext-pstack/assets` path must be passed as `assets_root` to `Pstack::discover(fs, cwd~, home~, assets_root~, events~)`. It merges the packaged file-backed workflow into the same Skills runtime as project/user Skills. Do not compose a second duplicate Skills extension. If the assets are unavailable, discovery returns `None` instead of silently using an incomplete built-in substitute.
 
-Upstream snapshot: `cursor/plugins` commit `bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7`. License: MIT. See `resources/upstream/LICENSE`.
+The host may compose its existing `posoco-ext-subagent`, `posoco-ext-todo`, `posoco-ext-askquestion`, `posoco-ext-plan` and `posoco-ext-kind` extensions. PStack does not instantiate these or grant permissions. If children require playbooks, their Skills composition must also be able to discover the PStack asset root. Optional Kind presets are available through `Pstack::load_kinds`; existing host kinds are also usable.
+
+## Out of scope
+
+Cursor cloud agents, Automations, `/loop`, Bugbot, hooks, plugin-provided commands, worktree orchestration and model-specific settings are not native Posoco features. Upstream steps relying on them must be skipped or translated only when a real configured equivalent exists. Opening a PR or shipping are not automatic side effects of this port.
+
+## Provenance
+
+The upstream Markdown remains pinned to `cursor/plugins` commit `bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7` under `resources/upstream` (MIT).

@@ -158,6 +158,35 @@ fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
     #|
     #|Use the engineering workflow and load the relevant playbook.
   fs.add_file("/bundle/skills/poteto-mode/SKILL.md", skill_md)
+  fs.add_dir("/bundle/skills/poteto-mode", ["SKILL.md", "resources"])
+  fs.add_dir("/bundle/skills/poteto-mode/resources", ["posoco-harness.md", "upstream"])
+  fs.add_file(
+    "/bundle/skills/poteto-mode/resources/posoco-harness.md",
+    "# Posoco runtime mapping",
+  )
+  fs.add_dir("/bundle/skills/poteto-mode/resources/upstream", ["skills"])
+  fs.add_dir("/bundle/skills/poteto-mode/resources/upstream/skills", ["poteto-mode"])
+  fs.add_dir(
+    "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode",
+    ["SKILL.md", "playbooks"],
+  )
+  fs.add_file(
+    "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/SKILL.md",
+    "# Upstream Poteto Mode",
+  )
+  let playbooks = [
+    "investigation", "bug-fix", "feature", "refactoring", "perf-issue", "prototype",
+  ]
+  fs.add_dir(
+    "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks",
+    playbooks.map(name => name + ".md"),
+  )
+  for name in playbooks {
+    fs.add_file(
+      "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/" + name + ".md",
+      "# " + name + " playbook: Trace, change, verify.",
+    )
+  }
 }
 
 ///|
@@ -179,28 +208,31 @@ async test "discover: PStack bundle becomes a native skill catalog" {
   match pstack {
     None => fail("expected the bundled poteto-mode skill to be discovered")
     Some(extension) => {
-      assert_true(extension.catalog().find("poteto-mode") is Some(_))
+      let skill = extension.catalog().find("poteto-mode").unwrap()
+      assert_true(skill.body is None)
+      assert_eq(skill.skill_md_path, "/bundle/skills/poteto-mode/SKILL.md")
       assert_eq(extension.extension_id(), "posoco_ext_pstack")
     }
   }
 }
 
 ///|
-async test "discover: missing bundle entry still registers the built-in skill" {
+async test "discover: missing bundle is rejected rather than silently using a summary" {
   let fs = PstackFakeFs::new()
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
     include_repository: false,
     include_user: false,
   }
-  let pstack = Pstack::discover(
-    fs,
-    cwd="/workspace",
-    home="/home/test",
-    assets_root="/bundle",
-    discovery_options=options,
-  ).unwrap()
-  assert_true(pstack.catalog().find("poteto-mode") is Some(_))
+  assert_true(
+    Pstack::discover(
+      fs,
+      cwd="/workspace",
+      home="/home/test",
+      assets_root="/bundle",
+      discovery_options=options,
+    ) is None,
+  )
 }
 
 ///|
