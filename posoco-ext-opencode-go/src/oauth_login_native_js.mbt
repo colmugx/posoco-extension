@@ -34,7 +34,7 @@ async fn go_console_post_json(
         "OpenCode Console request failed: " + err.to_string(),
       )
   }
-  let text = @utf8.decode(body_bytes) catch {
+  let text = @utf8.decode(body_bytes.binary()) catch {
     _ =>
       raise @oauth.OAuthError::ParseError(
         "OpenCode Console response is not UTF-8: " + url,
@@ -73,15 +73,13 @@ async fn go_console_get_json(
         "OpenCode Console request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
+  let body_bytes = conn.binary() catch {
+    err =>
       raise @oauth.OAuthError::HttpError(
         "OpenCode Console response read failed: " + err.to_string(),
       )
-    }
   }
-  conn.close()
+
   let text = @utf8.decode(body_bytes) catch {
     _ =>
       raise @oauth.OAuthError::ParseError(

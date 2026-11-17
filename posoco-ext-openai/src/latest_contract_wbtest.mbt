@@ -94,7 +94,7 @@ async test "openai_compact_latest_first_manual_and_auto_carry_current_tools_effo
       let config = OpenAIConfig::with_base_url(
         "k-test",
         "declared-model",
-        "http://127.0.0.1:\{server.server.addr.port()}/v1",
+        "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
       ).with_reasoning_effort("high")
       let model : &@posoco.ModelPort = OpenAIModelPort(config)
       let messages : Array[@posoco.Message] = [
@@ -502,7 +502,7 @@ async test "openai_compact_latest_production_port_raw_persist_chat_recompact" {
       defer server.stop()
       let _ = group.spawn(() => server.serve(), allow_failure=true)
       let model : &@posoco.ModelPort = compact_loopback_port(
-        "http://127.0.0.1:\{server.server.addr.port()}/v1",
+        "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
       )
       let options : @posoco.ChatOptions = {
         temperature: None,
@@ -594,7 +594,7 @@ async test "openai_compact_latest_cached_lite_survives_effort_and_key_rebuild" {
       let config = OpenAIConfig::with_base_url(
         "k-test",
         "cached-model",
-        "http://127.0.0.1:\{server.server.addr.port()}/v1",
+        "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
       )
       let records = @json.parse(
         "[{\"model_id\":\"cached-model\",\"thinking_efforts\":[\"medium\",\"high\"],\"default_effort\":\"medium\",\"context_window\":200000,\"use_responses_lite\":true}]",

@@ -115,7 +115,7 @@ async test "io[native]: of_project persists the cwd and summary reads it back" {
   }
   assert_eq(summary.cwd, Some("/a/b_c"))
   assert_eq(@posoco-ext-fs-session.display_title(summary), "Project session")
-  @fs.rmdir(home, recursive=true) catch {
+  @fs.remove(home, recursive=true) catch {
     _ => ()
   }
 }
@@ -137,7 +137,7 @@ async test "io[native]: appending the first message records the cwd too" {
   }
   // Trailing separators normalize before hashing and before recording.
   assert_eq(summary.cwd, Some("/x/y"))
-  @fs.rmdir(home, recursive=true) catch {
+  @fs.remove(home, recursive=true) catch {
     _ => ()
   }
 }
@@ -157,7 +157,7 @@ async test "io[native]: a legacy journal keeps cwd absent instead of guessing" {
   assert_eq(summary.cwd, None)
   // Legacy titles still come from the first user message.
   assert_eq(@posoco-ext-fs-session.display_title(summary), "legacy turn")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -176,7 +176,7 @@ async test "io[native]: a store without a project binding writes no cwd" {
     e => fail("summary failed: \{e}")
   }
   assert_eq(summary.cwd, None)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }

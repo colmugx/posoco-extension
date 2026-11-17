@@ -44,9 +44,10 @@ pub(all) struct SkillDescriptor {
   allowed_tools : String?
   metadata : Map[String, String]
   body : String?
+  resources : Map[String, String]
 }
-pub fn SkillDescriptor::SkillDescriptor(name~ : String, description~ : String, skill_md_path~ : String, skill_dir~ : String, scope~ : SkillScope, license? : String?, compatibility? : String?, allowed_tools? : String?, metadata? : Map[String, String], body? : String?) -> Self
-pub fn SkillDescriptor::builtin(name~ : String, description~ : String, body~ : String) -> Self
+pub fn SkillDescriptor::SkillDescriptor(name~ : String, description~ : String, skill_md_path~ : String, skill_dir~ : String, scope~ : SkillScope, license? : String?, compatibility? : String?, allowed_tools? : String?, metadata? : Map[String, String], body? : String?, resources? : Map[String, String]) -> Self
+pub fn SkillDescriptor::builtin(name~ : String, description~ : String, body~ : String, resources? : Map[String, String]) -> Self
 
 pub(all) struct SkillDiagnostic {
   severity : SkillDiagnosticSeverity

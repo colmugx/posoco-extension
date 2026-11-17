@@ -8,7 +8,7 @@ priv enum RecoveryCommand {
     reset_at_ms~ : Int64?,
     provider_code~ : String?,
     window_label~ : String?,
-    encountered_at_ms~ : Int64
+    encountered_at_ms~ : Int64,
   )
   TurnFailed(session_id~ : String)
   TurnCompleted(session_id~ : String)
@@ -245,7 +245,7 @@ fn recovery_fold_cmd(
       reset_at_ms~,
       provider_code~,
       window_label~,
-      encountered_at_ms~
+      encountered_at_ms~,
     ) =>
       record_limit(
         ctx, state, effects, policy, session_id, reset_at_ms, provider_code, window_label,

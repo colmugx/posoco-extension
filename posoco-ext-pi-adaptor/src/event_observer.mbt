@@ -372,7 +372,7 @@ pub impl @posoco.Observer for PiEventObserver with fn on_event(
       call~,
       content~,
       structured~,
-      attachments~
+      attachments~,
     ) =>
       if attachments.is_empty() {
         self.emit_tool_end(call, @kernel.Success(content~, structured~))

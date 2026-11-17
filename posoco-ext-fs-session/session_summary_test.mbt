@@ -29,7 +29,7 @@ async test "io[native]: explicit name wins over automatic title" {
   assert_eq(s.name, Some("Weekly Review"))
   assert_eq(s.title, Some("automatic title should not win"))
   assert_eq(@posoco-ext-fs-session.display_title(s), "Weekly Review")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -62,7 +62,7 @@ async test "io[native]: automatic title comes from session metadata" {
     @posoco-ext-fs-session.display_title(s),
     "investigate the login race condition",
   )
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -83,7 +83,7 @@ async test "io[native]: automatic title truncates at 50 chars" {
     e => fail("summary failed: \{e}")
   }
   assert_eq(s.title, Some("01234567890123456789012345678901234567890123456789"))
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -110,7 +110,7 @@ async test "io[native]: legacy session falls back to first user-role message" {
   }
   assert_eq(s.title, Some("old session title"))
   assert_eq(@posoco-ext-fs-session.display_title(s), "old session title")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -131,7 +131,7 @@ async test "io[native]: display_title falls back to the session id" {
   assert_eq(s.name, None)
   assert_eq(s.title, None)
   assert_eq(@posoco-ext-fs-session.display_title(s), "sess_silent")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -146,7 +146,7 @@ async test "io[native]: summary of a missing file is empty" {
   assert_eq(s.name, None)
   assert_eq(s.title, None)
   assert_eq(@posoco-ext-fs-session.display_title(s), "ghost")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }

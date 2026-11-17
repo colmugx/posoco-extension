@@ -693,7 +693,7 @@ test "encode image blocks as typed parts when the model accepts image input" {
         "type": Json::String("text"),
         "text": Json::String("what is in this picture?"),
         ..
-      }
+      },
     ) else {
     fail("expected text part")
   }
@@ -702,10 +702,10 @@ test "encode image blocks as typed parts when the model accepts image input" {
       {
         "type": Json::String("image_url"),
         "image_url": Json::Object(
-          { "url": Json::String("data:image/png;base64,aGVsbG8="), .. }
+          { "url": Json::String("data:image/png;base64,aGVsbG8="), .. },
         ),
         ..
-      }
+      },
     ) else {
     fail("expected image_url part")
   }

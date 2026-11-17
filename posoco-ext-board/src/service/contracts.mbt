@@ -190,7 +190,7 @@ fn[T] controller_result(
           @dynamic.ExpansionFailed(@expansion.SourceFailed(_)) =>
             AgentUnavailable
           @dynamic.ExpansionFailed(
-            @expansion.Backend(@coordinator.DurabilityUncertain(_))
+            @expansion.Backend(@coordinator.DurabilityUncertain(_)),
           ) => DurabilityUncertain
           _ => OperationRejected
         },

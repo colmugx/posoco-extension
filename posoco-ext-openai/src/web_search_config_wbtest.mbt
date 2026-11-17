@@ -27,7 +27,9 @@ async fn ws_chat_wire(
     @async.with_task_group() <| group => {
       defer server.stop()
       let _ = group.spawn(() => server.serve(), allow_failure=true)
-      let config = config_of("http://127.0.0.1:\{server.server.addr.port()}/v1")
+      let config = config_of(
+        "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
+      )
       let port = OpenAIModelPort::OpenAIModelPort(config)
       let _ = port.chat(
         compact_loopback_scope(),
@@ -190,7 +192,7 @@ async test "openai_web_search_mode_survives_catalog_effort_and_key_rebuild" {
       let source = @llm.ProviderConfigSource::ProviderConfigSource(
         settings=Some(
           @json.parse(
-            "{\"model\":\"gpt-5\",\"web_search\":\"live\",\"base_url\":\"http://127.0.0.1:\{server.server.addr.port()}/v1\"}",
+            "{\"model\":\"gpt-5\",\"web_search\":\"live\",\"base_url\":\"http://127.0.0.1:\{loopback_port(server.server.addr)}/v1\"}",
           ),
         ),
         provider_credential=Some(
@@ -286,7 +288,9 @@ async fn ws_provider_chat_wire(
       let source = @llm.ProviderConfigSource::ProviderConfigSource(
         settings=Some(
           @json.parse(
-            settings_of("http://127.0.0.1:\{server.server.addr.port()}/v1"),
+            settings_of(
+              "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
+            ),
           ),
         ),
         provider_credential=Some(

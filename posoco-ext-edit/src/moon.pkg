@@ -8,6 +8,8 @@ import {
 #cfg(not(target = "js"))
 import {
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
+  "moonbitlang/core/debug",
   // UTF-8 decoding backs the native/wasm read path only.
   "moonbitlang/core/encoding/utf8",
 }

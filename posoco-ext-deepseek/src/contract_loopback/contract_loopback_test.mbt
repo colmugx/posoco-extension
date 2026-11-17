@@ -47,7 +47,7 @@ async fn DeepSeekLoopback::bind(
   let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => fail("loopback probe bind failed")
   }
-  let port = probe.addr.port()
+  let port = loopback_port(probe.addr)
   probe.close()
   let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port~)) catch {
     _ => fail("loopback server bind failed")
@@ -132,7 +132,7 @@ async fn[T] contract_with_loopback(
     let _ = group.spawn(() => loopback.serve())
     let outcome = attempt_async(() => {
       @async.with_timeout(20000, () => {
-        f("http://127.0.0.1:\{loopback.server.addr.port()}", loopback)
+        f("http://127.0.0.1:\{loopback_port(loopback.server.addr)}", loopback)
       })
     })
     loopback.stop()
@@ -891,4 +891,19 @@ async test "contract stream repeated reasoning suffix aborts with a transport er
   })
   let message = contract_expect_transport(result)
   assert_true(message.contains("category=reasoning_repetition"))
+}
+
+///|
+/// Loopback tests only need the bound port; `Addr` no longer exposes it, and
+/// its canonical string ends in `:<port>` (`[v6]:port` for IPv6).
+fn loopback_port(addr : @socket.Addr) -> UInt16 {
+  let mut port = 0
+  for c in addr.to_string() {
+    if c >= '0' && c <= '9' {
+      port = port * 10 + c.to_int() - 48
+    } else {
+      port = 0
+    }
+  }
+  port.to_uint16()
 }

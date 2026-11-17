@@ -27,8 +27,8 @@ async fn OpenRouterDecisionPort::post_systemone(
       )
   }
   if response.code < 200 || response.code >= 300 {
-    let body_bytes = body_data.length()
-    let error_text = @utf8.decode(body_data) catch { _ => "" }
+    let body_bytes = body_data.binary().length()
+    let error_text = @utf8.decode(body_data.binary()) catch { _ => "" }
     raise openrouter_decision_http_error(
       model,
       response.code,
@@ -36,10 +36,10 @@ async fn OpenRouterDecisionPort::post_systemone(
       body=if error_text.length() > 0 { Some(error_text) } else { None },
     )
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.DecisionError::ResponseParse(
-        "decision response body is not valid UTF-8 (provider=openrouter model=\{model}, body_bytes=\{body_data.length()})",
+        "decision response body is not valid UTF-8 (provider=openrouter model=\{model}, body_bytes=\{body_data.binary().length()})",
       )
   }
   @json.parse(body_text) catch {

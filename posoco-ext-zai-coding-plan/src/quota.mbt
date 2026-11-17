@@ -137,13 +137,10 @@ pub async fn fetch_zai_coding_plan_quota(
       return Err("Z.ai quota request timed out (timeout_ms=10000)")
     err => return Err("Z.ai quota request failed: " + err.to_string())
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
-      return Err("Z.ai quota body read failed: " + err.to_string())
-    }
+  let body_bytes = conn.binary() catch {
+    err => return Err("Z.ai quota body read failed: " + err.to_string())
   }
-  conn.close()
+
   if response.code < 200 || response.code >= 300 {
     return Err(
       "Z.ai quota HTTP status: " +

@@ -83,7 +83,7 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       workflow~,
       mapping~,
       digest~,
-      at_ms~
+      at_ms~,
     ) => {
       f["type"] = "GraphExpanded"
       f["expansion_id"] = Json::string(expansion.value)

@@ -781,10 +781,16 @@ async fn e2e_dual_reconnect_scenario(node : String) -> Unit {
       ("MCP_FIXTURE_RESILIENCE", "1"),
     ])
     let results : Array[Result[Unit, String]] = []
-    let _ = group.spawn(() => results.push(bridge.reconnect_one(0)))
+    let _ = group.spawn(() => {
+      let outcome = match bridge.reconnect_one_admitted(0) {
+        Ok(_) => Ok(())
+        Err(message) => Err(message)
+      }
+      results.push(outcome)
+    })
     assert_true(e2e_wait_reconnecting(bridge))
     // The loser: refused by the actor fold, not by a check-then-act flag.
-    match bridge.reconnect_one(0) {
+    match bridge.reconnect_one_admitted(0) {
       Err(message) => assert_true(message.contains("already in progress"))
       Ok(_) => fail("expected the second reconnect to lose with Busy")
     }

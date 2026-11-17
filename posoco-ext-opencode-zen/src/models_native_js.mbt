@@ -36,15 +36,13 @@ pub async fn fetch_zen_models(
         "OpenCode Zen list models request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
+  let body_bytes = conn.binary() catch {
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenCode Zen list models body read failed: " + err.to_string(),
       )
-    }
   }
-  conn.close()
+
   if response.code < 200 || response.code >= 300 {
     // The gateway's error body names the failure cause; carry it verbatim.
     let byte_length = body_bytes.length()
@@ -98,15 +96,13 @@ pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @posoco.
         "models.dev metadata request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
+  let body_bytes = conn.binary() catch {
+    err =>
       raise @posoco.ModelError::Transport(
         "models.dev metadata body read failed: " + err.to_string(),
       )
-    }
   }
-  conn.close()
+
   if response.code < 200 || response.code >= 300 {
     let byte_length = body_bytes.length()
     let text = @utf8.decode(body_bytes) catch {

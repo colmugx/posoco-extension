@@ -32,9 +32,20 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
 }
 
 ///|
+/// @fs wraps the OS failure in `ReaderError.TransportError`; surface the OS
+/// reason so a directory read stays diagnosable ("Is a directory").
+fn edit_io_error_text(error : Error) -> String {
+  match error {
+    @io.ReaderError::TransportError(inner, ..) =>
+      @debug.to_repr(inner).to_string()
+    _ => error.to_string()
+  }
+}
+
+///|
 impl FsIo for NativeFsIo with fn read_text(_self, path : String) -> String {
   let data = @fs.read_binary(path) catch {
-    error => raise edit_failure("read", path, error.to_string())
+    error => raise edit_failure("read", path, edit_io_error_text(error))
   }
   @utf8.decode(data) catch {
     _ => raise edit_failure("decode", path, "invalid UTF-8")

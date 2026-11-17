@@ -433,8 +433,8 @@ async test "status invoke warms the statusbar segments" {
           label=None,
           priority=45,
           value=Some("110.00 CNY"),
-          color=None
-        )
+          color=None,
+        ),
       ) {
       balance_registered = true
       break

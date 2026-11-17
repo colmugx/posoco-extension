@@ -120,13 +120,13 @@ async fn KimiModelPort::chat_nonstream(
       )
   }
   if !is_kimi_http_success(response.code) {
-    let body_text = @utf8.decode(body_data) catch { _ => "" }
+    let body_text = @utf8.decode(body_data.binary()) catch { _ => "" }
     self.learn_prompt_cache_key_rejection(body_text)
     match
       classify_kimi_http_status(
         "chat.http_status",
         response.code,
-        BodyBytesUtf8(body_data.length()),
+        BodyBytesUtf8(body_data.binary().length()),
         body_text~,
         retry_after=retry_after_header(response),
         now_ms=@async.now(),
@@ -135,10 +135,10 @@ async fn KimiModelPort::chat_nonstream(
       None => ()
     }
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.length()})",
+        "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
       )
   }
   let resp_json : Json = @json.parse(body_text) catch {
@@ -170,27 +170,24 @@ async fn KimiModelPort::chat_stream(
     reasoning_effort=Some(self.config.reasoning_effort),
   )
   let headers = build_headers(self.config)
-  let client = @http.post(responses_url(self.config), headers~) catch {
+  let client = @http.post_stream(responses_url(self.config), headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "kimi transport failure (stage=post_stream): " + err.to_string(),
       )
   }
   client.write(@utf8.encode(body.stringify())[:]) catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
-        "kimi transport failure (stage=write_body): " + err.to_string(),
+        "kimi transport failure (stage=write_body): " +
+        err.to_repr().to_string(),
       )
-    }
   }
   let response = client.end_request() catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "kimi transport failure (stage=end_request): " + err.to_string(),
       )
-    }
   }
   if !is_kimi_http_success(response.code) {
     let retry_after = retry_after_header(response)
@@ -199,7 +196,6 @@ async fn KimiModelPort::chat_stream(
       Some(text) => self.learn_prompt_cache_key_rejection(text)
       None => ()
     }
-    client.close()
     match
       classify_kimi_http_status(
         "chat_stream.http_status",
@@ -225,12 +221,11 @@ async fn KimiModelPort::chat_stream(
   let mut last_yield = @async.now()
   while !done {
     let line = client.read_until(b"\n") catch {
-      err => {
-        client.close()
+      err =>
         raise @posoco.ModelError::Transport(
-          "Kimi transport failure (stage=read_stream): " + err.to_string(),
+          "Kimi transport failure (stage=read_stream): " +
+          err.to_repr().to_string(),
         )
-      }
     }
     match line {
       Some(data) => {
@@ -257,8 +252,7 @@ async fn KimiModelPort::chat_stream(
           }
         }
       }
-      None => {
-        client.close()
+      None =>
         match
           @responses.classify_stream_termination(
             provider="kimi",
@@ -267,7 +261,6 @@ async fn KimiModelPort::chat_stream(
           Some(err) => raise err
           None => done = true
         }
-      }
     }
     // Yield at most every 16ms so the event loop can breathe during a
     // buffered SSE burst; task cancellation also lands on this pause.
@@ -277,7 +270,6 @@ async fn KimiModelPort::chat_stream(
       last_yield = now
     }
   }
-  client.close()
   match
     @responses.classify_stream_termination(
       provider="kimi",

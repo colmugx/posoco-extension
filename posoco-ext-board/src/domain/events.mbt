@@ -8,7 +8,7 @@ pub(all) enum BoardEvent {
   DependenciesSet(
     id~ : BoardTaskId,
     dependencies~ : Array[BoardTaskId],
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   TaskModelChanged(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64)
   /// The ticket's curated review handoff was replaced (`Some`) or cleared
@@ -18,27 +18,27 @@ pub(all) enum BoardEvent {
     id~ : BoardTaskId,
     from~ : BoardStage,
     to~ : BoardStage,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   TaskDeleted(id~ : BoardTaskId, at_ms~ : Int64)
   AttemptQueued(
     id~ : AttemptId,
     task_id~ : BoardTaskId,
     kind~ : AttemptKind,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   AttemptStarted(id~ : AttemptId, task_id~ : BoardTaskId, at_ms~ : Int64)
   AttemptFinished(
     id~ : AttemptId,
     task_id~ : BoardTaskId,
     outcome~ : AttemptOutcome,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   ReviewRecorded(
     id~ : AttemptId,
     task_id~ : BoardTaskId,
     decision~ : ReviewDecision,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   /// The atomic request-changes decision: the review attempt recorded
   /// ChangesRequested and its ticket carries the durable feedback and is back
@@ -47,7 +47,7 @@ pub(all) enum BoardEvent {
     task_id~ : BoardTaskId,
     attempt_id~ : AttemptId,
     feedback~ : String,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
   /// The one authoritative fact of an accepted graph expansion: the new
   /// task exists in stage Created and the durable expansion record binds
@@ -60,7 +60,7 @@ pub(all) enum BoardEvent {
     workflow~ : String,
     mapping~ : Array[ExpansionMapping],
     digest~ : String,
-    at_ms~ : Int64
+    at_ms~ : Int64,
   )
 }
 
@@ -93,7 +93,7 @@ pub fn BoardEvent::copy_detached(self : BoardEvent) -> BoardEvent {
       workflow~,
       mapping~,
       digest~,
-      at_ms~
+      at_ms~,
     ) =>
       GraphExpanded(
         expansion~,

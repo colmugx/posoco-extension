@@ -139,8 +139,8 @@ async test "command: activate returns instructions through the guarded path" {
               "name": Json::String("demo"),
               "instructions": Json::String(text),
               ..
-            }
-          )
+            },
+          ),
         ) => assert_true(text.contains("Do the demo."))
         other =>
           fail(

@@ -1195,7 +1195,7 @@ test "openrouter decision decoder validates the official System One response" {
       id~,
       selected~,
       probabilities~,
-      confidence~
+      confidence~,
     ) => {
       assert_eq(id, "route")
       assert_eq(selected, "deep")

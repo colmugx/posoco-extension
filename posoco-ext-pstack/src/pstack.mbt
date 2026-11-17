@@ -8,9 +8,9 @@ pub struct Pstack {
 }
 
 ///|
-/// Low-level adapter for a Skills runtime that already contains poteto-mode.
-/// Prefer Pstack::discover with the installed assets root so the primary
-/// method and playbooks remain accessible.
+/// Low-level adapter for a Skills runtime that already contains poteto-mode:
+/// file-backed discovery (Pstack::discover) and hosts registering the
+/// Pstack::embedded_descriptor both land here.
 pub fn Pstack::from_skills(
   skills : @skills.Skills,
   events~ : @posoco.Events? = None,
@@ -19,6 +19,19 @@ pub fn Pstack::from_skills(
     Some(_) => Some({ skills, events, mode_active: false, })
     None => None
   }
+}
+
+///|
+/// Built-in descriptor for hosts that ship the workflow inside their binary:
+/// the instructions and every playbook travel as inline resources, so no
+/// assets directory or install step is required.
+pub fn Pstack::embedded_descriptor() -> @skills.SkillDescriptor {
+  @skills.SkillDescriptor::builtin(
+    name="poteto-mode",
+    description="Run PStack's task-specific engineering playbooks on Posoco. Select investigation, bug fix, feature, refactoring, performance, or prototype workflows and verify the result.",
+    body=embedded_skill_body(),
+    resources=embedded_skill_resources(),
+  )
 }
 
 ///|

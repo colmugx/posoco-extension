@@ -18,10 +18,10 @@ async fn ZaiModelPort::zai_compact_completion(
         "zai transport failure (stage=compact_post): " + err.to_string(),
       )
   }
-  let body_text = @utf8.decode(body_bytes) catch {
+  let body_text = @utf8.decode(body_bytes.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "zai compact parse failure (stage=decode_utf8, body_bytes=\{body_bytes.length()})",
+        "zai compact parse failure (stage=decode_utf8, body_bytes=\{body_bytes.binary().length()})",
       )
   }
   if !is_zai_http_success(response.code) {

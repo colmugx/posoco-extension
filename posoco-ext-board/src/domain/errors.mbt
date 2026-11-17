@@ -12,13 +12,13 @@ pub(all) enum BoardError {
   InvalidAttemptTransition(
     attempt~ : AttemptId,
     from~ : AttemptStatus,
-    to~ : AttemptStatus
+    to~ : AttemptStatus,
   )
   /// Review decision rejected given the attempt's current review state.
   InvalidReviewTransition(
     attempt~ : AttemptId,
     current~ : ReviewDecision?,
-    requested~ : ReviewDecision
+    requested~ : ReviewDecision,
   )
   /// A referenced dependency task does not exist.
   DependencyMissing(task~ : BoardTaskId, dependency~ : BoardTaskId)

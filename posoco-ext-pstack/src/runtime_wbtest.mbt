@@ -143,3 +143,32 @@ async test "statusbar: /poteto-mode toggles and shutdown clears the status" {
     _ => fail("shutdown must clear status")
   }
 }
+
+///|
+async test "workflow: embedded descriptor serves playbooks without any files" {
+  let fs = PstackFakeFs::new()
+  let catalog = @skills.merge_builtin_skills(@skills.SkillCatalog::empty(), [
+    Pstack::embedded_descriptor(),
+  ])
+  let skills = @skills.Skills::from_catalog(
+    fs,
+    catalog~,
+    config=@skills.SkillsConfig::default(),
+  ).unwrap()
+  let pstack = Pstack::from_skills(skills).unwrap()
+  match pstack.skills.activate_skill("poteto-mode") {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("Poteto Mode for Posoco"))
+      assert_true(content.contains("Bundled resources"))
+    }
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => fail(content)
+    _ => fail("embedded PStack SKILL.md should activate")
+  }
+  let path = "resources/upstream/skills/poteto-mode/playbooks/investigation.md"
+  match pstack.skills.read_skill_resource("poteto-mode", path) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("Investigation requests are read-only"))
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => fail(content)
+    _ => fail("embedded playbook read should succeed")
+  }
+}

@@ -123,7 +123,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       )
       let headers = build_headers(self.config, scope)
       let url = chat_url(self.config)
-      let client = @http.post(url, headers~) catch {
+      let client = @http.post_stream(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "\{self.config.client_id} transport failure (stage=post_stream): " +
@@ -135,7 +135,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
           client.close()
           raise @posoco.ModelError::Transport(
             "\{self.config.client_id} transport failure (stage=write_body): " +
-            err.to_string(),
+            err.to_repr().to_string(),
           )
         }
       }

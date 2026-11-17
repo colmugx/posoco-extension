@@ -79,7 +79,7 @@ async test "openai_cached_lite_effort_and_key_rebuild_reach_production_compact" 
         OpenAIConfig::with_base_url(
           "old-test-key",
           "future",
-          "http://127.0.0.1:\{server.server.addr.port()}/v1",
+          "http://127.0.0.1:\{loopback_port(server.server.addr)}/v1",
         ),
       )
       guard parse_cached_openai_models(

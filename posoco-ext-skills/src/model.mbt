@@ -192,6 +192,10 @@ pub(all) struct SkillDescriptor {
   /// `SkillDescriptor::builtin`. Discovered skills are always None; their
   /// activation re-reads SKILL.md from the filesystem instead.
   body : String?
+  /// Inline resources for built-in skills, keyed by the same relative paths
+  /// `read_skill_resource` accepts. Discovered skills are always empty; their
+  /// resources are read from the skill directory instead.
+  resources : Map[String, String]
 }
 
 ///|
@@ -209,6 +213,7 @@ pub fn SkillDescriptor::SkillDescriptor(
   allowed_tools~ : String? = None,
   metadata~ : Map[String, String] = Map([]),
   body~ : String? = None,
+  resources~ : Map[String, String] = Map([]),
 ) -> SkillDescriptor {
   {
     name,
@@ -221,18 +226,20 @@ pub fn SkillDescriptor::SkillDescriptor(
     allowed_tools,
     metadata,
     body,
+    resources,
   }
 }
 
 ///|
-/// Inline built-in skill: the instructions ship with the binary instead of
-/// living on the filesystem, so hosts can embed product manuals without any
-/// install step. The virtual paths pass catalog validation lexically and are
-/// never touched by activation or resource reads.
+/// Inline built-in skill: the instructions and any bundled resources ship
+/// with the binary instead of living on the filesystem, so hosts can embed
+/// skills without any install step. The virtual paths pass catalog validation
+/// lexically and are never touched by activation or resource reads.
 pub fn SkillDescriptor::builtin(
   name~ : String,
   description~ : String,
   body~ : String,
+  resources~ : Map[String, String] = Map([]),
 ) -> SkillDescriptor {
   SkillDescriptor::SkillDescriptor(
     name~,
@@ -241,14 +248,15 @@ pub fn SkillDescriptor::builtin(
     skill_dir="builtin/" + name,
     scope=Extra("builtin"),
     body=Some(body),
+    resources~,
   )
 }
 
 ///|
 /// Copy mutable descriptor members so a runtime snapshot cannot be changed by
-/// a caller retaining the original frontmatter metadata map.
+/// a caller retaining the original frontmatter metadata or resource maps.
 fn SkillDescriptor::snapshot(self : SkillDescriptor) -> SkillDescriptor {
-  { ..self, metadata: self.metadata.copy(), }
+  { ..self, metadata: self.metadata.copy(), resources: self.resources.copy(), }
 }
 
 ///|
@@ -420,6 +428,22 @@ pub fn SkillCatalog::validate(self : SkillCatalog) -> Result[Unit, String] {
         skill.name +
         "'",
       )
+    }
+    if skill.body is None && !skill.resources.is_empty() {
+      return Err(
+        "skill catalog carries inline resources for a discovered skill: " +
+        skill.name,
+      )
+    }
+    for key, _ in skill.resources {
+      if key.length() > hard_max_resource_path_chars ||
+        contains_unsafe_control(key) {
+        return Err(
+          "skill catalog inline resource path exceeds runtime safety limit for '" +
+          skill.name +
+          "'",
+        )
+      }
     }
     if skill.skill_md_path.length() > hard_max_skill_location_chars ||
       skill.skill_dir.length() > hard_max_skill_location_chars {

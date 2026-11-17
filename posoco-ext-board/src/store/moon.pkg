@@ -10,6 +10,7 @@ import {
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/types",
   "moonbitlang/core/encoding/utf8",
 }
 
@@ -43,6 +44,7 @@ options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/types",
   ],
   "native-stub": [ "truncate_stub.c" ],
   targets: {

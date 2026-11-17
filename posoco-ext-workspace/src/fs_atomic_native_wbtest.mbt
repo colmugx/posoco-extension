@@ -1,4 +1,5 @@
 ///|
+#borrow(fd)
 extern "C" fn workspace_test_file_mode(fd : @types.Fd) -> Int32 = "cetas_workspace_test_file_mode"
 
 ///|

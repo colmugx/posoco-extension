@@ -72,7 +72,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
-      let client = @http.post(url, headers~) catch {
+      let client = @http.post_stream(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "openrouter transport failure (stage=post_stream): " +
@@ -80,26 +80,21 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
           )
       }
       client.write(@utf8.encode(body.stringify())[:]) catch {
-        err => {
-          client.close()
+        err =>
           raise @posoco.ModelError::Transport(
             "openrouter transport failure (stage=write_body): " +
-            err.to_string(),
+            err.to_repr().to_string(),
           )
-        }
       }
       let response = client.end_request() catch {
-        err => {
-          client.close()
+        err =>
           raise @posoco.ModelError::Transport(
             "openrouter transport failure (stage=end_request): " +
             err.to_string(),
           )
-        }
       }
       if !is_openrouter_http_success(response.code) {
         let err_body = read_error_body(client) catch { _ => BodyUnavailable }
-        client.close()
         // Per-process learning: an explicit unsupported-parameter rejection
         // naming prompt_cache_key stops sending it on later requests.
         self.learn_cache_key_rejection(err_body)
@@ -125,13 +120,11 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until(b"\n") catch {
-          err => {
-            client.close()
+          err =>
             match classify_openrouter_stream_termination(TransportFailure) {
               Some(err) => raise err
               None => None
             }
-          }
         }
         match line {
           Some(data) => {
@@ -170,8 +163,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
               data_buffer = ""
             }
           }
-          None => {
-            client.close()
+          None =>
             if openrouter_eof_tolerable(state.acc) {
               let chunk = @posoco.StreamChunk::Finish(reason="tool_calls")
               on_chunk(chunk)
@@ -183,7 +175,6 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
                 None => done = true
               }
             }
-          }
         }
         // A buffered SSE burst makes read_until complete without suspending,
         // so this loop can spin through the whole stream in one coroutine
@@ -196,7 +187,6 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
           last_yield = now
         }
       }
-      client.close()
       match classify_openrouter_stream_termination(ExplicitTerminal) {
         Some(err) => raise err
         None => ()

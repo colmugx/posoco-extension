@@ -62,7 +62,7 @@ fn conn_ask_refused_closed(
 ) -> Bool {
   match got {
     Err(
-      @fuwaroid.AskFailure::NotDelivered(@fuwaroid.SendRefusal::MailboxClosed)
+      @fuwaroid.AskFailure::NotDelivered(@fuwaroid.SendRefusal::MailboxClosed),
     ) => true
     _ => false
   }

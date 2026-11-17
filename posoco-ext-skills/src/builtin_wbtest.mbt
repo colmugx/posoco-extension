@@ -69,10 +69,54 @@ async test "builtin: resource reads fail closed" {
   )
   match skills.read_resource("cetas-about", "guide.md") {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
-      assert_true(content.contains("no bundled resources"))
+      assert_true(content.contains("Skill resource not found"))
     _ => fail("builtin resource read must fail closed")
   }
   assert_true(fs.reads.is_empty())
+}
+
+///|
+async test "builtin: inline resources are served without touching the filesystem" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      SkillDescriptor::builtin(
+        name="poteto-mode",
+        description="Workflow",
+        body="Read resources/guide.md when needed.",
+        resources=Map([("resources/guide.md", "# Guide\nstep")]),
+      ),
+    ]),
+  )
+  match skills.read_resource("poteto-mode", "resources/guide.md") {
+    @posoco.ToolOutcome::Success(content~, structured~) => {
+      assert_true(content.contains("# Guide"))
+      match structured {
+        Some(Object(values)) =>
+          assert_eq(
+            values.get("path"),
+            Some(Json::string("resources/guide.md")),
+          )
+        _ => fail("expected structured resource metadata")
+      }
+    }
+    _ => fail("inline resource read should succeed")
+  }
+  match skills.read_resource("poteto-mode", "resources/missing.md") {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("Skill resource not found"))
+    _ => fail("missing inline resource must fail closed")
+  }
+  match skills.activate("poteto-mode") {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("resources/guide.md"))
+      assert_true(content.contains("Bundled resources"))
+    }
+    _ => fail("builtin activation should succeed")
+  }
+  assert_true(fs.reads.is_empty())
+  assert_true(fs.readdirs.is_empty())
 }
 
 ///|

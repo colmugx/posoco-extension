@@ -127,7 +127,7 @@ test "jev decodes official System One response shape" {
       id~,
       selected~,
       probabilities~,
-      confidence~
+      confidence~,
     ) => {
       assert_eq(id, "route")
       assert_eq(selected, "deep")
@@ -141,7 +141,7 @@ test "jev decodes official System One response shape" {
       id~,
       score~,
       probabilities~,
-      confidence~
+      confidence~,
     ) => {
       assert_eq(id, "effort")
       assert_eq(score, 1.7)

@@ -396,7 +396,7 @@ async test "io[native]: load non-existent session returns empty" {
   }
   assert_eq(s.messages.length(), 0)
   assert_eq(s.metadata.keys().to_array().length(), 0)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -428,7 +428,7 @@ async test "io[native]: save then load round-trips a full session" {
   }
   assert_eq(loaded.messages.length(), 3)
   assert_true(loaded.metadata.contains("k"))
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -438,7 +438,7 @@ async test "io[native]: save creates parent directory lazily" {
   // tmpdir() always creates the dir, so for lazy-mkdir we delete first then
   // save into the (now-missing) path; the impl should re-create it.
   let root = fresh_root("lazy-mkdir")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
@@ -450,7 +450,7 @@ async test "io[native]: save creates parent directory lazily" {
     e => fail("save should lazily create root: \{e}")
   }
   assert_true(@fs.exists(root))
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -474,7 +474,7 @@ async test "io[native]: save into nested non-existent root creates all levels" {
     e => fail("load after nested save failed: \{e}")
   }
   assert_eq(loaded.messages.length(), 0)
-  @fs.rmdir(base, recursive=true) catch {
+  @fs.remove(base, recursive=true) catch {
     _ => ()
   }
 }
@@ -502,7 +502,7 @@ async test "io[native]: overwrite existing session truncates correctly" {
     e => fail("load after overwrite failed: \{e}")
   }
   assert_eq(s.messages.length(), 0)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -611,7 +611,7 @@ async test "io[native]: save and append publish the session status register" {
       #|)
     ),
   )
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -637,7 +637,7 @@ async test "io[native]: a store without a channel behaves exactly as before" {
     e => fail("load without a channel failed: \{e}")
   }
   assert_eq(loaded.messages.length(), 1)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -662,7 +662,7 @@ async test "io[native]: failed persist publishes nothing" {
     _ => fail("invalid session id should fail save")
   }
   assert_eq(capture.events.length(), 0)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }

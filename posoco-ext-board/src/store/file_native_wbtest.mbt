@@ -9,7 +9,7 @@ test "native empty root stays relative to the current workspace" {
 ///|
 async test "native absent directory rev0 default path and real durable replacement" {
   let root = @fs.tmpdir(prefix="board-s3b1-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let path = root
   let store = FileBoardStore::FileBoardStore(root=path)
@@ -54,7 +54,7 @@ async test "six injected native stages preserve old board before rename and neve
       DirectoryFsync,
     ] {
     let root = @fs.tmpdir(prefix="board-s3b1-failure-")
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let data = root + "/.cetas/board/default"
     let good = FileBoardStore::FileBoardStore(root~)
     let old = fixture()
@@ -118,7 +118,7 @@ async test "six injected native stages preserve old board before rename and neve
 async test "native first-write failures no board means empty even with ahead audit and temp" {
   for stage in [TempWrite, TempFsync, JournalAppend, JournalFsync, Rename] {
     let root = @fs.tmpdir(prefix="board-s3b1-new-")
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let path = root + "/new/nested/default"
     let store = FileBoardStore::FileBoardStore(root=path, fail_at=Some(stage))
     assert_eq(store.persist(fixture(), all_events()), Err(Injected(stage)))
@@ -133,10 +133,10 @@ async test "native first-write failures no board means empty even with ahead aud
 ///|
 async test "native temp residue never rescues absent or corrupt authoritative board" {
   let root = @fs.tmpdir(prefix="board-s3b1-temp-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
-  @fs.mkdir(data, recursive=true, allow_exist=true)
+  @fs.mkdir(data, recursive=true, allow_existing=true)
   @fs.write_text(data + "/board.json.tmp", encode_snapshot(fixture()).unwrap())
   assert_eq(store.load().map(loaded => loaded.snapshot), Ok(empty_snapshot()))
   @fs.write_text(data + "/board.json", "corrupt")
@@ -156,7 +156,7 @@ async test "native temp residue never rescues absent or corrupt authoritative bo
 ///|
 async test "native malformed complete journal lines fail load and persist before replacement" {
   let root = @fs.tmpdir(prefix="board-s3b1-corrupt-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
@@ -186,10 +186,10 @@ async test "native malformed complete journal lines fail load and persist before
 ///|
 async test "native safely truncates torn tails before append including UTF8 residue" {
   let root = @fs.tmpdir(prefix="board-s3b1-tail-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
-  @fs.mkdir(data, recursive=true, allow_exist=true)
+  @fs.mkdir(data, recursive=true, allow_existing=true)
   let event = @domain.TaskCreated(id=tid("λ"), at_ms=1L)
   let next = all_events()[1]
   let line = journal_line(event).unwrap() + "\n"
@@ -229,10 +229,10 @@ async test "native safely truncates torn tails before append including UTF8 resi
 ///|
 async test "native retains valid unterminated records and inserts newline before appending" {
   let root = @fs.tmpdir(prefix="board-s3b1-line-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
-  @fs.mkdir(data, recursive=true, allow_exist=true)
+  @fs.mkdir(data, recursive=true, allow_existing=true)
   let first = all_events()[0]
   let second = all_events()[1]
   let raw = journal_line(first).unwrap()
@@ -256,7 +256,7 @@ async test "native retains valid unterminated records and inserts newline before
 async test "native failed persist retries retain a valid unterminated journal tail" {
   for stage in [JournalAppend, Rename] {
     let root = @fs.tmpdir(prefix="board-s3b1-tail-retry-")
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let data = root + "/.cetas/board/default"
     let store = FileBoardStore::FileBoardStore(root~)
     assert_eq(store.persist(fixture(), []), Ok(()))
@@ -302,7 +302,7 @@ async test "native failed persist retries retain a valid unterminated journal ta
 ///|
 async test "native explicit-time recovery persists before return second restart no repeated normalization" {
   let root = @fs.tmpdir(prefix="board-s3b1-recover-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let initial = FileBoardStore::FileBoardStore(root~)
   assert_eq(initial.persist(fixture(), []), Ok(()))
@@ -330,7 +330,7 @@ async test "native explicit-time recovery persists before return second restart 
 ///|
 async test "native helper failures never return an unpersisted normalized snapshot" {
   let root = @fs.tmpdir(prefix="board-s3b1-helper-fail-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let good = FileBoardStore::FileBoardStore(root~)
   assert_eq(good.persist(fixture(), []), Ok(()))
@@ -352,7 +352,7 @@ async test "native helper failures never return an unpersisted normalized snapsh
 ///|
 async test "native invalid requests do not create files and real IO errors are typed" {
   let root = @fs.tmpdir(prefix="board-s3b1-io-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let path = root + "/absent"
   let store = FileBoardStore::FileBoardStore(root=path)
   invalid(store.persist({ ..fixture(), revision: -1L, }, []))
@@ -372,7 +372,7 @@ async test "native invalid requests do not create files and real IO errors are t
 ///|
 async test "native request arrays detached before first suspension" {
   let root = @fs.tmpdir(prefix="board-s3b1-detach-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   let request = fixture()
@@ -406,7 +406,7 @@ async test "native request arrays detached before first suspension" {
 ///|
 async test "native helper directory fsync failure may already normalize authoritative board" {
   let root = @fs.tmpdir(prefix="board-s3b1-uncertain-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let good = FileBoardStore::FileBoardStore(root~)
   assert_eq(good.persist(fixture(), []), Ok(()))
   let failing = FileBoardStore::FileBoardStore(
@@ -442,7 +442,7 @@ test "native parent directory selection for durable recursive creation" {
 ///|
 async test "native and memory expose identical detached snapshot and revisioned journal on success" {
   let root = @fs.tmpdir(prefix="board-s3b1-shared-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let file = FileBoardStore::FileBoardStore(root~)
   let memory = MemoryBoardStore::MemoryBoardStore()
   assert_eq(file.load(), memory.load())
@@ -467,7 +467,7 @@ async test "native and memory expose identical detached snapshot and revisioned 
 ///|
 async test "native rejects schema-invalid unterminated tail without changing board or journal" {
   let root = @fs.tmpdir(prefix="board-s3b1-schema-tail-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let store = FileBoardStore::FileBoardStore(root~)
   let data = root + "/.cetas/board/default"
   assert_eq(store.persist(fixture(), [all_events()[0]]), Ok(()))
@@ -493,7 +493,7 @@ async test "native rejects schema-invalid unterminated tail without changing boa
 ///|
 async test "native best effort cleanup never masks primary IO failure" {
   let root = @fs.tmpdir(prefix="board-s3b1-cleanup-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
   let data = root + "/.cetas/board/default"

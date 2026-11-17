@@ -207,7 +207,7 @@ async test "review record schema rejects pending, unknown, null, extra fields an
             command_id="cmd-review-1",
             name="board.review.record",
             ..
-          )
+          ),
         ) => true
         _ => fail("Expected InvalidArguments for the \{label} review variant")
       },

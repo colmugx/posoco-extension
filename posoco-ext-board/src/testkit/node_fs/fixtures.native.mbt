@@ -5,7 +5,7 @@ pub async fn temporary_directory() -> String {
 
 ///|
 pub async fn cleanup(directory : String) -> Unit {
-  @fs.rmdir(directory, recursive=true)
+  @fs.remove(directory, recursive=true)
 }
 
 ///|

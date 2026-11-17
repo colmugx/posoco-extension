@@ -133,7 +133,7 @@ async test "compact_replay store save and fresh load preserve envelope projectio
   let (raw, session) = compact_replay_fixture()
   let root = @fs.tmpdir(prefix="posoco-fs-session-compact-replay-")
   {
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let writer = JsonlSessionStore(root)
     // Replace an existing committed transcript, as successful compact does.
     writer.save("compact_fixture", {

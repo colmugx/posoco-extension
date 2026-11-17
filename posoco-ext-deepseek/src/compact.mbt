@@ -268,13 +268,13 @@ async fn DeepSeekModelPort::ds_compact_completion(
       classify_deepseek_http_status(
         "compact.http_status",
         response.code,
-        BodyBytesUtf8(body_data.length()),
+        BodyBytesUtf8(body_data.binary().length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "DeepSeek compact parse failure (stage=decode_utf8, category=invalid_utf8)",

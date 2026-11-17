@@ -6,7 +6,7 @@ pub(all) enum ScriptedModelStep {
   Respond(@kernel.ModelCallResult)
   Stream(
     chunks~ : Array[@types.StreamChunk],
-    response~ : @kernel.ModelCallResult
+    response~ : @kernel.ModelCallResult,
   )
   StreamParked(chunks~ : Array[@types.StreamChunk])
   Fail(@error.ModelError)

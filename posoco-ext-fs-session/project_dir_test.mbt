@@ -100,7 +100,7 @@ async test "io[native]: of_project stores into the project bucket" {
     e => fail("list_ids on sibling bucket failed: \{e}")
   }
   assert_eq(ids, [])
-  @fs.rmdir(home, recursive=true) catch {
+  @fs.remove(home, recursive=true) catch {
     _ => ()
   }
 }

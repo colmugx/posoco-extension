@@ -198,7 +198,7 @@ async fn WsTransport::send_text(
 async fn WsTransport::next_text(
   self : WsTransport,
 ) -> Result[String?, String] noraise {
-  let controller = @js_async.AbortController::new()
+  let controller = @js_async.AbortController::AbortController()
   let frame = @js_async.run_promise(fn(signal) {
     ws_js_next(self.handle, signal, WS_IDLE_TIMEOUT_MS)
   }) catch {

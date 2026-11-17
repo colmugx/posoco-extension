@@ -112,7 +112,7 @@ async fn wsr_chat_stream(
         OpenAIConfig::with_base_url(
           "wsr-test-key",
           "gpt-5",
-          "http://127.0.0.1:\{loopback.server.addr.port()}/v1",
+          "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
         ),
       )
       for turn in turns {
@@ -157,7 +157,7 @@ async fn wsr_chat_nonstream(
         OpenAIConfig::with_base_url(
           "wsr-test-key",
           "gpt-5",
-          "http://127.0.0.1:\{loopback.server.addr.port()}/v1",
+          "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
         ),
       )
       outcome = Ok(
@@ -357,7 +357,7 @@ async test "web search stream renders inline citation and captures raw output" {
       label~,
       priority~,
       value~,
-      color~
+      color~,
     ) else {
     fail("the first web search operation must register the segment")
   }

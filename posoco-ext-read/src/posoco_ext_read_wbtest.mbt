@@ -689,7 +689,7 @@ async test "read_attaches_image_files_whole_for_vision" {
       @posoco.ToolOutcome::SuccessWithAttachments(
         content~,
         structured=Some(_),
-        attachments~
+        attachments~,
       ) => {
         assert_true(content.contains("shot.png"))
         assert_eq(attachments.length(), 1)

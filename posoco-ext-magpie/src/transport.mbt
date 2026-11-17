@@ -80,13 +80,7 @@ impl MagpieTransport for HttpMagpieTransport with fn get(
     let (response, body) = @http.get(url, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    let bytes = body.read_all() catch {
-      _ => {
-        body.close()
-        return Failed(detail="response read failed")
-      }
-    }
-    body.close()
+    let bytes = body.binary()
     let decoded = @utf8.decode(bytes) catch {
       _ => return Failed(detail="response decode failed")
     }
@@ -135,7 +129,9 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
     let (response, data) = @http.post_text(url, body, headers=http_headers) catch {
       failure => return Failed(detail="request failed: \{failure}")
     }
-    let text = data
+    let text = data.text() catch {
+      _ => return Failed(detail="response decode failed")
+    }
     Answered(code=response.code, body=text)
   }) catch {
     failure =>
@@ -166,7 +162,10 @@ impl MagpieEventStream for HttpEventStream with fn next_line(
     return None
   }
   let bytes = self.client.read_until(@utf8.encode("\n")[:]) catch {
-    err => raise MagpieGatewayError::Offline("stream read failed: \{err}")
+    err =>
+      raise MagpieGatewayError::Offline(
+        "stream read failed: \{err.to_repr().to_string()}",
+      )
   }
   match bytes {
     None => None
@@ -200,13 +199,15 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
   for key, value in headers {
     http_headers[@http.CaseInsensitiveString(key)] = value
   }
-  let client = @http.post(url, headers=http_headers) catch {
+  let client = @http.post_stream(url, headers=http_headers) catch {
     err => raise MagpieGatewayError::Offline("stream open failed: \{err}")
   }
   client.write(@utf8.encode(body)[:]) catch {
     err => {
       client.close()
-      raise MagpieGatewayError::Offline("stream write failed: \{err}")
+      raise MagpieGatewayError::Offline(
+        "stream write failed: \{err.to_repr().to_string()}",
+      )
     }
   }
   let response = client.end_request() catch {

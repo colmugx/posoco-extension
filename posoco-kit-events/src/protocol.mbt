@@ -38,7 +38,7 @@ pub(all) enum StatusOp {
     label~ : String?,
     priority~ : Int32,
     value~ : String?,
-    color~ : String?
+    color~ : String?,
   )
   Update(segment~ : String, value~ : String)
   Unregister(segment~ : String)

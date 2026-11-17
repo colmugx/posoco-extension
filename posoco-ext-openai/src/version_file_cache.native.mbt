@@ -10,7 +10,7 @@ async fn openai_version_write_atomic(
   nonce : String,
   payload : String,
 ) -> Unit {
-  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  @fs.mkdir(directory, recursive=true, allow_existing=true)
   let temporary = target + "." + nonce + ".tmp"
   @fs.write_text(
     temporary,

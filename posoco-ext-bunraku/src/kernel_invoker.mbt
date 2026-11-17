@@ -53,10 +53,10 @@ pub impl ToolInvoker for KernelScopedInvoker with fn invoke(
         structured=None,
       )
     @kernel.InvocationResult::Completed(
-      @kernel.ToolReportedError(content~, structured~)
+      @kernel.ToolReportedError(content~, structured~),
     ) => @protocol.Failure(code="ToolRejected", content~, structured~)
     @kernel.InvocationResult::Completed(
-      @kernel.RuntimeFailure(error_category~, message~)
+      @kernel.RuntimeFailure(error_category~, message~),
     ) =>
       @protocol.Failure(code=error_category, content=message, structured=None)
     @kernel.InvocationResult::Completed(@kernel.NotExecuted(reason~, ..)) =>
@@ -68,7 +68,7 @@ pub impl ToolInvoker for KernelScopedInvoker with fn invoke(
     @kernel.InvocationResult::Interrupted(
       reason~,
       cancellation~,
-      side_effects_possible~
+      side_effects_possible~,
     ) =>
       @protocol.Failure(
         code="Interrupted",

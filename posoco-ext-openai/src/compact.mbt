@@ -137,7 +137,7 @@ async fn OpenAIModelPort::compact_v2_stream(
   let headers = build_headers(self.config, Some(session_id), true)
   codex_apply_body_headers(headers, payload)
   let (origin, prefix) = split_openai_base_url(self.config.base_url)
-  let client = @http.post(origin + prefix + "/responses", headers~) catch {
+  let client = @http.post_stream(origin + prefix + "/responses", headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
         "OpenAI compact transport failure (stage=create_client)",

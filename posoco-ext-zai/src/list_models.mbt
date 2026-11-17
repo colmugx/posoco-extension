@@ -140,15 +140,12 @@ pub async fn fetch_zai_models(
         "zai list models request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
+  let body_bytes = conn.binary() catch {
+    err =>
       raise @posoco.ModelError::Transport(
         "zai list models body read failed: " + err.to_string(),
       )
-    }
   }
-  conn.close()
   if response.code < 200 || response.code >= 300 {
     raise @posoco.ModelError::Transport(
       "zai list models HTTP status: " +

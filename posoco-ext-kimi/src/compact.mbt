@@ -81,12 +81,12 @@ async fn KimiModelPort::kimi_compact_completion(
       )
   }
   if !is_kimi_http_success(response.code) {
-    let body_text = @utf8.decode(body_data) catch { _ => "" }
+    let body_text = @utf8.decode(body_data.binary()) catch { _ => "" }
     match
       classify_kimi_http_status(
         "compact.http_status",
         response.code,
-        BodyBytesUtf8(body_data.length()),
+        BodyBytesUtf8(body_data.binary().length()),
         body_text~,
         retry_after=retry_after_header(response),
         now_ms=@async.now(),
@@ -95,7 +95,7 @@ async fn KimiModelPort::kimi_compact_completion(
       None => ()
     }
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "kimi compact parse failure (stage=decode_utf8, category=invalid_utf8)",

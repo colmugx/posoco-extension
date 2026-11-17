@@ -210,7 +210,7 @@ async fn LazyTools::semantic_group_match(
       match answer {
         @posoco.DecisionAnswer::BooleanAnswer(
           id="lazytools.group_relevance",
-          probability_true~
+          probability_true~,
         ) if probability_true >= SEMANTIC_GROUP_MIN_PROBABILITY =>
           return Some(group)
         _ => ()

@@ -16,7 +16,7 @@ import {
   "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-permission@0.2.0",
   "posoco/devkit@0.4.1",
-  "moonbit-community/yaml@0.0.5",
+  "moonbit-community/yaml@0.0.9",
 }
 
 source = "src"

@@ -381,7 +381,7 @@ async test "thread tools attach parsed reply text as structured payload" {
   guard thread
     is @posoco.ToolOutcome::Success(
       content=thread_content,
-      structured=thread_structured
+      structured=thread_structured,
     ) else {
     fail("expected success")
   }

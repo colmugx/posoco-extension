@@ -494,7 +494,7 @@ async test "invalid or unauthorized Agent proposals are rejected before approval
       assert_true(
         host.generate(source, authorization=Some(planning_authority()))
         is Err(
-          @expansion.DecodeFailed(@expansion.MalformedJson(offset=_, reason=_))
+          @expansion.DecodeFailed(@expansion.MalformedJson(offset=_, reason=_)),
         ),
       )
       assert_eq(host.phase(), @expansion.Rejected)

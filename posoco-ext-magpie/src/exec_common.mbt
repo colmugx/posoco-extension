@@ -253,7 +253,7 @@ fn downgrade_tool_outcome(outcome : @posoco.ToolOutcome) -> @posoco.ToolOutcome 
     @posoco.ToolOutcome::SuccessWithAttachments(
       content~,
       structured~,
-      attachments~
+      attachments~,
     ) => {
       let merged = StringBuilder()
       merged.write_string(content)

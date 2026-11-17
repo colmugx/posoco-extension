@@ -166,10 +166,10 @@ async fn OpenCodeZenModelPort::chat_responses(
             "opencode-zen transport failure (stage=post): " + err.to_string(),
           )
       }
-      let body_text = @utf8.decode(body_data) catch {
+      let body_text = @utf8.decode(body_data.binary()) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen response parse failure (stage=decode_utf8, body_bytes=\{body_data.length()})",
+            "opencode-zen response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
           )
       }
       if !is_zen_http_success(response.code) {
@@ -206,7 +206,7 @@ async fn OpenCodeZenModelPort::chat_responses(
       )
       let headers = build_headers(self.config, scope)
       let url = responses_url(self.config)
-      let client = @http.post(url, headers~) catch {
+      let client = @http.post_stream(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
             "opencode-zen transport failure (stage=post_stream): " +
@@ -218,7 +218,7 @@ async fn OpenCodeZenModelPort::chat_responses(
           client.close()
           raise @posoco.ModelError::Transport(
             "opencode-zen transport failure (stage=write_body): " +
-            err.to_string(),
+            err.to_repr().to_string(),
           )
         }
       }
@@ -257,7 +257,7 @@ async fn OpenCodeZenModelPort::chat_responses(
             client.close()
             raise @posoco.ModelError::Transport(
               "opencode-zen transport failure (stage=read_stream): " +
-              err.to_string(),
+              err.to_repr().to_string(),
             )
           }
         }

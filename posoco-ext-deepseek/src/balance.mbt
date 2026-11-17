@@ -101,13 +101,7 @@ pub async fn fetch_deepseek_balance(
       return Err("DeepSeek balance request timed out (timeout_ms=10000)")
     err => return Err("DeepSeek balance request failed: " + err.to_string())
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
-      return Err("DeepSeek balance body read failed: " + err.to_string())
-    }
-  }
-  conn.close()
+  let body_bytes = conn.binary()
   if response.code < 200 || response.code >= 300 {
     return Err(
       "DeepSeek balance HTTP status: " +

@@ -83,7 +83,7 @@ async test "expand graph commits durably with one persist and one event" {
         workflow~,
         mapping~,
         digest~,
-        at_ms~
+        at_ms~,
       ) else {
       fail("expected GraphExpanded")
     }

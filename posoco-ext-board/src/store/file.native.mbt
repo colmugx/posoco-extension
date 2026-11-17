@@ -66,7 +66,8 @@ fn parent_directory(path : String) -> String {
 }
 
 ///|
-extern "c" fn truncate_file(fd : Int32, length : Int64) -> Int32 = "board_store_truncate"
+#borrow(fd)
+extern "c" fn truncate_file(fd : @types.Fd, length : Int64) -> Int32 = "board_store_truncate"
 
 ///|
 async fn FileBoardStore::journal(self : FileBoardStore) -> Bytes {
@@ -137,7 +138,7 @@ pub impl BoardStore for FileBoardStore with fn persist(self, snapshot, events) {
   let renamed = Ref(false)
   try {
     @async.protect_from_cancel(() => {
-      @fs.mkdir(self.directory, recursive=true, allow_exist=true)
+      @fs.mkdir(self.directory, recursive=true, allow_existing=true)
       let old_journal = self.journal()
       let scan = scan_journal_bytes(old_journal)
       // Fixed temp filename is intentional: serialized writers only. A stale

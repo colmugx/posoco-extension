@@ -68,7 +68,7 @@ impl @posoco.ModelPort for JournalModel with fn compact(
 ///|
 async test "real scoped Agent with native identity journal preserves S3 snapshots and rejects execution after restart" {
   let root = @fs.tmpdir(prefix="board-real-execution-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let board_store = @store.FileBoardStore(root~)
   let journal = @native.FileBoardExecutionStore(directory=root)
   let request : @execution.BoardExecutionRequest = {

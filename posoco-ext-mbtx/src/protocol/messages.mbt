@@ -22,7 +22,7 @@ pub(all) enum Message {
     input~ : Json,
     tools~ : Array[String],
     max_pending~ : Int32,
-    max_frame_bytes~ : Int32
+    max_frame_bytes~ : Int32,
   )
   Request(id~ : Int32, name~ : String, arguments~ : Json)
   Reply(id~ : Int32, outcome~ : Outcome)

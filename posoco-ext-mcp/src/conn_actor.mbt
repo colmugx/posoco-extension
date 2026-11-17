@@ -64,7 +64,7 @@ priv enum ConnQuery[ClientT] {
   FinishReconnectAcquire(
     generation~ : Int32,
     client~ : ClientT,
-    attempt_id~ : Int32
+    attempt_id~ : Int32,
   )
   Inspect
 }

@@ -57,7 +57,7 @@ fn native_proposal() -> @domain.BoardProposal {
 ///|
 async test "native file store commits one atomic expansion and reloads the durable record" {
   let root = @fs.tmpdir(prefix="board-s4e1-native-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
@@ -72,7 +72,7 @@ async test "native file store commits one atomic expansion and reloads the durab
       workflow~,
       mapping~,
       digest~,
-      at_ms~
+      at_ms~,
     ) else {
     fail("expected one GraphExpanded fact")
   }
@@ -139,7 +139,7 @@ async test "native file store commits one atomic expansion and reloads the durab
 ///|
 async test "native restart recovery keeps the expansion identity and rejects duplicate reuse durably" {
   let root = @fs.tmpdir(prefix="board-s4e1-duplicate-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let data = root + "/.cetas/board/default"
   let store = FileBoardStore::FileBoardStore(root~)
   assert_eq(store.persist(fixture(), []), Ok(()))
@@ -235,7 +235,7 @@ async test "all six native failure stages keep the expansion graph atomic includ
       DirectoryFsync,
     ] {
     let root = @fs.tmpdir(prefix="board-s4e1-stage-")
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let data = root + "/.cetas/board/default"
     let good = FileBoardStore::FileBoardStore(root~)
     assert_eq(good.persist(fixture(), []), Ok(()))

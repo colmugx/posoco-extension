@@ -26,33 +26,29 @@ async fn DeepSeekModelPort::chat_stream(
   )
   let headers = build_headers(self.config)
   let url = chat_url(self.config)
-  let client = @http.post(url, headers~) catch {
+  let client = @http.post_stream(url, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=post_stream): " + err.to_string(),
       )
   }
   client.write(@utf8.encode(body.stringify())[:]) catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=write_body): " + err.to_string(),
+        "DeepSeek transport failure (stage=write_body): " +
+        err.to_repr().to_string(),
       )
-    }
   }
   let response = client.end_request() catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=end_request): " + err.to_string(),
       )
-    }
   }
   if !is_deepseek_http_success(response.code) {
     let err_summary = read_error_body_summary(client) catch {
       _ => BodyUnavailable
     }
-    client.close()
     match
       classify_deepseek_http_status(
         "chat_stream.http_status",
@@ -72,12 +68,11 @@ async fn DeepSeekModelPort::chat_stream(
   let mut last_yield = @async.now()
   while !done {
     let line = client.read_until(b"\n") catch {
-      err => {
-        client.close()
+      err =>
         raise @posoco.ModelError::Transport(
-          "DeepSeek transport failure (stage=read_stream): " + err.to_string(),
+          "DeepSeek transport failure (stage=read_stream): " +
+          err.to_repr().to_string(),
         )
-      }
     }
     match line {
       Some(data) => {
@@ -100,17 +95,14 @@ async fn DeepSeekModelPort::chat_stream(
                   code="deepseek.reasoning_repetition_detected",
                   message="Repeated reasoning suffix detected; aborting stream",
                 )
-                client.close()
                 raise @posoco.ModelError::Transport(
                   "DeepSeek stream reasoning repetition detected (stage=read_stream, category=reasoning_repetition)",
                 )
               }
-              Some(@dk.ReasoningBreach::BudgetExceeded) => {
-                client.close()
+              Some(@dk.ReasoningBreach::BudgetExceeded) =>
                 raise @posoco.ModelError::Transport(
                   "DeepSeek reasoning stream exceeded configured max_reasoning_chars (stage=read_stream, category=reasoning_budget_exceeded)",
                 )
-              }
               None => ()
             }
           }
@@ -118,13 +110,11 @@ async fn DeepSeekModelPort::chat_stream(
           data_buffer = ""
         }
       }
-      None => {
-        client.close()
+      None =>
         match classify_deepseek_stream_termination(CleanEof) {
           Some(err) => raise err
           None => done = true
         }
-      }
     }
     // Yield at most every 16ms so the event loop can breathe during a
     // buffered SSE burst; task cancellation also lands on this pause.
@@ -134,7 +124,6 @@ async fn DeepSeekModelPort::chat_stream(
       last_yield = now
     }
   }
-  client.close()
   match classify_deepseek_stream_termination(ExplicitTerminal) {
     Some(err) => raise err
     None => ()

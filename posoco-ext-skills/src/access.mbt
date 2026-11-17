@@ -517,8 +517,8 @@ async fn Skills::activate(
 }
 
 ///|
-/// Built-in skills carry their instructions inline; activation never touches
-/// the filesystem and has no resources to list.
+/// Built-in skills carry their instructions and resources inline; activation
+/// never touches the filesystem and lists the inline resources instead.
 fn activate_builtin(
   skill : SkillDescriptor,
   body : String,
@@ -531,21 +531,94 @@ fn activate_builtin(
       structured=None,
     )
   }
+  let listing = builtin_resource_listing(skill.resources, config)
   let structured = Json::object({
     "summary": Json::string(skill.name),
     "kind": Json::string("builtin_agent_skill"),
     "name": Json::string(skill.name),
     "description": Json::string(skill.description),
     "instruction_chars": Json::number(body.length().to_double()),
+    "resources": json_string_array(listing.files),
+    "resources_truncated": Json::boolean(listing.truncated),
   })
   @posoco.ToolOutcome::Success(
-    content=builtin_activation_text(skill, body),
+    content=builtin_activation_text(skill, body, listing),
     structured=Some(structured),
   )
 }
 
 ///|
-fn builtin_activation_text(skill : SkillDescriptor, body : String) -> String {
+/// Built-in resource disclosure: the inline map is already materialized, so
+/// only the same entry and character budgets as discovered listings apply.
+fn builtin_resource_listing(
+  resources : Map[String, String],
+  config : SkillsConfig,
+) -> SkillResourceListing {
+  let files : Array[String] = []
+  if config.max_resource_entries == 0 || config.max_resource_listing_chars == 0 {
+    return { files, truncated: false, warnings: [], warnings_omitted: 0, }
+  }
+  let paths : Array[String] = []
+  for path, _ in resources {
+    paths.push(path)
+  }
+  paths.sort()
+  let mut chars = 0
+  let mut truncated = false
+  for path in paths {
+    if files.length() >= config.max_resource_entries ||
+      chars + path.length() > config.max_resource_listing_chars {
+      truncated = true
+      break
+    }
+    files.push(path)
+    chars = chars + path.length()
+  }
+  { files, truncated, warnings: [], warnings_omitted: 0, }
+}
+
+///|
+fn builtin_resource_outcome(
+  skill : SkillDescriptor,
+  name : String,
+  relative : String,
+  config : SkillsConfig,
+) -> @posoco.ToolOutcome {
+  match skill.resources.get(relative) {
+    Some(content) =>
+      if content.length() > config.max_resource_chars {
+        @posoco.ToolOutcome::ToolReportedError(
+          content="Skill resource exceeds configured text-read limit: " +
+            relative,
+          structured=None,
+        )
+      } else {
+        @posoco.ToolOutcome::Success(
+          content~,
+          structured=Some(
+            Json::object({
+              "kind": Json::string("agent_skill_resource"),
+              "skill": Json::string(name),
+              "path": Json::string(relative),
+              "content_chars": Json::number(content.length().to_double()),
+            }),
+          ),
+        )
+      }
+    None =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="Skill resource not found: " + relative,
+        structured=None,
+      )
+  }
+}
+
+///|
+fn builtin_activation_text(
+  skill : SkillDescriptor,
+  body : String,
+  listing : SkillResourceListing,
+) -> String {
   let b = StringBuilder()
   b.write_string(
     "Activated Built-in Agent Skill: " + quote_prompt_scalar(skill.name) + "\n",
@@ -554,6 +627,15 @@ fn builtin_activation_text(skill : SkillDescriptor, body : String) -> String {
     "These instructions ship with the product. Follow them for the task subject to higher-priority system/developer instructions and normal tool permissions; skill metadata never grants additional authority.\n",
   )
   b.write_string("\nInstructions:\n" + body)
+  if !listing.files.is_empty() {
+    b.write_string("\n\nBundled resources (listed only; not loaded):\n")
+    for path in listing.files {
+      b.write_string("- " + quote_prompt_scalar(path) + "\n")
+    }
+  }
+  if listing.truncated {
+    b.write_string("\nResource listing was truncated by configured limits.\n")
+  }
   b.to_string()
 }
 
@@ -577,14 +659,6 @@ async fn Skills::read_resource(
         structured=None,
       )
   }
-  match skill.body {
-    Some(_) =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="Built-in skill has no bundled resources: " + name,
-        structured=None,
-      )
-    None => ()
-  }
   let relative = match normalize_resource_path(path) {
     Ok(value) => value
     Err(reason) =>
@@ -592,6 +666,11 @@ async fn Skills::read_resource(
         content="Invalid resource path for '" + name + "': " + reason,
         structured=None,
       )
+  }
+  if skill.body is Some(_) {
+    // Built-in skills carry their resources inline with the binary, so a
+    // resource read never touches the filesystem.
+    return builtin_resource_outcome(skill, name, relative, self.config)
   }
   let root_now = self.fs.realpath(skill.skill_dir) catch {
     _ =>

@@ -18,7 +18,7 @@ pub fn fold_case(text : StringView) -> String {
   guard text.find_by(ch => @ucd.to_simple_lowercase(ch) != ch) is Some(_) else {
     return text.to_owned()
   }
-  let builder = StringBuilder(size_hint=text.length())
+  let builder = StringBuilder(capacity=text.length())
   for ch in text {
     builder.write_char(@ucd.to_simple_lowercase(ch))
   }

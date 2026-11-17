@@ -19,7 +19,7 @@ async test "io[native]: set_session_name persists metadata name" {
     Some(Json::String(v)) => assert_eq(v, "Refactor sprint")
     _ => fail("expected name metadata, got unexpected outcome")
   }
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -49,7 +49,7 @@ async test "io[native]: append_messages preserves a stored name" {
     _ => fail("name should survive append, got unexpected outcome")
   }
   assert_eq(loaded.messages.length(), 1)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -80,7 +80,7 @@ async test "io[native]: /name invoke renames the current session" {
     Some(Json::String(v)) => assert_eq(v, "Renamed via slash")
     _ => fail("expected persisted name, got unexpected outcome")
   }
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -127,7 +127,7 @@ async test "io[native]: /name accepts the object value field and rejects junk" {
     Some(Json::String(v)) => assert_eq(v, "Object form")
     _ => fail("expected the object-form rename, got unexpected outcome")
   }
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }

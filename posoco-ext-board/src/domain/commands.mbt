@@ -15,7 +15,7 @@ pub(all) enum BoardCommand {
     user_story~ : String,
     implementation_suggestions~ : String,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   UpdateTask(
     id~ : BoardTaskId,
@@ -26,19 +26,19 @@ pub(all) enum BoardCommand {
     user_story~ : String?,
     implementation_suggestions~ : String?,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   SetDependencies(
     id~ : BoardTaskId,
     dependencies~ : Array[BoardTaskId],
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   SetTaskModel(
     id~ : BoardTaskId,
     model~ : ModelSelection?,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   /// Replace the curated review handoff of one ticket with `Some`, or clear
   /// it with `None`. Only a ticket that is being worked on (Running) or is
@@ -47,13 +47,13 @@ pub(all) enum BoardCommand {
     id~ : BoardTaskId,
     review~ : ReviewReport?,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   MoveTask(
     id~ : BoardTaskId,
     to~ : BoardStage,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   /// Remove a non-running task. Used when shaping replaces one oversized
   /// ticket with independently executable tickets.
@@ -65,7 +65,7 @@ pub(all) enum BoardCommand {
     role~ : TeamRole,
     member_id~ : String,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   /// Select which delivery roles actually execute this ticket. RD is
   /// mandatory; SET and TE may be skipped for research/report work.
@@ -73,27 +73,27 @@ pub(all) enum BoardCommand {
     id~ : BoardTaskId,
     roles~ : Array[TeamRole],
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   QueueAttempt(
     id~ : AttemptId,
     task~ : BoardTaskId,
     kind~ : AttemptKind,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   StartAttempt(id~ : AttemptId, at_ms~ : Int64, expected_revision~ : Int64)
   FinishAttempt(
     id~ : AttemptId,
     outcome~ : AttemptOutcome,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   RecordReview(
     id~ : AttemptId,
     decision~ : ReviewDecision,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   /// One reviewer decision that changes two records atomically: the attempt
   /// records ChangesRequested and the ticket stores the durable feedback and
@@ -102,7 +102,7 @@ pub(all) enum BoardCommand {
     id~ : AttemptId,
     feedback~ : String,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
   /// S4E1 atomic additive graph expansion: all detached candidate tasks in
   /// stage Created, one durable expansion record and one GraphExpanded
@@ -113,7 +113,7 @@ pub(all) enum BoardCommand {
     parent~ : BoardTaskId,
     workflow~ : String,
     at_ms~ : Int64,
-    expected_revision~ : Int64
+    expected_revision~ : Int64,
   )
 }
 
@@ -161,7 +161,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       user_story~,
       implementation_suggestions~,
       at_ms~,
-      expected_revision~
+      expected_revision~,
     ) =>
       CreateTask(
         id~,
@@ -184,7 +184,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       user_story~,
       implementation_suggestions~,
       at_ms~,
-      expected_revision~
+      expected_revision~,
     ) =>
       match definition_of_done {
         Some(items) =>
@@ -229,7 +229,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       parent~,
       workflow~,
       at_ms~,
-      expected_revision~
+      expected_revision~,
     ) =>
       ExpandGraph(
         expansion~,

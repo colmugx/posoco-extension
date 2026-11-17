@@ -129,7 +129,7 @@ fn message_to_json(msg : @posoco.Message) -> Json {
       content~,
       tool_calls~,
       reasoning~,
-      finish_reason~
+      finish_reason~,
     ) => {
       let base = Map::from_array([
         ("role", Json::string("assistant")),

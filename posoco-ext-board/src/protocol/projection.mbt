@@ -459,7 +459,7 @@ pub fn project_event(
       workflow~,
       mapping~,
       digest~,
-      at_ms~
+      at_ms~,
     ) =>
       wire_event(kind="board.graph.expanded", payload=[
         ("expansion_id", Json::string(expansion.value)),

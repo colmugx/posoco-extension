@@ -26,8 +26,8 @@ async fn OpenRouterModelPort::openrouter_post_chat_json(
       )
   }
   if !is_openrouter_http_success(response.code) {
-    let byte_length = body_data.length()
-    let text = @utf8.decode(body_data) catch {
+    let byte_length = body_data.binary().length()
+    let text = @utf8.decode(body_data.binary()) catch {
       _ =>
         raise @posoco.ModelError::Transport(
           format_openrouter_http_error(
@@ -53,10 +53,10 @@ async fn OpenRouterModelPort::openrouter_post_chat_json(
       None => ()
     }
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "openrouter response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.length()})",
+        "openrouter response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
       )
   }
   @json.parse(body_text) catch {

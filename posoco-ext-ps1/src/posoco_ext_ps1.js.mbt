@@ -194,7 +194,7 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
   // coroutine in a cancel-protected suspension, so an aborted turn would
   // hang until the child exits on its own. With the controller, the
   // suspension unwinds on cancellation and the deferred kill above runs.
-  let wait_controller = @js_async.AbortController::new()
+  let wait_controller = @js_async.AbortController::AbortController()
   let waited : Result[Ps1Collect, Error] = Ok(
     proc.collect(ps1_drain_grace_ms).wait(abort_controller=wait_controller),
   ) catch {

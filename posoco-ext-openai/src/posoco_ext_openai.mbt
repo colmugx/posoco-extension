@@ -624,7 +624,7 @@ async fn OpenAIModelPort::chat_stream(
   let headers = build_headers(self.config, Some(session_id), true)
   codex_apply_body_headers(headers, payload)
   let (origin, path_prefix) = split_openai_base_url(self.config.base_url)
-  let client = @http.post(origin + path_prefix + "/responses", headers~) catch {
+  let client = @http.post_stream(origin + path_prefix + "/responses", headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
@@ -640,18 +640,20 @@ async fn OpenAIModelPort::chat_stream(
       client.write(bytes) catch {
         err =>
           raise @posoco.ModelError::Transport(
-            "OpenAI transport failure (stage=write_body): " + err.to_string(),
+            "OpenAI transport failure (stage=write_body): " +
+            err.to_repr().to_string(),
           )
       }
     Plain(text) =>
       client.write(@utf8.encode(text)[:]) catch {
         err =>
           raise @posoco.ModelError::Transport(
-            "OpenAI transport failure (stage=write_body): " + err.to_string(),
+            "OpenAI transport failure (stage=write_body): " +
+            err.to_repr().to_string(),
           )
       }
   }
-  client.flush() catch {
+  client.flush_partial_data() catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=flush): " + err.to_string(),
@@ -818,7 +820,7 @@ async fn openai_post_json(
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(config, session_id, false)
   let (origin, path_prefix) = split_openai_base_url(config.base_url)
-  let client = @http.post(origin + path_prefix + path, headers~) catch {
+  let client = @http.post_stream(origin + path_prefix + path, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),

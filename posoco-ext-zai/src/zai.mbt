@@ -49,7 +49,7 @@ fn downgrade_tool_outcome(outcome : @posoco.ToolOutcome) -> @posoco.ToolOutcome 
     @posoco.ToolOutcome::SuccessWithAttachments(
       content~,
       structured~,
-      attachments~
+      attachments~,
     ) => {
       let merged = StringBuilder()
       merged.write_string(content)
@@ -223,10 +223,10 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
             "zai transport failure (stage=post): " + err.to_string(),
           )
       }
-      let body_text = @utf8.decode(body_bytes) catch {
+      let body_text = @utf8.decode(body_bytes.binary()) catch {
         _ =>
           raise @posoco.ModelError::ResponseParse(
-            "zai response parse failure (stage=decode_utf8, body_bytes=\{body_bytes.length()})",
+            "zai response parse failure (stage=decode_utf8, body_bytes=\{body_bytes.binary().length()})",
           )
       }
       if !is_zai_http_success(response.code) {
@@ -254,7 +254,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
       }
     }
     Stream(on_chunk) => {
-      let client = @http.post(
+      let client = @http.post_stream(
         messages_url(self.config),
         headers=build_headers(self.config),
       ) catch {
@@ -264,24 +264,20 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           )
       }
       client.write(@utf8.encode(body.stringify())[:]) catch {
-        err => {
-          client.close()
+        err =>
           raise @posoco.ModelError::Transport(
-            "zai transport failure (stage=write_body): " + err.to_string(),
+            "zai transport failure (stage=write_body): " +
+            err.to_repr().to_string(),
           )
-        }
       }
       let response = client.end_request() catch {
-        err => {
-          client.close()
+        err =>
           raise @posoco.ModelError::Transport(
             "zai transport failure (stage=end_request): " + err.to_string(),
           )
-        }
       }
       if !is_zai_http_success(response.code) {
         let err_body = read_error_body_text(client) catch { _ => None }
-        client.close()
         match
           classify_zai_http_error(
             "chat_stream.http_status",
@@ -303,12 +299,11 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until(b"\n") catch {
-          err => {
-            client.close()
+          err =>
             raise @posoco.ModelError::Transport(
-              "zai transport failure (stage=read_stream): " + err.to_string(),
+              "zai transport failure (stage=read_stream): " +
+              err.to_repr().to_string(),
             )
-          }
         }
         match line {
           Some(data) => {
@@ -329,12 +324,10 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
               )
             }
           }
-          None => {
-            client.close()
+          None =>
             raise @posoco.ModelError::ResponseParse(
               "zai SSE truncated (stage=eof, terminal_marker=missing)",
             )
-          }
         }
         // Yield at most every 16ms so the event loop can breathe during a
         // buffered SSE burst; task cancellation also lands on this pause.
@@ -344,7 +337,6 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           last_yield = now
         }
       }
-      client.close()
       let result = @messages.messages_stream_result(
         provider="zai",
         acc~,

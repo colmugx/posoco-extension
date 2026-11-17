@@ -42,16 +42,16 @@ async fn DeepSeekModelPort::post_chat_once(
       classify_deepseek_http_status(
         "chat.http_status",
         response.code,
-        BodyBytesUtf8(body_data.length()),
+        BodyBytesUtf8(body_data.binary().length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let body_text = @utf8.decode(body_data) catch {
+  let body_text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.length()})",
+        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.binary().length()})",
       )
   }
   let resp_json : Json = @json.parse(body_text) catch {

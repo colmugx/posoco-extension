@@ -177,15 +177,7 @@ pub async fn fetch_deepseek_models(
         "DeepSeek list models request failed: " + err.to_string(),
       )
   }
-  let body_bytes = conn.read_all() catch {
-    err => {
-      conn.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek list models body read failed: " + err.to_string(),
-      )
-    }
-  }
-  conn.close()
+  let body_bytes = conn.binary()
   if response.code < 200 || response.code >= 300 {
     raise @posoco.ModelError::Transport(
       "DeepSeek list models HTTP status: " +

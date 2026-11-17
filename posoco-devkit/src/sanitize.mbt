@@ -40,7 +40,7 @@ pub fn display_strip(text : String) -> String {
   guard text.find_by(ch => is_display_unsafe(ch)) is Some(_) else {
     return text
   }
-  let builder = StringBuilder(size_hint=text.length())
+  let builder = StringBuilder(capacity=text.length())
   for ch in text {
     if !is_display_unsafe(ch) {
       builder.write_char(ch)
@@ -59,7 +59,7 @@ pub fn display_strip(text : String) -> String {
 /// same string again.
 pub fn display_label(text : String, replacement~ : Char = ' ') -> String {
   guard text.find_by(ch => is_control(ch)) is Some(_) else { return text }
-  let builder = StringBuilder(size_hint=text.length())
+  let builder = StringBuilder(capacity=text.length())
   for ch in text {
     builder.write_char(if is_control(ch) { replacement } else { ch })
   }

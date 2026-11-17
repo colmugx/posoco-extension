@@ -102,6 +102,12 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
           "oauth HTTP POST failed: " + err.to_string(),
         )
     }
+    let body = body.text() catch {
+      err =>
+        raise OAuthError::HttpError(
+          "oauth HTTP POST body decode failed: " + err.to_string(),
+        )
+    }
     { status: response.code, body, }
   }) catch {
     @async.TimeoutError =>
@@ -127,9 +133,15 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn get(
     for k, v in headers {
       http_headers[k] = v
     }
-    let (response, body) = @http.get_text(url, headers=http_headers) catch {
+    let (response, body) = @http.get(url, headers=http_headers) catch {
       err =>
         raise OAuthError::HttpError("oauth HTTP GET failed: " + err.to_string())
+    }
+    let body = body.text() catch {
+      err =>
+        raise OAuthError::HttpError(
+          "oauth HTTP GET body decode failed: " + err.to_string(),
+        )
     }
     { status: response.code, body, }
   }) catch {

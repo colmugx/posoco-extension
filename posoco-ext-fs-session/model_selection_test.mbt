@@ -208,7 +208,7 @@ async test "io[native]: observed selection decorates the next save" {
   assert_eq(s.effort, Some("high"))
   // Pre-existing metadata keys survive the decoration.
   assert_eq(s.name, Some("keep"))
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -228,7 +228,7 @@ async test "io[native]: no observation leaves metadata untouched" {
   }
   assert_eq(s.model, None)
   assert_eq(s.effort, None)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -259,7 +259,7 @@ async test "io[native]: foreign event traffic is ignored" {
     e => fail("summary failed: \{e}")
   }
   assert_eq(s.model, None)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -282,7 +282,7 @@ async test "io[native]: first append creates a decorated journal" {
   }
   assert_eq(s.model, Some("z/d"))
   assert_eq(s.effort, None)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -316,7 +316,7 @@ async test "io[native]: append rewrites line 1 after a selection change" {
     e => fail("reload failed: \{e}")
   }
   assert_eq(reloaded.messages.length(), 2)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -346,7 +346,7 @@ async test "io[native]: append without a change keeps the metadata line" {
     e => fail("reload failed: \{e}")
   }
   assert_eq(reloaded.messages.length(), 2)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -374,7 +374,7 @@ async test "io[native]: corrupt metadata line is skipped, not crashed on" {
   store.append_messages("sess_bad", 1, [selection_test_message("two")][:]) catch {
     e => fail("append should not raise on corrupt line 1: \{e}")
   }
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -409,7 +409,7 @@ async test "io[native]: checkpoint with metadata keeps the selection record" {
     e => fail("reload failed: \{e}")
   }
   assert_eq(reloaded.messages.length(), 2)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -460,7 +460,7 @@ async test "io[native]: v2 injection persists on save and append" {
     )
     is None,
   )
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -498,7 +498,7 @@ async test "io[native]: lookup projects an owner-scoped neutral selection ref" {
     e => fail("lookup failed: \{e}")
   }
   assert_true(foreign is None)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -537,7 +537,7 @@ async test "io[native]: control snapshot follows committed selection across jour
     Some(selection) => assert_eq(selection.model_id, "second")
     None => fail("missing selection snapshot")
   }
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }

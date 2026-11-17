@@ -28,7 +28,7 @@ async test "io[native]: list_ids returns sorted stems of jsonl files only" {
   let ids = store.list_ids() catch { e => fail("list_ids failed: \{e}") }
   // Lexicographic order — clock-minted ids therefore sort chronologically.
   assert_eq(ids, ["cetas-100", "cetas-20", "cetas-300"])
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -41,7 +41,7 @@ async test "io[native]: list_ids on an empty root is empty" {
     e => fail("list_ids on empty root failed: \{e}")
   }
   assert_eq(ids, [])
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
 }
@@ -49,7 +49,7 @@ async test "io[native]: list_ids on an empty root is empty" {
 ///|
 async test "io[native]: list_ids on a missing root is empty" {
   let root = fresh_root("list-missing")
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)

@@ -185,15 +185,13 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
           "OpenAI models request failed: " + err.to_string(),
         )
     }
-    let body_bytes = conn.read_all() catch {
-      err => {
-        conn.close()
+    let body_bytes = conn.binary() catch {
+      err =>
         raise @posoco.ModelError::Transport(
           "OpenAI models response body read failed: " + err.to_string(),
         )
-      }
     }
-    conn.close()
+
     let body = @utf8.decode(body_bytes) catch {
       _ =>
         raise @posoco.ModelError::Transport(

@@ -55,7 +55,7 @@ priv enum BoardMsg {
   Submit(@domain.BoardCommand, SubmissionCompletion)
   WaitReady(
     waiter~ : Int64,
-    completion~ : @aqueue.Queue[Result[Unit, BoardCoordinatorError]]
+    completion~ : @aqueue.Queue[Result[Unit, BoardCoordinatorError]],
   )
   CancelReady(waiter~ : Int64)
   Worker(WorkerReport)
@@ -71,7 +71,7 @@ priv enum WorkerReport {
   Persisted(ticket~ : Int64, outcome~ : Result[Unit, @store.BoardStoreError])
   Reloaded(
     ticket~ : Int64,
-    outcome~ : Result[@domain.BoardStateSnapshot, @store.BoardStoreError]
+    outcome~ : Result[@domain.BoardStateSnapshot, @store.BoardStoreError],
   )
 }
 

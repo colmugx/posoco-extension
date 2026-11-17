@@ -1,7 +1,7 @@
 ///|
 async test "native journal refuses symlinked root journal and temporary paths" {
   let root = @fs.tmpdir(prefix="board-execution-links-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.symlink(root + "/linked-root", target=root)
   let linked_root = @native.FileBoardExecutionStore(
     directory=root + "/linked-root",

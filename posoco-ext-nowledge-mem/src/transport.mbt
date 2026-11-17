@@ -193,7 +193,11 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
           "nmem transport failure (stage=post_json): " + err.to_string(),
         )
     }
-    Ok({ status: response.code, body: client, })
+    let body = client.json() catch {
+      err =>
+        return Err("nmem transport failure (stage=post_json.decode): \{err}")
+    }
+    Ok({ status: response.code, body, })
   }) catch {
     @async.TimeoutError =>
       Err(

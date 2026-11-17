@@ -213,7 +213,7 @@ async fn ShellTools::bash_foreground(
   // coroutine in a cancel-protected suspension, so an aborted turn would
   // hang until the child exits on its own. With the controller, the
   // suspension unwinds on cancellation and the deferred kill above runs.
-  let wait_controller = @js_async.AbortController::new()
+  let wait_controller = @js_async.AbortController::AbortController()
   let waited : Result[ShellCollected, Error] = Ok(
     proc.exit_code().wait(abort_controller=wait_controller),
   ) catch {

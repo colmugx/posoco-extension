@@ -335,7 +335,7 @@ test "tool_event_message: terminal nodes map onto model-visible tool messages" {
       @posoco.Message::ToolMessage(
         outcome=Success(content="hit", structured=None),
         ..
-      )
+      ),
     ) else {
     fail("expected a Success ToolMessage")
   }
@@ -350,7 +350,7 @@ test "tool_event_message: terminal nodes map onto model-visible tool messages" {
       ),
     )
     is Some(
-      @posoco.Message::ToolMessage(outcome=SuccessWithAttachments(..), ..)
+      @posoco.Message::ToolMessage(outcome=SuccessWithAttachments(..), ..),
     ) else {
     fail("expected a SuccessWithAttachments ToolMessage")
   }
@@ -364,7 +364,7 @@ test "tool_event_message: terminal nodes map onto model-visible tool messages" {
       @posoco.Message::ToolMessage(
         outcome=RuntimeFailure(message="io broke", ..),
         ..
-      )
+      ),
     ) else {
     fail("expected a RuntimeFailure ToolMessage")
   }
@@ -378,7 +378,7 @@ test "tool_event_message: terminal nodes map onto model-visible tool messages" {
       @posoco.Message::ToolMessage(
         outcome=ToolReportedError(content="exit 1", ..),
         ..
-      )
+      ),
     ) else {
     fail("expected a ToolReportedError ToolMessage")
   }
@@ -389,7 +389,7 @@ test "tool_event_message: terminal nodes map onto model-visible tool messages" {
       @posoco.Message::ToolMessage(
         outcome=NotExecuted(reason=UnknownTool, ..),
         ..
-      )
+      ),
     ) else {
     fail("expected a NotExecuted ToolMessage")
   }

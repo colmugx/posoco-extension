@@ -14,7 +14,7 @@ fn reserved() -> @execution.BoardExecutionBinding {
 ///|
 async test "native journal persists identities separately from S3 Board state and locks competing owners" {
   let root = @fs.tmpdir(prefix="board-execution-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let first = @native.FileBoardExecutionStore(directory=root)
   assert_eq(first.load(), Ok([]))
   let competitor = @native.FileBoardExecutionStore(directory=root)
@@ -36,7 +36,7 @@ async test "native journal persists identities separately from S3 Board state an
 async test "native pre and post rename journal failures forbid subsequent writes" {
   for stage in [@native.BeforeRename, @native.AfterRename] {
     let root = @fs.tmpdir(prefix="board-execution-failure-")
-    defer @fs.rmdir(root, recursive=true)
+    defer @fs.remove(root, recursive=true)
     let store = @native.FileBoardExecutionStore(directory=root, fail_at=stage)
     assert_eq(store.load(), Ok([]))
     assert_true(store.persist([reserved()]) is Err(@execution.StoreUnavailable))
@@ -57,7 +57,7 @@ async test "native pre and post rename journal failures forbid subsequent writes
 ///|
 async test "native journal rejects corrupt files and existing temp paths without overwriting" {
   let root = @fs.tmpdir(prefix="board-execution-unsafe-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.write_text(
     root + "/executions.json",
     "{\"schema_version\":2,\"bindings\":[]}",
@@ -78,7 +78,7 @@ async test "native journal rejects corrupt files and existing temp paths without
 ///|
 async test "stale lock after crash is never removed or automatically reacquired" {
   let root = @fs.tmpdir(prefix="board-execution-stale-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.write_text(root + "/execution.lock", "old owner unknown")
   let store = @native.FileBoardExecutionStore(directory=root)
   assert_true(store.load() is Err(@execution.StoreUnavailable))

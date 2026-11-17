@@ -193,7 +193,7 @@ async fn WsMock::bind(scripts : Array[Array[String]]) -> WsMock {
   let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => abort("ws loopback probe bind failed")
   }
-  let port = probe.addr.port()
+  let port = loopback_port(probe.addr)
   probe.close()
   let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port~)) catch {
     _ => abort("ws loopback server bind failed")
@@ -279,7 +279,7 @@ async test "codex ws loopback reuses the connection and sends the delta" {
   @async.with_timeout(20000, () => {
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => mock.serve(), allow_failure=true)
-      let config = ws_mock_config(mock.server.addr.port())
+      let config = ws_mock_config(loopback_port(mock.server.addr).to_int())
       let port_impl = OpenAIModelPort(config)
       let messages : Array[@posoco.Message] = []
       // Two turns over one cached connection; the mocked events advance the
@@ -325,9 +325,9 @@ async test "codex ws unreachable endpoint falls back and marks the session" {
   let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => abort("dead port probe failed")
   }
-  let port = probe.addr.port()
+  let port = loopback_port(probe.addr)
   probe.close()
-  let config = ws_mock_config(port)
+  let config = ws_mock_config(port.to_int())
   let port_impl = OpenAIModelPort(config)
   let messages : Array[@posoco.Message] = []
   let outcome = port_impl.codex_ws_chat(
@@ -373,7 +373,9 @@ async test "codex ws hosted search renders citations and preserves exact continu
         mock.stopping = true
         mock.server.close()
       }
-      let port_impl = OpenAIModelPort(ws_mock_config(mock.server.addr.port()))
+      let port_impl = OpenAIModelPort(
+        ws_mock_config(loopback_port(mock.server.addr).to_int()),
+      )
       let options : @posoco.ChatOptions = {
         temperature: None,
         max_output_tokens: None,
@@ -463,7 +465,9 @@ async test "codex ws does not fall back after hosted search starts before text" 
           "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"web_search_call\",\"id\":\"ws_started\",\"status\":\"in_progress\"}}",
         )
       })
-      let port_impl = OpenAIModelPort(ws_mock_config(mock.server.addr.port()))
+      let port_impl = OpenAIModelPort(
+        ws_mock_config(loopback_port(mock.server.addr).to_int()),
+      )
       let outcome = attempt_async(() => {
         port_impl.codex_ws_chat(
           "ws-search-interrupted",

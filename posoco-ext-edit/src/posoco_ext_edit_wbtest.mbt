@@ -141,13 +141,13 @@ async test "edit_directory_is_loud_without_os_error" {
       error => Err(error)
     }
     match outcome {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
-        assert_eq(
-          message,
-          "edit: read failed for '" +
-          @devkit.sanitize_path(dir) +
-          "': Is a directory",
-        )
+      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
+        // The core wraps OS failures in ReaderError.TransportError, so the
+        // reason arrives as the inner error's repr; the path prefix and the
+        // OS cause must both stay present.
+        assert_true(message.contains(@devkit.sanitize_path(dir)))
+        assert_true(message.contains("Is a directory"))
+      }
       _ => fail("expected editing a directory to fail reading")
     }
   }

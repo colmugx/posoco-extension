@@ -7,7 +7,7 @@ fn mbtx_is_windows() -> Bool {
 
 ///|
 async fn tc_fs_mkdir(path : String) -> Unit {
-  @fs.mkdir(path, recursive=true, allow_exist=true)
+  @fs.mkdir(path, recursive=true, allow_existing=true)
 }
 
 ///|

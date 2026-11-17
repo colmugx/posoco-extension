@@ -103,7 +103,7 @@ pub fn tool_event_message(event : @posoco.TurnEvent) -> @posoco.Message? {
       call~,
       content~,
       structured~,
-      attachments~
+      attachments~,
     ) => {
       let outcome = if attachments.is_empty() {
         @posoco.ToolOutcome::Success(content~, structured~)

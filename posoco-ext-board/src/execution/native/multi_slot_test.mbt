@@ -81,7 +81,7 @@ fn journal_request(
 ///|
 async test "native journal serializes multi-slot identities with v1 records lock and restart semantics" {
   let root = @fs.tmpdir(prefix="board-execution-multi-slot-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let journal = @native.FileBoardExecutionStore(directory=root)
   @async.with_task_group(group => {
     let backend = @backend.BoardBackend(store=@store.FileBoardStore(root~), now_ms=() => {

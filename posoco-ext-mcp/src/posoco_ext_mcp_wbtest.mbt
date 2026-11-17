@@ -296,7 +296,7 @@ test "list_tools_failure_message_distinguishes_timeout" {
 ///|
 async test "reconnect_one_rejects_missing_connection" {
   let bridge = MCPToolBridge()
-  match bridge.reconnect_one(0) {
+  match bridge.reconnect_one_admitted(0) {
     Err(message) => assert_true(message.contains("no longer present"))
     Ok(_) => fail("expected missing connection rejection")
   }

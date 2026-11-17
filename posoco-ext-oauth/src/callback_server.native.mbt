@@ -22,7 +22,7 @@ pub impl CallbackServer for NativeCallbackServer with fn start(
   self : NativeCallbackServer,
   port : Int32,
 ) -> Unit raise OAuthError {
-  let addr = @socket.Addr::resolve("127.0.0.1", port~) catch {
+  let addr = @socket.Addr::resolve("127.0.0.1", port=port.to_uint16()) catch {
     err => raise OAuthError::HttpError("resolve: " + err.to_string())
   }
   let srv = @http.Server(addr) catch {

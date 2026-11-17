@@ -79,13 +79,13 @@ pub async fn DeepSeekModelPort::json_schema_completion(
       classify_deepseek_http_status(
         "json_schema.http_status",
         response.code,
-        BodyBytesUtf8(body_data.length()),
+        BodyBytesUtf8(body_data.binary().length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let text = @utf8.decode(body_data) catch {
+  let text = @utf8.decode(body_data.binary()) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "DeepSeek JSON schema response invalid UTF-8",

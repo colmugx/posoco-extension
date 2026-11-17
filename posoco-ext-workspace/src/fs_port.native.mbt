@@ -211,7 +211,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn mkdir(
   path,
   recursive~,
 ) {
-  @fs.mkdir(path, recursive~, allow_exist=true) catch {
+  @fs.mkdir(path, recursive~, allow_existing=true) catch {
     _ => raise fs_err("mkdir")
   }
 }
