@@ -150,7 +150,8 @@ pub impl @workspace.WorkspaceFs for PstackFakeFs with fn walk(
 fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
   fs.add_dir("/bundle/skills", ["poteto-mode"])
   fs.add_dir("/bundle/skills/poteto-mode", ["SKILL.md"])
-  let skill_md = #|---
+  let skill_md =
+    #|---
     #|name: poteto-mode
     #|description: PStack engineering workflow entry point
     #|---
@@ -159,13 +160,16 @@ fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
     #|Use the engineering workflow and load the relevant playbook.
   fs.add_file("/bundle/skills/poteto-mode/SKILL.md", skill_md)
   fs.add_dir("/bundle/skills/poteto-mode", ["SKILL.md", "resources"])
-  fs.add_dir("/bundle/skills/poteto-mode/resources", ["posoco-harness.md", "upstream"])
+  fs.add_dir("/bundle/skills/poteto-mode/resources", [
+    "posoco-harness.md", "upstream",
+  ])
   fs.add_file(
-    "/bundle/skills/poteto-mode/resources/posoco-harness.md",
-    "# Posoco runtime mapping",
+    "/bundle/skills/poteto-mode/resources/posoco-harness.md", "# Posoco runtime mapping",
   )
   fs.add_dir("/bundle/skills/poteto-mode/resources/upstream", ["skills"])
-  fs.add_dir("/bundle/skills/poteto-mode/resources/upstream/skills", ["poteto-mode"])
+  fs.add_dir("/bundle/skills/poteto-mode/resources/upstream/skills", [
+    "poteto-mode",
+  ])
   fs.add_dir(
     "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode",
     ["SKILL.md", "playbooks"],
@@ -183,7 +187,9 @@ fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
   )
   for name in playbooks {
     fs.add_file(
-      "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/" + name + ".md",
+      "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/" +
+      name +
+      ".md",
       "# " + name + " playbook: Trace, change, verify.",
     )
   }
@@ -231,7 +237,8 @@ async test "discover: missing bundle is rejected rather than silently using a su
       home="/home/test",
       assets_root="/bundle",
       discovery_options=options,
-    ) is None,
+    )
+    is None,
   )
 }
 
@@ -257,19 +264,17 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_eq(manifest.prompt_contributors.length(), 1)
   assert_eq(manifest.commands.length(), 2)
   let tools = @posoco.ToolProvider::list_tools(manifest.tools[0])
-  assert_eq(
-    tools.map(t => t.name.to_string()),
-    ["activate_skill", "read_skill_resource", "skill_search"],
-  )
+  assert_eq(tools.map(t => t.name.to_string()), [
+    "activate_skill", "read_skill_resource", "skill_search",
+  ])
   let prompt = @posoco.SystemPromptContributor::system_prompt(
     manifest.prompt_contributors[0],
   )
   assert_true(prompt.contains("poteto-mode"))
   assert_true(prompt.contains("activate_skill"))
-  assert_eq(
-    @posoco.CommandPort::commands(pstack).map(c => c.id),
-    ["poteto-mode"],
-  )
+  assert_eq(@posoco.CommandPort::commands(pstack).map(c => c.id), [
+    "poteto-mode",
+  ])
 }
 
 ///|
@@ -289,11 +294,7 @@ async test "command: poteto-mode returns the structured skill activation envelop
     discovery_options=options,
   ).unwrap()
   match
-    @posoco.CommandPort::invoke(
-      pstack,
-      "poteto-mode",
-      Json::object(Map([])),
-    ) {
+    @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::object(Map([]))) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_eq(feedback, "activated skill: poteto-mode")
       match structured {
@@ -313,13 +314,15 @@ async test "command: poteto-mode returns the structured skill activation envelop
 ///|
 async test "kinds: packaged presets parse into native KindSpec values" {
   let fs = PstackFakeFs::new()
-  let poteto_agent = #|---
+  let poteto_agent =
+    #|---
     #|name: poteto-agent
     #|description: General PStack engineering agent
     #|mode: workspace_write
     #|---
     #|Work on the assigned engineering task.
-  let comment_sicko = #|---
+  let comment_sicko =
+    #|---
     #|name: comment-sicko
     #|description: Adversarial code reviewer
     #|mode: readonly
@@ -339,7 +342,8 @@ async test "kinds: packaged presets parse into native KindSpec values" {
 ///|
 async test "kinds: missing preset fails loudly instead of silently dropping a role" {
   let fs = PstackFakeFs::new()
-  let poteto_agent = #|---
+  let poteto_agent =
+    #|---
     #|name: poteto-agent
     #|description: General PStack engineering agent
     #|---

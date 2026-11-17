@@ -8,10 +8,9 @@ test "pstack adds one bundled skill root after the host roots" {
     "/installed/pstack/assets",
     base~,
   )
-  assert_eq(
-    options.extra_roots,
-    ["/host/skills", "/installed/pstack/assets/skills"],
-  )
+  assert_eq(options.extra_roots, [
+    "/host/skills", "/installed/pstack/assets/skills",
+  ])
   assert_true(options.include_repository)
   assert_true(options.include_user)
 }

@@ -26,6 +26,7 @@ supported_targets = "native"
 
 options(
   "native-stub": [ "random_stub.c" ],
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
 )
 
 rule(

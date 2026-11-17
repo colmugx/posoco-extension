@@ -1,6 +1,6 @@
 ///|
-//// A native Posoco extension that owns one Skills runtime, ships the
-//// PStack workflows as file-backed resources, and exposes its slash command.
+/// A native Posoco extension that owns one Skills runtime, ships the
+/// PStack workflows as file-backed resources, and exposes its slash command.
 pub struct Pstack {
   skills : @skills.Skills
   events : @posoco.Events?
@@ -8,9 +8,9 @@ pub struct Pstack {
 }
 
 ///|
-//// Low-level adapter for a Skills runtime that already contains poteto-mode.
+/// Low-level adapter for a Skills runtime that already contains poteto-mode.
 /// Prefer Pstack::discover with the installed assets root so the primary
-//// method and playbooks remain accessible.
+/// method and playbooks remain accessible.
 pub fn Pstack::from_skills(
   skills : @skills.Skills,
   events~ : @posoco.Events? = None,
@@ -22,8 +22,8 @@ pub fn Pstack::from_skills(
 }
 
 ///|
-//// The installed PStack assets directory holds SKILL.md, original playbooks,
-//// principles, and optional Kind presets.
+/// The installed PStack assets directory holds SKILL.md, original playbooks,
+/// principles, and optional Kind presets.
 fn asset_path(root : String, suffix : String) -> String {
   if root.has_suffix("/") {
     root + suffix
@@ -33,7 +33,7 @@ fn asset_path(root : String, suffix : String) -> String {
 }
 
 ///|
-//// Add an optional PStack asset skill root after the host's existing roots.
+/// Add an optional PStack asset skill root after the host's existing roots.
 /// Retained for hosts that intentionally want file-based overrides.
 pub fn pstack_discovery_options(
   assets_root : String,
@@ -67,15 +67,10 @@ pub async fn Pstack::discover(
   }
   let skill_dir = asset_path(assets_root, "skills/poteto-mode")
   let required = [
-    "SKILL.md",
-    "resources/posoco-harness.md",
-    "resources/upstream/skills/poteto-mode/SKILL.md",
-    "resources/upstream/skills/poteto-mode/playbooks/investigation.md",
-    "resources/upstream/skills/poteto-mode/playbooks/bug-fix.md",
-    "resources/upstream/skills/poteto-mode/playbooks/feature.md",
-    "resources/upstream/skills/poteto-mode/playbooks/refactoring.md",
-    "resources/upstream/skills/poteto-mode/playbooks/perf-issue.md",
-    "resources/upstream/skills/poteto-mode/playbooks/prototype.md",
+    "SKILL.md", "resources/posoco-harness.md", "resources/upstream/skills/poteto-mode/SKILL.md",
+    "resources/upstream/skills/poteto-mode/playbooks/investigation.md", "resources/upstream/skills/poteto-mode/playbooks/bug-fix.md",
+    "resources/upstream/skills/poteto-mode/playbooks/feature.md", "resources/upstream/skills/poteto-mode/playbooks/refactoring.md",
+    "resources/upstream/skills/poteto-mode/playbooks/perf-issue.md", "resources/upstream/skills/poteto-mode/playbooks/prototype.md",
   ]
   for path in required {
     let exists = fs.exists(asset_path(skill_dir, path)) catch { _ => false }
@@ -84,33 +79,34 @@ pub async fn Pstack::discover(
     }
   }
   let options = pstack_discovery_options(assets_root, base=discovery_options)
-  match @skills.Skills::discover(
-    fs,
-    cwd~,
-    home~,
-    discovery_options=options,
-    config~,
-  ) {
+  match
+    @skills.Skills::discover(
+      fs,
+      cwd~,
+      home~,
+      discovery_options=options,
+      config~,
+    ) {
     Some(skills) => Pstack::from_skills(skills, events~)
     None => None
   }
 }
 
 ///|
-//// Access the exact catalog used for model-facing skill activation.
+/// Access the exact catalog used for model-facing skill activation.
 pub fn Pstack::catalog(self : Pstack) -> @skills.SkillCatalog {
   self.skills.catalog()
 }
 
 ///|
-//// Whether this Agent session has activated Poteto Mode.
+/// Whether this Agent session has activated Poteto Mode.
 pub fn Pstack::is_mode_active(self : Pstack) -> Bool {
   self.mode_active
 }
 
 ///|
-//// Publish the status segment consumed by posoco-ext-statusbar. The key is
-//// the potato glyph so Cetas-style rendering displays exactly "🥔 Mode On".
+/// Publish the status segment consumed by posoco-ext-statusbar. The key is
+/// the potato glyph so Cetas-style rendering displays exactly "🥔 Mode On".
 fn Pstack::publish_mode_status(self : Pstack, active : Bool) -> Unit {
   match self.events {
     Some(events) =>
@@ -131,9 +127,7 @@ fn Pstack::publish_mode_status(self : Pstack, active : Bool) -> Unit {
       } else {
         ignore(
           events.publish(
-            @kit_events.StatusChanged(
-              @kit_events.Unregister(segment="🥔"),
-            ),
+            @kit_events.StatusChanged(@kit_events.Unregister(segment="🥔")),
           ),
         )
       }
@@ -142,8 +136,8 @@ fn Pstack::publish_mode_status(self : Pstack, active : Bool) -> Unit {
 }
 
 ///|
-//// Idempotent session status transition. Status is session-scoped and is
-//// toggled by /poteto-mode and cleared by Agent shutdown.
+/// Idempotent session status transition. Status is session-scoped and is
+/// toggled by /poteto-mode and cleared by Agent shutdown.
 fn Pstack::set_mode_active(self : Pstack, active : Bool) -> Unit {
   if self.mode_active == active {
     return
@@ -153,7 +147,7 @@ fn Pstack::set_mode_active(self : Pstack, active : Bool) -> Unit {
 }
 
 ///|
-//// Load bundled Kind presets through the same WorkspaceFs used for skills.
+/// Load bundled Kind presets through the same WorkspaceFs used for skills.
 /// Pass these as extra to KindCatalog::load(home~, cwd~, extra~).
 pub async fn Pstack::load_kinds(
   fs : &@workspace.WorkspaceFs,
@@ -180,11 +174,9 @@ pub async fn Pstack::load_kinds(
 }
 
 ///|
-//// Reuse Skills' model-facing tools and prompt contributor. PStack adds a
-//// toggle command and a shutdown hook that clears its status segment.
-pub impl @posoco.Extension for Pstack with fn manifest(
-  self : Pstack,
-) -> @posoco.ExtensionManifest {
+/// Reuse Skills' model-facing tools and prompt contributor. PStack adds a
+/// toggle command and a shutdown hook that clears its status segment.
+pub impl @posoco.Extension for Pstack with fn manifest(self : Pstack) -> @posoco.ExtensionManifest {
   let inner = @posoco.Extension::manifest(self.skills)
   let commands : Array[&@posoco.CommandPort] = inner.commands.copy()
   commands.push(self)
@@ -199,9 +191,7 @@ pub impl @posoco.Extension for Pstack with fn manifest(
 }
 
 ///|
-pub impl @posoco.Extension for Pstack with fn extension_id(
-  _self : Pstack,
-) -> String {
+pub impl @posoco.Extension for Pstack with fn extension_id(_self : Pstack) -> String {
   "posoco_ext_pstack"
 }
 
@@ -223,15 +213,15 @@ fn poteto_mode_command_def() -> @posoco.CommandDef {
 }
 
 ///|
-pub impl @posoco.CommandPort for Pstack with fn commands(
-  _self : Pstack,
-) -> Array[@posoco.CommandDef] {
+pub impl @posoco.CommandPort for Pstack with fn commands(_self : Pstack) -> Array[
+  @posoco.CommandDef,
+] {
   [poteto_mode_command_def()]
 }
 
 ///|
-//// Reuse Skills' activation result. Publish the status indicator only after
-//// activation succeeds; failures never produce a false "Mode On".
+/// Reuse Skills' activation result. Publish the status indicator only after
+/// activation succeeds; failures never produce a false "Mode On".
 pub impl @posoco.CommandPort for Pstack with fn invoke(
   self : Pstack,
   id : String,
@@ -266,9 +256,7 @@ pub impl @posoco.CommandPort for Pstack with fn invoke(
 }
 
 ///|
-pub impl @posoco.Lifecycle for Pstack with fn on_shutdown(
-  self : Pstack,
-) -> Unit {
+pub impl @posoco.Lifecycle for Pstack with fn on_shutdown(self : Pstack) -> Unit {
   self.set_mode_active(false)
 }
 
@@ -279,4 +267,4 @@ pub extend Pstack with @posoco.Extension::{extension_id, manifest}
 pub extend Pstack with @posoco.CommandPort::{commands, invoke}
 
 ///|
-pub extend Pstack with @posoco.Lifecycle::{on_shutdown}
+pub extend Pstack with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}

@@ -8,8 +8,11 @@ async test "workflow: activation and every supported playbook use native Skills 
     include_user: false,
   }
   let pstack = Pstack::discover(
-    fs, cwd="/workspace", home="/home/test",
-    assets_root="/bundle", discovery_options=options,
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    discovery_options=options,
   ).unwrap()
   assert_true(pstack.catalog().find("poteto-mode").unwrap().body is None)
   match pstack.skills.activate_skill("poteto-mode") {
@@ -18,7 +21,10 @@ async test "workflow: activation and every supported playbook use native Skills 
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => fail(content)
     _ => fail("PStack SKILL.md should activate")
   }
-  for name in ["investigation", "bug-fix", "feature", "refactoring", "perf-issue", "prototype"] {
+  for
+    name in [
+      "investigation", "bug-fix", "feature", "refactoring", "perf-issue", "prototype",
+    ] {
     let path = "resources/upstream/skills/poteto-mode/playbooks/" + name + ".md"
     match pstack.skills.read_skill_resource("poteto-mode", path) {
       @posoco.ToolOutcome::Success(content~, ..) =>
@@ -27,7 +33,10 @@ async test "workflow: activation and every supported playbook use native Skills 
       _ => fail("PStack playbook read should succeed")
     }
   }
-  match pstack.skills.read_skill_resource("poteto-mode", "resources/posoco-harness.md") {
+  match
+    pstack.skills.read_skill_resource(
+      "poteto-mode", "resources/posoco-harness.md",
+    ) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("Posoco runtime mapping"))
     _ => fail("Posoco adapter must be readable")
@@ -42,9 +51,11 @@ async test "workflow: activation and every supported playbook use native Skills 
 async test "workflow: discovery rejects a missing required playbook" {
   let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
-  ignore(fs.files.remove(
-    "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/feature.md",
-  ))
+  ignore(
+    fs.files.remove(
+      "/bundle/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/feature.md",
+    ),
+  )
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
     include_repository: false,
@@ -52,9 +63,13 @@ async test "workflow: discovery rejects a missing required playbook" {
   }
   assert_true(
     Pstack::discover(
-      fs, cwd="/workspace", home="/home/test",
-      assets_root="/bundle", discovery_options=options,
-    ) is None,
+      fs,
+      cwd="/workspace",
+      home="/home/test",
+      assets_root="/bundle",
+      discovery_options=options,
+    )
+    is None,
   )
 }
 
@@ -64,9 +79,9 @@ async test "statusbar: /poteto-mode toggles and shutdown clears the status" {
   add_bundle_skill(fs)
   let system = @posoco.EventSystem()
   let envelopes : Array[@posoco.EventEnvelope] = []
-  let _subscription = system.subscribe(fn(envelope) {
-    envelopes.push(envelope)
-  }).unwrap()
+  let _subscription = system
+    .subscribe(fn(envelope) { envelopes.push(envelope) })
+    .unwrap()
   let publisher = system.publisher(owner="posoco_ext_pstack").unwrap()
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
@@ -74,13 +89,19 @@ async test "statusbar: /poteto-mode toggles and shutdown clears the status" {
     include_user: false,
   }
   let pstack = Pstack::discover(
-    fs, cwd="/workspace", home="/home/test", assets_root="/bundle",
-    events=Some(publisher), discovery_options=options,
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    events=Some(publisher),
+    discovery_options=options,
   ).unwrap()
   match @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_true(feedback.contains("activated skill: poteto-mode"))
-      assert_true(structured.unwrap().stringify().contains("agent_skill_activation"))
+      assert_true(
+        structured.unwrap().stringify().contains("agent_skill_activation"),
+      )
     }
     @posoco.CommandOutcome::Failure(reason~) => fail(reason)
     @posoco.CommandOutcome::NeedsInput(prompt~) => fail(prompt)
