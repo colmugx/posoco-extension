@@ -58,9 +58,10 @@ priv struct ConnView {
 
 ///|
 /// Queries: synchronous folds that answer.
-priv enum ConnQuery {
+priv enum ConnQuery[ClientT] {
   Acquire
   BeginReconnect
+  FinishReconnectAcquire(generation~ : Int32, client~ : ClientT)
   Inspect
 }
 
@@ -106,9 +107,9 @@ priv struct ConnState[ClientT] {
 ///   reply Granted(gen+1); Reconnecting -> Busy (single winner).
 /// - `Inspect`: reply the read-only view, fold nothing.
 fn[ClientT] conn_fold_query(
-  _ctx : @fuwaroid.Ctx[ConnCmd[ClientT], ConnQuery, ConnReply[ClientT]],
+  _ctx : @fuwaroid.Ctx[ConnCmd[ClientT], ConnQuery[ClientT], ConnReply[ClientT]],
   state : ConnState[ClientT],
-  query : ConnQuery,
+  query : ConnQuery[ClientT],
 ) -> (ConnState[ClientT], ConnReply[ClientT]) {
   match query {
     Acquire =>
@@ -131,6 +132,22 @@ fn[ClientT] conn_fold_query(
         state.health = Reconnecting
         (state, Granted(generation=state.generation))
       }
+    // Installing the replacement and reserving a permit happen in one fold;
+    // a stale or repeated finish can neither overwrite a newer connection
+    // nor inflate its in_flight counter.
+    FinishReconnectAcquire(generation=g, client=replacement) => {
+      if g == state.generation && state.health is Reconnecting {
+        state.client = replacement
+        state.health = Fresh
+        state.in_flight = 1
+        (
+          state,
+          Permit({ client: state.client, generation: state.generation, }),
+        )
+      } else {
+        (state, Denied(ReconnectInProgress))
+      }
+    }
     Inspect =>
       (
         state,
@@ -155,7 +172,7 @@ fn[ClientT] conn_fold_query(
 ///   client. Zero in_flight in either case — every leftover report of old
 ///   generations is thereby invalidated.
 fn[ClientT] conn_fold_cmd(
-  _ctx : @fuwaroid.Ctx[ConnCmd[ClientT], ConnQuery, ConnReply[ClientT]],
+  _ctx : @fuwaroid.Ctx[ConnCmd[ClientT], ConnQuery[ClientT], ConnReply[ClientT]],
   state : ConnState[ClientT],
   cmd : ConnCmd[ClientT],
 ) -> ConnState[ClientT] {
@@ -203,7 +220,7 @@ fn[ClientT] conn_fold_cmd(
 /// classify (never swallowed into success), and the ask timeout stays the
 /// caller's decision.
 priv struct ConnActor[ClientT] {
-  actor : @fuwaroid.Fuwaroid[ConnCmd[ClientT], ConnQuery, ConnReply[ClientT]]
+  actor : @fuwaroid.Fuwaroid[ConnCmd[ClientT], ConnQuery[ClientT], ConnReply[ClientT]]
 }
 
 ///|
@@ -250,6 +267,18 @@ async fn[ClientT] ConnActor::begin_reconnect(
   timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
   self.actor.ask(BeginReconnect, timeout_ms~)
+}
+
+///|
+/// Finish a successful reconnect and reserve the caller's first admission in
+/// the same mailbox query, instead of EndReconnect tell followed by Acquire.
+async fn[ClientT] ConnActor::finish_reconnect_acquire(
+  self : ConnActor[ClientT],
+  generation~ : Int32,
+  client~ : ClientT,
+  timeout_ms~ : Int32,
+) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
+  self.actor.ask(FinishReconnectAcquire(generation~, client~), timeout_ms~)
 }
 
 ///|
