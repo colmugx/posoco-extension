@@ -486,3 +486,98 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
     let _ = actor.join()
   })
 }
+
+///|
+async test "fused admission timeout compensation releases only its permit" {
+  @core_async.with_task_group(group => {
+    let actor = ConnActor::start(group~, client=10)
+    assert_true(conn_reply_is(
+      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
+    ))
+    assert_true(conn_reply_is(
+      actor.finish_reconnect_acquire(
+        generation=1, client=20, timeout_ms=10_000,
+      ),
+      conn_permit_reply(20, 1),
+    ))
+    assert_true(conn_reply_is(
+      actor.acquire(timeout_ms=10_000), conn_permit_reply(20, 1),
+    ))
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=2))
+    let _ = actor.end_call(generation=1, outcome=CallOk)
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
+    assert_true(conn_reply_is(
+      actor.acquire(timeout_ms=10_000), conn_permit_reply(20, 1),
+    ))
+    let _ = actor.end_call(generation=1, outcome=CallOk)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
+  })
+}
+
+///|
+async test "concurrent fused completion grants exactly one admission" {
+  @core_async.with_task_group(lifetime => {
+    let actor = ConnActor::start(group=lifetime, client=10)
+    assert_true(conn_reply_is(
+      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
+    ))
+    let accepted : Array[Int32] = []
+    let denied : Array[Int32] = []
+    @core_async.with_task_group(workers => {
+      for i in 0..<64 {
+        workers.spawn_bg(() => {
+          match actor.finish_reconnect_acquire(
+            generation=1, client=100 + i, timeout_ms=10_000,
+          ) {
+            Ok(Permit(permit)) => accepted.push(permit.client)
+            Ok(Denied(ReconnectInProgress)) => denied.push(i)
+            _ => fail("concurrent finish returned an unexpected reply")
+          }
+        })
+      }
+    })
+    assert_eq(accepted.length(), 1)
+    assert_eq(denied.length(), 63)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=1))
+    let winner = accepted[0]
+    assert_true(conn_reply_is(
+      actor.acquire(timeout_ms=10_000), conn_permit_reply(winner, 1),
+    ))
+    let _ = actor.end_call(generation=1, outcome=CallOk)
+    let _ = actor.end_call(generation=1, outcome=CallOk)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
+  })
+}
+
+///|
+async test "stale fused compensation leaves successor admission intact" {
+  @core_async.with_task_group(group => {
+    let actor = ConnActor::start(group~, client=10)
+    assert_true(conn_reply_is(
+      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
+    ))
+    assert_true(conn_reply_is(
+      actor.finish_reconnect_acquire(
+        generation=1, client=20, timeout_ms=10_000,
+      ),
+      conn_permit_reply(20, 1),
+    ))
+    assert_true(conn_reply_is(
+      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=2),
+    ))
+    assert_true(conn_reply_is(
+      actor.finish_reconnect_acquire(
+        generation=2, client=30, timeout_ms=10_000,
+      ),
+      conn_permit_reply(30, 2),
+    ))
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1)
+    let _ = actor.end_call(generation=1, outcome=TimedOut)
+    assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=1))
+    let _ = actor.end_call(generation=2, outcome=CallOk)
+    assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=0))
+  })
+}
