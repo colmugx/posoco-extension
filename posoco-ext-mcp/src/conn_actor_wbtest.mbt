@@ -457,7 +457,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=1,
           client=900,
-        attempt_id=1,
+          attempt_id=1,
           timeout_ms=10_000,
         ),
         Denied(ReconnectInProgress),
@@ -471,7 +471,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=2,
           client=200,
-        attempt_id=1,
+          attempt_id=1,
           timeout_ms=10_000,
         ),
         conn_permit_reply(200, 2),
@@ -483,7 +483,7 @@ async test "conn_actor finish reconnect acquire rejects stale generation" {
         actor.finish_reconnect_acquire(
           generation=2,
           client=300,
-        attempt_id=1,
+          attempt_id=1,
           timeout_ms=10_000,
         ),
       ),
@@ -584,5 +584,33 @@ async test "stale fused compensation leaves successor admission intact" {
     assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=1))
     let _ = actor.end_call(generation=2, outcome=CallOk)
     assert_true(conn_view_is(actor, health=Fresh, generation=2, in_flight=0))
+  })
+}
+
+///|
+/// A denied finish with a lost reply must not compensate an unrelated
+/// successful admission from another concurrent contender in the same epoch.
+async test "denied fused finish compensation does not release winner" {
+  @core_async.with_task_group(group => {
+    let actor = ConnActor::start(group~, client=10)
+    assert_true(conn_reply_is(
+      actor.begin_reconnect(timeout_ms=10_000), Granted(generation=1),
+    ))
+    assert_true(conn_reply_is(
+      actor.finish_reconnect_acquire(
+        generation=1, client=20, attempt_id=1, timeout_ms=10_000,
+      ),
+      conn_permit_reply(20, 1),
+    ))
+    assert_true(conn_reply_is(
+      actor.finish_reconnect_acquire(
+        generation=1, client=30, attempt_id=2, timeout_ms=10_000,
+      ),
+      Denied(ReconnectInProgress),
+    ))
+    let _ = actor.abandon_finish_reconnect_acquire(generation=1, attempt_id=2)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=1))
+    let _ = actor.end_call(generation=1, outcome=CallOk)
+    assert_true(conn_view_is(actor, health=Fresh, generation=1, in_flight=0))
   })
 }
