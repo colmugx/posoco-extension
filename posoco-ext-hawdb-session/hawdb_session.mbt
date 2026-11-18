@@ -110,7 +110,7 @@ fn transaction_write(
 }
 
 ///|
-pub extend HawdbSessionStore with @posoco.SessionStore::{
+pub extend HawdbSessionStore with @posoco.SessionPort::{
   load,
   save,
   append_messages,
@@ -119,7 +119,7 @@ pub extend HawdbSessionStore with @posoco.SessionStore::{
 }
 
 ///|
-pub impl @posoco.SessionStore for HawdbSessionStore with fn load(
+pub impl @posoco.SessionPort for HawdbSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
@@ -142,7 +142,7 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn load(
 }
 
 ///|
-pub impl @posoco.SessionStore for HawdbSessionStore with fn save(
+pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
   self,
   id : String,
   session : @posoco.Session,
@@ -163,7 +163,7 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn save(
 /// Logical from_index is intentionally not equated with physical row count:
 /// replay fixation can insert non-persisted transient messages. The snapshot
 /// and metadata replacement are committed in the same HawDB transaction.
-pub impl @posoco.SessionStore for HawdbSessionStore with fn checkpoint(
+pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
   self,
   id : String,
   checkpoint : @posoco.SessionCheckpoint,
@@ -193,7 +193,7 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn checkpoint(
 }
 
 ///|
-pub impl @posoco.SessionStore for HawdbSessionStore with fn append_messages(
+pub impl @posoco.SessionPort for HawdbSessionStore with fn append_messages(
   self,
   id : String,
   from_index : Int32,
@@ -207,7 +207,7 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn append_messages(
 }
 
 ///|
-pub impl @posoco.SessionStore for HawdbSessionStore with fn truncate(
+pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
   self,
   id : String,
   from_index : Int32,
