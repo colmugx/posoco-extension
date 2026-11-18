@@ -280,30 +280,35 @@ async test "before_tool blocks only writes while planning" {
       other => fail("expected Approve for '\{name}', got \{other}")
     }
   }
-  // Deferred gateway calls classify by the inner tool name: a deferred
-  // write hits the write gate, a deferred read passes.
-  let deferred_write = tk_call_with_args(
+  // The gateway envelope itself is not a write: it passes, and the real tool
+  // is gated as its own child call — a write hits the write gate there.
+  let envelope = tk_call_with_args(
     "tool_execute",
     Json::object({
       "tool": Json::string("write"),
       "arguments": Json::object({ "path": Json::string("src/x.rs") }),
     }),
   )
+  match plan.before_tool(envelope) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve for the gateway envelope, got \{other}")
+  }
+  let deferred_write = tk_call_with_args(
+    "write",
+    Json::object({ "path": Json::string("src/x.rs") }),
+  )
   match plan.before_tool(deferred_write) {
     @posoco.ToolDecision::Reject(reason~) =>
       assert_true(reason.contains("plan mode"))
-    other => fail("expected Reject for deferred write, got \{other}")
+    other => fail("expected Reject for the deferred write child, got \{other}")
   }
   let deferred_read = tk_call_with_args(
-    "tool_execute",
-    Json::object({
-      "tool": Json::string("webfetch"),
-      "arguments": Json::object({ "url": Json::string("https://example.com") }),
-    }),
+    "webfetch",
+    Json::object({ "url": Json::string("https://example.com") }),
   )
   match plan.before_tool(deferred_read) {
     @posoco.ToolDecision::Approve(..) => ()
-    other => fail("expected Approve for deferred webfetch, got \{other}")
+    other => fail("expected Approve for the webfetch child, got \{other}")
   }
   // Planning: write tools are rejected with guidance.
   match plan.before_tool(tk_call("write")) {

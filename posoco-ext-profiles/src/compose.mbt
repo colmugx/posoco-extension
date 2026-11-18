@@ -1,12 +1,58 @@
 ///|
+/// Build the deferral gateway for one owner set. Deferred owners keep their
+/// tool definitions in the kernel catalog and only leave the model request, so
+/// the gateway needs owner ids and prompt hints — never a tool enumeration.
+///
+/// `extra_owners` covers groups the host registers AFTER this composition
+/// (a live MCP bridge is host-owned because its transport is host-specific);
+/// declaring the owner here is enough for it to be deferred when it publishes.
+pub fn deferred_gateway(
+  deferred~ : Array[&@posoco.Extension],
+  extra_owners~ : Array[String] = [],
+  hints~ : Map[String, String] = Map::from_array([]),
+) -> Result[@lazytools.LazyTools, String] {
+  let groups : Array[@lazytools.DeferredGroup] = []
+  for ext in deferred {
+    let owner = ext.extension_id()
+    groups.push({
+      owner,
+      hint: match hints.get(owner) {
+        Some(hint) => hint
+        None => ""
+      },
+    })
+  }
+  for owner in extra_owners {
+    let mut declared = false
+    for group in groups {
+      if group.owner == owner {
+        declared = true
+        break
+      }
+    }
+    if !declared {
+      groups.push({
+        owner,
+        hint: match hints.get(owner) {
+          Some(hint) => hint
+          None => ""
+        },
+      })
+    }
+  }
+  @lazytools.LazyTools::new(groups~)
+}
+
+///|
 /// One safe composition path for Posoco hosts using Profiles together with
 /// LazyTools. The caller supplies the ordinary resident extensions and the
 /// extensions whose tool schemas should be behind LazyTools.
 ///
 /// The composer owns the mandatory ordering and deferral invariants:
 /// - only members of loaded profiles lose their resident prompt sections;
-/// - all deferred tool providers are routed through one LazyTools gateway;
-/// - tool provenance for usage accounting is built before tool removal;
+/// - every deferred extension keeps its tool definitions registered and loses
+///   only model visibility, which one LazyTools gateway declares per owner;
+/// - tool provenance for usage accounting is read before any deferral;
 /// - Profiles precedes the gateway in the hook chain.
 ///
 /// The returned extensions replace BOTH input lists in Agent(exts=...).
@@ -34,6 +80,8 @@ pub fn compose_profiles(
   store~ : &ProfileStore? = None,
   activation_sink~ : &ProfileActivationSink? = None,
   summarizer~ : ((Array[(String, Int32)]) -> (String, String))? = None,
+  deferred_hints~ : Map[String, String] = Map::from_array([]),
+  extra_deferred_owners~ : Array[String] = [],
 ) -> Result[ProfileComposition, String] {
   let deferred_ids : Array[String] = []
   let attribution : Map[String, String] = Map::from_array([])
@@ -77,9 +125,13 @@ pub fn compose_profiles(
       deferred_ids.push(id)
     }
   }
-  let (gateway, toolless) = match
-    @lazytools.LazyTools::defer_extensions(exts=deferred) {
-    Ok(pair) => pair
+  let gateway = match
+    deferred_gateway(
+      deferred~,
+      extra_owners=extra_deferred_owners,
+      hints=deferred_hints,
+    ) {
+    Ok(gateway) => gateway
     Err(reason) => return Err(reason)
   }
   let deep : Array[&@posoco.Extension] = []
@@ -108,10 +160,10 @@ pub fn compose_profiles(
     exts.push(ext)
   }
   exts.push(profiles as &@posoco.Extension)
-  for view in toolless {
-    match deep_by_id.get(view.extension_id()) {
+  for ext in deferred {
+    match deep_by_id.get(ext.extension_id()) {
       Some(deep_view) => exts.push(deep_view)
-      None => exts.push(view)
+      None => exts.push(ext)
     }
   }
   exts.push(gateway as &@posoco.Extension)

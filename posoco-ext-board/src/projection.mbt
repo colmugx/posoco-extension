@@ -76,6 +76,7 @@ fn board_projection(event : @posoco.TurnEvent) -> (String, Json)? {
       TurnStarted => ("run.started", {})
       TurnCompleted => ("run.completed", {})
       TurnFailed(_) => ("run.failed", { "preview": "Run failed" })
+      TurnCancelled => ("run.cancelled", { "preview": "Run cancelled" })
       StreamChunkReceived(chunk=TextDelta(token~)) =>
         ("assistant.delta", { "text": board_display(token) })
       StreamChunkReceived(chunk=ReasoningDelta(token~)) =>

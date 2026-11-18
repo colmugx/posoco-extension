@@ -1,16 +1,16 @@
 ///|
-/// Profile member extensions are deferred past the
-/// prompt layer as well as the tool layer. lazytools' toolless views keep an
-/// extension's prompt contributions resident; a deep-deferred view strips
-/// BOTH `tools` and `prompt_contributors`, because activation re-injects the
-/// stripped prompt text once per profile — keeping it resident would
-/// duplicate it in every turn.
+/// Profile member extensions are deferred past the prompt layer as well as
+/// the tool layer. Tool visibility is the gateway's job now — the definitions
+/// stay registered and only leave the model request — so a deep-deferred view
+/// strips `prompt_contributors` alone, because activation re-injects that text
+/// once per profile and keeping it resident would duplicate it every turn.
 
 ///|
-/// A view of an extension whose `tools` and `prompt_contributors` arrays are
-/// emptied. Everything else (id and the remaining port arrays — hooks,
+/// A view of an extension whose `prompt_contributors` array is emptied.
+/// Everything else (id, tools, and the remaining port arrays — hooks,
 /// observers, sessions, commands, ...) is copied from the wrapped extension,
-/// so composition still attributes the extension's other ports to it.
+/// so composition still attributes its ports to it and the gateway still sees
+/// the owner's tools.
 priv struct DeepDeferredView {
   inner : &@posoco.Extension
 }
@@ -26,7 +26,7 @@ impl @posoco.Extension for DeepDeferredView with fn extension_id(
 impl @posoco.Extension for DeepDeferredView with fn manifest(
   self : DeepDeferredView,
 ) -> @posoco.ExtensionManifest {
-  { ..self.inner.manifest(), tools: [], prompt_contributors: [], }
+  { ..self.inner.manifest(), prompt_contributors: [], }
 }
 
 ///|
@@ -42,10 +42,9 @@ impl @posoco.Extension for DeepDeferredView with fn manifest(
 ///   text into `Profiles::build` so activation can inject it; an extension
 ///   whose contributors produce nothing is absent from the map.
 /// - the views the host must register instead of the originals: extensions
-///   contributing tools OR prompt sections come back as deep-deferred
-///   views; extensions with neither pass through unchanged. Registering an
-///   original would put its tools and prompt back into every request and
-///   defeat the deferral.
+///   contributing prompt sections come back as deep-deferred views;
+///   extensions without one pass through unchanged. Registering an original
+///   would put its prompt back into every request.
 pub fn deep_defer_extensions(
   exts~ : Array[&@posoco.Extension],
 ) -> (Map[String, String], Array[&@posoco.Extension]) {
@@ -53,8 +52,7 @@ pub fn deep_defer_extensions(
   let views : Array[&@posoco.Extension] = []
   for ext in exts {
     let manifest = ext.manifest()
-    if manifest.tools.length() == 0 &&
-      manifest.prompt_contributors.length() == 0 {
+    if manifest.prompt_contributors.length() == 0 {
       views.push(ext)
     } else {
       let mut text = ""

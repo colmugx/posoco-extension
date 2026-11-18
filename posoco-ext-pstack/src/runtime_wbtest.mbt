@@ -74,15 +74,61 @@ async test "workflow: discovery rejects a missing required playbook" {
 }
 
 ///|
-async test "statusbar: /poteto-mode toggles and shutdown clears the status" {
+async test "statusbar: every activation channel announces 🥔 Mode and shutdown releases it" {
   let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
+  let options : @skills.SkillDiscoveryOptions = {
+    ..@skills.SkillDiscoveryOptions::default(),
+    include_repository: false,
+    include_user: false,
+  }
   let system = @posoco.EventSystem()
   let envelopes : Array[@posoco.EventEnvelope] = []
   let _subscription = system
     .subscribe(fn(envelope) { envelopes.push(envelope) })
     .unwrap()
   let publisher = system.publisher(owner="posoco_ext_pstack").unwrap()
+  let pstack = Pstack::discover(
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    events=Some(publisher),
+    discovery_options=options,
+  ).unwrap()
+  // Cetas' terminal inlines the activation instructions into the user message.
+  let inline = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(
+      "<activated-skill name=\"poteto-mode\">\ninstructions\n</activated-skill>\n\ndo the work",
+    ),
+  ])
+  ignore(pstack.before_model([inline]))
+  assert_true(pstack.is_announced())
+  assert_eq(envelopes.length(), 1)
+  assert_eq(@kit_events.publisher_id(envelopes[0]), Some("posoco_ext_pstack"))
+  match @kit_events.status_changed_of(envelopes[0]) {
+    Some(@kit_events.Register(segment~, label~, priority~, value~, color~)) => {
+      assert_eq(segment, "🥔")
+      assert_eq(label, None)
+      assert_eq(priority, 5)
+      assert_eq(value, Some("Mode"))
+      assert_eq(color, Some("success"))
+    }
+    _ => fail("expected registration")
+  }
+  pstack.on_shutdown()
+  assert_true(!pstack.is_announced())
+  assert_eq(envelopes.length(), 2)
+  match @kit_events.status_changed_of(envelopes[1]) {
+    Some(@kit_events.Unregister(segment~)) => assert_eq(segment, "🥔")
+    _ => fail("shutdown must clear status")
+  }
+}
+
+///|
+async test "statusbar: the model-facing activate_skill result also announces 🥔 Mode" {
+  let fs = PstackFakeFs::new()
+  add_bundle_skill(fs)
   let options : @skills.SkillDiscoveryOptions = {
     ..@skills.SkillDiscoveryOptions::default(),
     include_repository: false,
@@ -93,54 +139,87 @@ async test "statusbar: /poteto-mode toggles and shutdown clears the status" {
     cwd="/workspace",
     home="/home/test",
     assets_root="/bundle",
-    events=Some(publisher),
+    discovery_options=options,
+    // No publisher and no registered process default: publication is a
+    // silent no-op, but the activation fact is still recorded.
+  ).unwrap()
+  let activation = @posoco.ToolOutcome::Success(
+    content="Activated Agent Skill: \"poteto-mode\"",
+    structured=Some(
+      Json::object({
+        "kind": Json::string("agent_skill"),
+        "name": Json::string("poteto-mode"),
+      }),
+    ),
+  )
+  let tool_message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_1"),
+    tool_name=@posoco.ToolName::unchecked("activate_skill"),
+    outcome=activation,
+  )
+  ignore(pstack.before_model([tool_message]))
+  assert_true(pstack.is_announced())
+  // An unrelated tool result must not announce.
+  let other = Pstack::discover(
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
     discovery_options=options,
   ).unwrap()
-  match @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()) {
-    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
-      assert_true(feedback.contains("activated skill: poteto-mode"))
-      assert_true(
-        structured.unwrap().stringify().contains("agent_skill_activation"),
-      )
-    }
-    @posoco.CommandOutcome::Failure(reason~) => fail(reason)
-    @posoco.CommandOutcome::NeedsInput(prompt~) => fail(prompt)
+  ignore(
+    other.before_model([
+      @posoco.Message::ToolMessage(
+        call_id=@posoco.CallId::unchecked("call_2"),
+        tool_name=@posoco.ToolName::unchecked("read_file"),
+        outcome=@posoco.ToolOutcome::Success(content="ok", structured=None),
+      ),
+    ]),
+  )
+  assert_true(!other.is_announced())
+}
+
+///|
+async test "statusbar: without an injected publisher the process default carries the segment" {
+  let fs = PstackFakeFs::new()
+  add_bundle_skill(fs)
+  let options : @skills.SkillDiscoveryOptions = {
+    ..@skills.SkillDiscoveryOptions::default(),
+    include_repository: false,
+    include_user: false,
   }
-  assert_true(pstack.is_mode_active())
+  // Hosts assemble the session system as the process default and do not
+  // thread it into the skills extension; this is the path they take.
+  let system = @posoco.EventSystem()
+  @devkit.events_system_register(system)
+  let envelopes : Array[@posoco.EventEnvelope] = []
+  let _subscription = system
+    .subscribe(fn(envelope) { envelopes.push(envelope) })
+    .unwrap()
+  let pstack = Pstack::discover(
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    discovery_options=options,
+  ).unwrap()
+  ignore(
+    pstack.before_model([
+      @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text(
+          "<activated-skill name=\"poteto-mode\">\ninstructions\n</activated-skill>",
+        ),
+      ]),
+    ]),
+  )
   assert_eq(envelopes.length(), 1)
   assert_eq(@kit_events.publisher_id(envelopes[0]), Some("posoco_ext_pstack"))
   match @kit_events.status_changed_of(envelopes[0]) {
-    Some(@kit_events.Register(segment~, label~, priority~, value~, color~)) => {
+    Some(@kit_events.Register(segment~, value~, ..)) => {
       assert_eq(segment, "🥔")
-      assert_eq(label, None)
-      assert_eq(priority, 5)
-      assert_eq(value, Some("Mode On"))
-      assert_eq(color, Some("success"))
+      assert_eq(value, Some("Mode"))
     }
-    _ => fail("expected registration")
-  }
-  match @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()) {
-    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
-      assert_true(feedback.contains("Poteto Mode Off"))
-      assert_true(structured is None)
-    }
-    @posoco.CommandOutcome::Failure(reason~) => fail(reason)
-    @posoco.CommandOutcome::NeedsInput(prompt~) => fail(prompt)
-  }
-  assert_true(!pstack.is_mode_active())
-  assert_eq(envelopes.length(), 2)
-  match @kit_events.status_changed_of(envelopes[1]) {
-    Some(@kit_events.Unregister(segment~)) => assert_eq(segment, "🥔")
-    _ => fail("expected unregister")
-  }
-  ignore(@posoco.CommandPort::invoke(pstack, "poteto-mode", Json::null()))
-  assert_eq(envelopes.length(), 3)
-  pstack.on_shutdown()
-  assert_true(!pstack.is_mode_active())
-  assert_eq(envelopes.length(), 4)
-  match @kit_events.status_changed_of(envelopes[3]) {
-    Some(@kit_events.Unregister(segment~)) => assert_eq(segment, "🥔")
-    _ => fail("shutdown must clear status")
+    _ => fail("the process-default channel must carry the 🥔 register op")
   }
 }
 

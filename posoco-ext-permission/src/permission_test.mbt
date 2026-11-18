@@ -962,60 +962,64 @@ fn test_call_list() -> @posoco.ToolCall {
 }
 
 ///|
-async test "read-only mode classifies deferred tools by inner name" {
+async test "read-only mode classifies meta tools and the real child call" {
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
   )
-  // webfetch rides the read class even behind the gateway.
+  // Meta tools have no side effects of their own and never prompt: the real
+  // tool arrives as its own child call and is judged there, by its own name.
   assert_true(
-    policy.before_tool(
-      test_call_lazy(
-        "webfetch",
-        Map::from_array([("url", Json::string("https://example.com"))]),
-      ),
-    )
+    policy.before_tool(test_call_lazy("webfetch", Map::from_array([])))
     is @posoco.ToolDecision::Approve(_),
   )
-  // Deferred unknown tools stay rejected, named by the inner tool.
-  match
-    policy.before_tool(test_call_lazy("memory_search", Map::from_array([]))) {
+  assert_true(
+    policy.before_tool(test_call_list()) is @posoco.ToolDecision::Approve(_),
+  )
+  // A child call rides the read class under its own name.
+  assert_true(
+    policy.before_tool(test_call_lazy("webfetch", Map::from_array([])))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_true(
+    policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
+  )
+  // Unknown/blocked tools stay rejected, named by their own name.
+  match policy.before_tool(test_call("memory_search")) {
     @posoco.ToolDecision::Reject(reason~) =>
       assert_true(reason.contains("memory_search"))
-    _ => fail("expected rejection naming the inner tool")
+    _ => fail("expected rejection naming the tool")
   }
 }
 
 ///|
-async test "gateway unknown tools are gated and scoped per inner tool name" {
+async test "interactive gating scopes consent to the executed tool" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
-  // First deferred memory call: asks once; the prompt sees the inner name.
-  match
-    policy.before_tool(
-      test_call_lazy(
-        "memory_search",
-        Map::from_array([("query", Json::string("x"))]),
-      ),
-    ) {
-    @posoco.ToolDecision::ApproveAfterConsent(call~, ..) =>
-      // The consent keeps the ORIGINAL gateway call for execution.
-      assert_eq(call.name.to_string(), "tool_execute")
-    _ => fail("expected ApproveAfterConsent for the deferred call")
-  }
-  assert_eq(source.asked, 1)
-  // A different deferred tool does not inherit the approval.
-  match
-    policy.before_tool(test_call_lazy("obsidian_search", Map::from_array([]))) {
-    @posoco.ToolDecision::ApproveAfterConsent(..) => ()
-    _ => fail("expected a fresh ask for a different inner tool")
-  }
-  assert_eq(source.asked, 2)
-  // Same inner tool: session cache hit, no re-ask.
+  // The gateway call itself is not a side effect: no prompt for the envelope.
   assert_true(
     policy.before_tool(test_call_lazy("memory_search", Map::from_array([])))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+  // The child call is the one that asks, under the real tool name.
+  match policy.before_tool(test_call("memory_search")) {
+    @posoco.ToolDecision::ApproveAfterConsent(call~, ..) =>
+      assert_eq(call.name.to_string(), "memory_search")
+    _ => fail("expected ApproveAfterConsent for the child call")
+  }
+  assert_eq(source.asked, 1)
+  // A different tool does not inherit the approval.
+  match policy.before_tool(test_call("obsidian_search")) {
+    @posoco.ToolDecision::ApproveAfterConsent(..) => ()
+    _ => fail("expected a fresh ask for a different tool")
+  }
+  assert_eq(source.asked, 2)
+  // Same tool: session cache hit, no re-ask.
+  assert_true(
+    policy.before_tool(test_call("memory_search"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 2)

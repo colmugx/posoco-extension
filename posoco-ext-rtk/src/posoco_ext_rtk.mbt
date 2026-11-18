@@ -107,12 +107,10 @@ pub impl @posoco.Extension for RTKHook with fn manifest(self : RTKHook) -> @poso
 pub extend RTKHook with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Rewrite shell calls, deferred or direct: a lazytools gateway `execute`
-/// call names the real tool in `tool` and nests the shell arguments under
-/// `arguments`. Unwrap to classify (inner name in the shell list), rewrite
-/// the inner `cmd`, and hand the kernel back the shape it dispatched —
-/// gateway calls are rewrapped, direct calls rewritten in place. Deferred
-/// bash keeps rtk routing and per-scope approvals.
+/// Rewrite shell calls in place. A deferred shell call reaches this hook as
+/// its own child call — the gateway re-enters the kernel child pipeline under
+/// the real tool's name — so the gate classifies and rewrites exactly what the
+/// kernel will dispatch, with no envelope to unwrap or rebuild.
 
 ///|
 /// Rewrite seam: resolve `rtk rewrite <cmd>` to its rewritten shell command
@@ -130,25 +128,18 @@ async fn before_tool_impl(
   self : RTKHook,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
-  let is_gateway = call.name.to_string() == "tool_execute"
-  let (name, effective) = @lazytools.LazyTools::unwrap_call(call)
+  // A deferred shell call arrives here as its own child call, so the name and
+  // arguments judged below are already the real tool's.
+  let name = call.name.to_string()
   if !self.shell_tools.names.contains(name) {
     return Approve(call~)
   }
-  let cmd = extract_command(effective.arguments) catch {
+  let cmd = extract_command(call.arguments) catch {
     error => return Reject(reason=error.to_string())
   }
   match rewriter.rewrite(self.rtk_path, cmd) {
-    Some(rewritten) if rewritten != cmd => {
-      let inner = rewrite_tool_call(effective, rewritten)
-      Approve(
-        call=if is_gateway {
-          @lazytools.LazyTools::rewrap_call(call, inner)
-        } else {
-          inner
-        },
-      )
-    }
+    Some(rewritten) if rewritten != cmd =>
+      Approve(call=rewrite_tool_call(call, rewritten))
     _ => Approve(call~)
   }
 }

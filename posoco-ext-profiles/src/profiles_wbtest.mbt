@@ -333,7 +333,7 @@ test "pending_results_are_ordered_and_deduplicated" {
 /// ——— deep deferred views ———
 
 ///|
-test "deep_defer_strips_tools_and_prompt_sections_keeps_other_ports" {
+test "deep_defer_strips_only_prompt_sections_and_keeps_other_ports" {
   let ext : &@posoco.Extension = FakeProfileExt::{
     id: "fake_nmem",
     tools: [@tk.RecordingToolProvider([], Map::from_array([]))],
@@ -354,7 +354,9 @@ test "deep_defer_strips_tools_and_prompt_sections_keeps_other_ports" {
   let view = views[0]
   assert_eq(view.extension_id(), "fake_nmem")
   let m = view.manifest()
-  assert_eq(m.tools.length(), 0)
+  // Tool visibility is the gateway's job now: the definitions stay registered
+  // so the declared `tool_call_owners` face still resolves.
+  assert_eq(m.tools.length(), 1)
   assert_eq(m.prompt_contributors.length(), 0)
   // Everything else is preserved for composition attribution.
   assert_eq(m.observers.length(), 1)
@@ -383,7 +385,7 @@ test "deep_defer_joins_contributors_and_skips_empty_text" {
 }
 
 ///|
-test "deep_defer_tools_only_extension_gets_view_but_no_prompt_entry" {
+test "deep_defer_leaves_a_tools_only_extension_untouched" {
   let ext : &@posoco.Extension = FakeProfileExt::{
     id: "fake_tools_only",
     tools: [@tk.RecordingToolProvider([], Map::from_array([]))],
@@ -393,9 +395,9 @@ test "deep_defer_tools_only_extension_gets_view_but_no_prompt_entry" {
   let (prompts, views) = deep_defer_extensions(exts=[ext])
   assert_false(prompts.contains("fake_tools_only"))
   assert_eq(views.length(), 1)
+  // Nothing to strip: the original view is registered as-is, tools included.
   assert_eq(views[0].extension_id(), "fake_tools_only")
-  assert_eq(views[0].manifest().tools.length(), 0)
-  assert_eq(views[0].manifest().prompt_contributors.length(), 0)
+  assert_eq(views[0].manifest().tools.length(), 1)
 }
 
 ///|

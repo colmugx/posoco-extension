@@ -15,7 +15,7 @@ description = "Subagent orchestration kit for Posoco - config validation, prompt
 import {
   "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-kind@0.1.0",
-  "colmugx/posoco-ext-permission@0.2.0",
+  "colmugx/posoco-ext-permission@0.2.1",
   "posoco/devkit@0.4.1",
 }
 

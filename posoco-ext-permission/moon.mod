@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-permission"
 
-version = "0.2.0"
+version = "0.2.1"
 
 readme = "README.mbt.md"
 
@@ -18,5 +18,5 @@ import {
   "colmugx/posoco@0.24.2",
   "posoco/devkit@0.4.1",
   "posoco/kit-events@0.1.0",
-  "colmugx/posoco-ext-lazytools@0.1.0",
+  "colmugx/posoco-ext-lazytools@0.2.0",
 }

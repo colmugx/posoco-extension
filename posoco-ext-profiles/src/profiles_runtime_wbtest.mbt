@@ -285,7 +285,7 @@ async test "hook_publishes_activated_event_on_injection_only" {
 /// ——— usage attribution ———
 
 ///|
-test "usage_counts_wrapped_gateway_calls_by_inner_name" {
+test "usage_counts_child_calls_and_ignores_the_gateway_envelope" {
   let profiles = Profiles::build(
     manifests=[],
     defer_set=[],
@@ -295,14 +295,25 @@ test "usage_counts_wrapped_gateway_calls_by_inner_name" {
       ("mcp_send", "ext_mcp"),
     ]),
   )
-  let wrapped = usage_call(name="tool_execute", inner="mcp_search")
-  profiles.on_event(Some(scope_for("s1")), result_event(wrapped))
-  profiles.on_event(Some(scope_for("s1")), result_event(wrapped))
+  // The envelope names no attributable tool; the child call carries the real
+  // name and is the only thing counted.
   profiles.on_event(
     Some(scope_for("s1")),
-    result_event(usage_call(name="tool_execute", inner="mcp_send")),
+    result_event(usage_call(name="tool_execute", inner="mcp_search")),
   )
-  // Both inner names fold into the same owning ext.
+  profiles.on_event(
+    Some(scope_for("s1")),
+    result_event(usage_call(name="mcp_search")),
+  )
+  profiles.on_event(
+    Some(scope_for("s1")),
+    result_event(usage_call(name="mcp_search")),
+  )
+  profiles.on_event(
+    Some(scope_for("s1")),
+    result_event(usage_call(name="mcp_send")),
+  )
+  // Both tool names fold into the same owning ext.
   assert_eq(profiles.session_usage("s1"), [("ext_mcp", 3)])
 }
 
@@ -576,7 +587,7 @@ async test "profile_save_writes_store_and_catalog_visible" {
   )
   profiles.on_event(
     Some(scope_for("s1")),
-    result_event(usage_call(name="tool_execute", inner="mcp_search")),
+    result_event(usage_call(name="mcp_search")),
   )
   match
     profiles.invoke(

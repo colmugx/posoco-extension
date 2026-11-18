@@ -262,7 +262,13 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   assert_eq(manifest.id, "posoco_ext_pstack")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
-  assert_eq(manifest.commands.length(), 2)
+  // Skills' own `skills` command, and no pstack-owned command: the workflow is
+  // entered with the `$poteto-mode` mention the Skills layer already handles.
+  assert_eq(manifest.commands.length(), 1)
+  assert_eq(manifest.commands[0].commands().map(c => c.id), ["skills"])
+  // Skills' explicit-mention hook must survive the manifest merge, otherwise
+  // `$name` activation never reaches the model.
+  assert_eq(manifest.hooks.length(), 2)
   let tools = @posoco.ToolProvider::list_tools(manifest.tools[0])
   assert_eq(tools.map(t => t.name.to_string()), [
     "activate_skill", "read_skill_resource", "skill_search",
@@ -272,13 +278,10 @@ async test "manifest: native PStack extension forwards Skills tools and prompt" 
   )
   assert_true(prompt.contains("poteto-mode"))
   assert_true(prompt.contains("activate_skill"))
-  assert_eq(@posoco.CommandPort::commands(pstack).map(c => c.id), [
-    "poteto-mode",
-  ])
 }
 
 ///|
-async test "command: poteto-mode returns the structured skill activation envelope" {
+async test "status: a poteto-mode activation announces 🥔 Mode exactly once" {
   let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
   let options : @skills.SkillDiscoveryOptions = {
@@ -286,28 +289,57 @@ async test "command: poteto-mode returns the structured skill activation envelop
     include_repository: false,
     include_user: false,
   }
+  let system = @posoco.EventSystem()
+  let envelopes : Array[@posoco.EventEnvelope] = []
+  let _subscription = system
+    .subscribe(fn(envelope) { envelopes.push(envelope) })
+    .unwrap()
+  let publisher = system.publisher(owner="posoco_ext_pstack").unwrap()
   let pstack = Pstack::discover(
     fs,
     cwd="/workspace",
     home="/home/test",
     assets_root="/bundle",
     discovery_options=options,
+    events=Some(publisher),
   ).unwrap()
-  match
-    @posoco.CommandPort::invoke(pstack, "poteto-mode", Json::object(Map([]))) {
-    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
-      assert_eq(feedback, "activated skill: poteto-mode")
-      match structured {
-        Some(payload) => {
-          let rendered = payload.stringify()
-          assert_true(rendered.contains("agent_skill_activation"))
-          assert_true(rendered.contains("Use the engineering workflow"))
-        }
-        None => fail("activation result must include structured instructions")
-      }
+  // Hosts whose terminal does not inline the instructions deliver `$name`
+  // activation as the Skills explicit-mention envelope.
+  let activation_envelope = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(
+      "<cetas-context type=\"skill_activation\" trust=\"false\" source=\"skill:poteto-mode\" invocation=\"explicit\">\nbody\n</cetas-context>",
+    ),
+  ])
+  ignore(pstack.before_model([activation_envelope]))
+  assert_true(pstack.is_announced())
+  assert_eq(envelopes.length(), 1)
+  match @kit_events.status_changed_of(envelopes[0]) {
+    Some(@kit_events.Register(segment~, label~, priority~, value~, color~)) => {
+      assert_eq(segment, "🥔")
+      assert_eq(label, None)
+      assert_eq(priority, 5)
+      assert_eq(value, Some("Mode"))
+      assert_eq(color, Some("success"))
     }
-    @posoco.CommandOutcome::Failure(reason~) => fail(reason)
-    @posoco.CommandOutcome::NeedsInput(prompt~) => fail(prompt)
+    _ => fail("expected the 🥔 segment to be registered")
+  }
+  // A plain request announces nothing, and the second activation must not
+  // duplicate the segment.
+  ignore(
+    pstack.before_model([
+      @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text("plain request"),
+      ]),
+    ]),
+  )
+  ignore(pstack.before_model([activation_envelope]))
+  assert_eq(envelopes.length(), 1)
+  pstack.on_shutdown()
+  assert_true(!pstack.is_announced())
+  assert_eq(envelopes.length(), 2)
+  match @kit_events.status_changed_of(envelopes[1]) {
+    Some(@kit_events.Unregister(segment~)) => assert_eq(segment, "🥔")
+    _ => fail("shutdown must release the 🥔 segment")
   }
 }
 

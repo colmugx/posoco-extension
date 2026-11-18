@@ -1,56 +1,63 @@
 ///|
-/// The `tool_list` handler: browse or keyword-search the folded catalog.
-/// Results are grouped by extension — one match returns the whole group —
-/// and each tool carries only its name and full JSON input schema. Capability
-/// descriptions already live in the resident catalog and semantic discovery
-/// path, so repeating them here only spends context.
+/// The `tool_list` handler: browse or keyword-search the deferred face of the
+/// CURRENT operation. The face comes from `ToolCallContext::tools`, which the
+/// kernel computes from this extension's `tool_call_owners` plus the catalog
+/// captured at operation admission — so a group published after composition
+/// (an MCP connection, a runtime toolkit) is listed as soon as it is live,
+/// with no composition-time snapshot to refresh.
 
 ///|
-/// Strip the packaging prefix from a provenance id for display: extensions
-/// stamp `posoco_ext_<name>` as provenance, but the declared manifest id is
-/// just `<name>` — show that.
-fn display_id(provenance : String) -> String {
-  if provenance.has_prefix("posoco_ext_") {
-    provenance["posoco_ext_".length():].to_owned()
+/// Strip the packaging prefix from an owner id for display: extensions stamp
+/// `posoco_ext_<name>` as their manifest id, but the readable name is just
+/// `<name>`.
+fn display_id(owner : String) -> String {
+  if owner.has_prefix("posoco_ext_") {
+    owner["posoco_ext_".length():].to_owned()
   } else {
-    provenance
+    owner
   }
 }
 
 ///|
-/// One extension group: display id and its deferred entries in declaration
-/// order.
+fn truncate_oneline(s : String, max_len : Int32) -> String {
+  let flat = s.replace(old="\n", new=" ")
+  if flat.length() > max_len {
+    flat[0:max_len].to_owned() + "…"
+  } else {
+    flat
+  }
+}
+
+///|
+/// One deferred owner group as this operation sees it: the raw owner key used
+/// for provider-neutral DecisionPort choices, its display id, the resident
+/// hint, and every live definition it owns in this operation.
 priv struct ToolGroup {
-  /// Raw provenance key used for provider-neutral DecisionPort choices.
   key : String
-  /// Human-readable display id.
   id : String
-  entries : Array[LazyEntry]
+  hint : String
+  tools : Array[@posoco.ToolDef]
 }
 
 ///|
-/// Group the deferred index by provenance, first-seen order.
-fn LazyTools::groups(self : LazyTools) -> Array[ToolGroup] {
-  let order : Array[String] = []
-  let by_source : Map[String, ToolGroup] = Map::from_array([])
-  for entry in self.entries {
-    let source = match entry.def.provenance {
-      Some(p) => p
-      None => "(unlabeled)"
-    }
-    match by_source.get(source) {
-      Some(group) => group.entries.push(entry)
-      None => {
-        order.push(source)
-        by_source[source] = {
-          key: source,
-          id: display_id(source),
-          entries: [entry],
-        }
-      }
-    }
+/// Project the live face onto the declared groups, in declaration order.
+/// Owners with no live definition keep an empty `tools` array so a group that
+/// exists but has not published yet stays visible instead of vanishing.
+fn LazyTools::live_groups(
+  self : LazyTools,
+  face : Array[@posoco.ToolDef],
+) -> Array[ToolGroup] {
+  let groups : Array[ToolGroup] = []
+  for group in self.groups {
+    let owned = face.filter(fn(def) { def.owner.to_string() == group.owner })
+    groups.push({
+      key: group.owner,
+      id: display_id(group.owner),
+      hint: group.hint,
+      tools: owned,
+    })
   }
-  order.map(fn(source) { by_source[source] })
+  groups
 }
 
 ///|
@@ -66,14 +73,13 @@ fn parse_query_tokens(query : String) -> Array[String] {
 }
 
 ///|
-/// A group matches when EVERY keyword appears in its id or in any of its
-/// tools' names or descriptions — one hit promotes the whole group.
+/// A group matches when EVERY keyword appears in its id, its hint, or in any
+/// of its tools' names or descriptions — one hit promotes the whole group.
 fn group_matches(group : ToolGroup, tokens : Array[String]) -> Bool {
-  let id = group.id.to_lower()
-  let haystacks : Array[String] = [id]
-  for entry in group.entries {
-    haystacks.push(entry.def.name.to_string().to_lower())
-    haystacks.push(entry.def.description.to_lower())
+  let haystacks : Array[String] = [group.id.to_lower(), group.hint.to_lower()]
+  for def in group.tools {
+    haystacks.push(def.name.to_string().to_lower())
+    haystacks.push(def.description.to_lower())
   }
   for token in tokens {
     let mut hit = false
@@ -91,20 +97,28 @@ fn group_matches(group : ToolGroup, tokens : Array[String]) -> Bool {
 }
 
 ///|
-/// Render one group as compact JSON: display id plus every tool with name
-/// and input schema. Descriptions are intentionally omitted from model-visible
-/// list results because the resident prompt already carries capability hints.
+/// Render one group as compact JSON: display id plus every live tool with
+/// name and input schema. Descriptions are intentionally omitted from
+/// model-visible list results because the resident prompt carries capability
+/// hints and the definition itself is one `tool_execute` away.
 fn group_json(group : ToolGroup) -> Json {
   let tools : Array[Json] = []
-  for entry in group.entries {
+  for def in group.tools {
     tools.push(
       Json::object({
-        "name": Json::string(entry.def.name.to_string()),
-        "input_schema": entry.def.input_schema,
+        "name": Json::string(def.name.to_string()),
+        "input_schema": def.input_schema,
       }),
     )
   }
-  Json::object({ "ext": Json::string(group.id), "tools": Json::array(tools) })
+  let fields : Map[String, Json] = Map::from_array([
+    ("ext", Json::string(group.id)),
+    ("tools", Json::array(tools)),
+  ])
+  if group.tools.is_empty() {
+    fields["status"] = Json::string("no tools are live in this operation yet")
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -122,26 +136,16 @@ fn arguments_object(
 }
 
 ///|
-fn truncate_oneline(s : String, max_len : Int32) -> String {
-  let flat = s.replace(old="\n", new=" ")
-  if flat.length() > max_len {
-    flat[0:max_len].to_owned() + "…"
-  } else {
-    flat
-  }
-}
-
-///|
 const SEMANTIC_GROUP_MIN_PROBABILITY = 0.6
 
 ///|
 fn semantic_group_description(group : ToolGroup) -> Json {
   let tools : Array[Json] = []
-  for entry in group.entries {
+  for def in group.tools {
     tools.push(
       Json::object({
-        "name": Json::string(entry.def.name.to_string()),
-        "description": Json::string(entry.def.description),
+        "name": Json::string(def.name.to_string()),
+        "description": Json::string(def.description),
       }),
     )
   }
@@ -164,7 +168,8 @@ fn selected_probability(
 ///|
 /// Semantic discovery is a fallback only. Existing exact/keyword matches stay
 /// deterministic; provider absence, malformed answers, low probability, or
-/// DecisionPort errors all preserve the historical "no match" result.
+/// DecisionPort errors all preserve the historical "no match" result. Groups
+/// with no live tool are never offered: there is nothing to judge.
 async fn LazyTools::semantic_group_match(
   self : LazyTools,
   query : String,
@@ -188,7 +193,7 @@ async fn LazyTools::semantic_group_match(
         @posoco.DecisionQuestion::Boolean(
           id="lazytools.group_relevance",
           instructions=Json::string(
-            "Is this folded tool group semantically relevant to the user's search query? Judge relevance only; do not decide whether any tool should be executed.",
+            "Is this deferred tool group semantically relevant to the user's search query? Judge relevance only; do not decide whether any tool should be executed.",
           ),
           true_criteria=None,
           false_criteria=None,
@@ -227,7 +232,7 @@ async fn LazyTools::semantic_group_match(
       @posoco.DecisionQuestion::Choice(
         id="lazytools.group",
         instructions=Json::string(
-          "Choose the single folded tool group most semantically relevant to the user's search query. Judge relevance only; do not decide whether the tool should be executed.",
+          "Choose the single deferred tool group most semantically relevant to the user's search query. Judge relevance only; do not decide whether the tool should be executed.",
         ),
         options~,
       ),
@@ -268,10 +273,12 @@ async fn LazyTools::semantic_group_match(
 }
 
 ///|
-/// `tool_list`: without `keyword`, every group; with `keyword`, only the
-/// groups whose id or tools match — each rendered whole, with full schemas.
+/// `tool_list`: without `keyword`, every declared group; with `keyword`, only
+/// the groups whose id, hint or tools match — each rendered whole, with full
+/// schemas.
 async fn LazyTools::execute_list(
   self : LazyTools,
+  ctx : @posoco.ToolCallContext,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let args = arguments_object("tool_list", call)
@@ -283,7 +290,13 @@ async fn LazyTools::execute_list(
         "tool_list: optional 'keyword' must be a string",
       )
   }
-  let groups = self.groups()
+  let groups = self.live_groups(ctx.tools())
+  if groups.is_empty() {
+    return @posoco.ToolOutcome::Success(
+      content="No deferred tool groups are declared behind this gateway.",
+      structured=None,
+    )
+  }
   let keyword_text : String = match keyword {
     Some(k) => k
     None => ""
@@ -294,16 +307,17 @@ async fn LazyTools::execute_list(
       let tokens = parse_query_tokens(k)
       if tokens.is_empty() {
         raise @posoco.RuntimeError::UnknownTool(
-          "tool_list: 'keyword' must contain at least one keyword; omit it to browse all folded groups",
+          "tool_list: 'keyword' must contain at least one keyword; omit it to browse all deferred groups",
         )
       }
       let hit = groups.filter(fn(group) { group_matches(group, tokens) })
       if hit.is_empty() {
-        match self.semantic_group_match(k, groups) {
+        let populated = groups.filter(fn(group) { !group.tools.is_empty() })
+        match self.semantic_group_match(k, populated) {
           Some(group) => [group]
           None =>
             return @posoco.ToolOutcome::Success(
-              content="No folded tool group matches '\{k}'. Try different keywords, or call tool_list without arguments to browse every folded group.",
+              content="No deferred tool group matches '\{k}'. Try different keywords, or call tool_list without arguments to browse every deferred group.",
               structured=None,
             )
         }
@@ -312,16 +326,10 @@ async fn LazyTools::execute_list(
       }
     }
   }
-  if matched.is_empty() {
-    return @posoco.ToolOutcome::Success(
-      content="No folded tools are registered behind this gateway.",
-      structured=None,
-    )
-  }
   let scope = match (matched.length(), groups.length()) {
     (n, total) if n == total =>
-      "all \{n} folded group\{if n == 1 { "" } else { "s" }}:"
-    (n, total) => "\{n} of \{total} folded groups matched '\{keyword_text}':"
+      "all \{n} deferred group\{if n == 1 { "" } else { "s" }}:"
+    (n, total) => "\{n} of \{total} deferred groups matched '\{keyword_text}':"
   }
   let payload = matched.map(fn(group) { group_json(group) })
   let content = "\{scope}\n\{Json::array(payload).stringify()}"

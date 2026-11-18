@@ -65,6 +65,9 @@ impl @posoco.Observer for ExecutionGate with fn on_event(self, scope, event) {
         self.completed = true
       }
     (_, TurnFailed(_)) => self.failed = true
+    // TurnCancelled is deliberately not mapped: kernel cancellation surfaces
+    // through `AgentError::Cancelled` and the adapter reports `Cancelled` —
+    // a user cancellation must not poison the gate as an execution failure.
     _ => ()
   }
 }

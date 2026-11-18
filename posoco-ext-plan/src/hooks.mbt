@@ -80,8 +80,8 @@ fn target_is_writable(
 
 ///|
 /// While Planning/ReadyForApproval the gate is a WRITE BLOCK, not an
-/// allow-list. Deferred gateway calls are classified by the inner tool
-/// name (`LazyTools::unwrap_call`): meta tools pass, the enter/exit pair
+/// allow-list. A deferred tool reaches this gate as its own child call, so
+/// classification reads the call's own name: meta tools pass, the enter/exit pair
 /// passes, shell tools pass everything that cannot write outside the
 /// writable areas (shell_gate.mbt), write tools pass only writable
 /// targets (`target_is_writable`), and every other tool passes
@@ -96,11 +96,10 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
   if self.status is Off {
     return @posoco.ToolDecision::Approve(call~)
   }
-  let (name, effective) = @lazytools.LazyTools::unwrap_call(call)
-  // Gateway meta calls have no side effects of their own: `tool_list`
-  // only browses the folded catalog, and a well-formed `tool_execute` was
-  // already unwrapped above — the literal name survives only for a
-  // malformed call, which executes nothing and fails at the gateway.
+  let (name, effective) = (call.name.to_string(), call)
+  // Gateway meta calls have no side effects of their own: `tool_list` only
+  // browses the operation's deferred face, and `tool_execute` reaches this
+  // gate again as the real tool's child call, which is judged below.
   if @lazytools.LazyTools::is_meta_tool(name) {
     return @posoco.ToolDecision::Approve(call~)
   }

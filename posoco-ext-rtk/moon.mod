@@ -1,10 +1,10 @@
 name = "colmugx/posoco-ext-rtk"
 
-version = "0.3.0"
+version = "0.3.1"
 
 import {
   "colmugx/posoco@0.24.2",
-  "colmugx/posoco-ext-lazytools@0.1.0",
+  "colmugx/posoco-ext-lazytools@0.2.0",
 }
 
 readme = "README.mbt.md"

@@ -6,3 +6,6 @@
 
 ///|
 pub extend LazyTools with @posoco.ToolProvider::{execute, list_tools}
+
+///|
+pub extend LazyTools with @posoco.PipelineHook::{tool_exposure}

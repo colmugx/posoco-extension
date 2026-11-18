@@ -1,35 +1,35 @@
 ///|
-/// The resident discoverability surface: a stable system-prompt section that
-/// names every folded extension group and gives each tool a short capability
-/// hint. Full schemas stay deferred to `tool_list` and remain reusable from
-/// conversation history once fetched.
+/// The resident discoverability surface: a stable system-prompt section naming
+/// every deferred owner and its host-authored capability hint. Full schemas
+/// stay behind `tool_list` and remain reusable from conversation history once
+/// fetched.
+///
+/// The section is frozen by Posoco after the first model call and cannot
+/// enumerate live tools (a group may not have published yet), so it carries
+/// owner-level hints only — that is what keeps prefix caching intact across
+/// connection and toolkit churn.
 
 ///|
-/// Keep resident capability hints deliberately small: this text is paid on
-/// every model request, while the complete schema is available on demand.
-const PROMPT_DESC_CAP = 48
+/// Keep resident hints deliberately small: this text is paid on every model
+/// request, while the complete schema is available on demand.
+const PROMPT_HINT_CAP = 96
 
 ///|
-/// One compact bullet per extension group in first-seen declaration order.
-/// The display id strips the packaging prefix; each tool keeps only a short,
-/// single-line description so discovery remains useful without carrying the
-/// full ToolDef prose in the resident prompt.
+/// One compact bullet per declared group in declaration order. The display id
+/// strips the packaging prefix; the hint is a single capped line.
 fn LazyTools::catalog_bullets(self : LazyTools) -> String {
   let lines : Array[String] = []
-  for group in self.groups() {
-    let tools = group.entries.map(fn(entry) {
-      let name = entry.def.name.to_string()
-      let description = truncate_oneline(entry.def.description, PROMPT_DESC_CAP)
-      if description == "" {
-        name
-      } else {
-        "\{name} — \{description}"
-      }
-    })
-    lines.push("- \{group.id}: \{tools.join("; ")}")
+  for group in self.groups {
+    let id = display_id(group.owner)
+    let hint = truncate_oneline(group.hint, PROMPT_HINT_CAP)
+    if hint == "" {
+      lines.push("- \{id}")
+    } else {
+      lines.push("- \{id}: \{hint}")
+    }
   }
   if lines.is_empty() {
-    "(no folded tools)"
+    "(no deferred groups)"
   } else {
     lines.join("\n")
   }

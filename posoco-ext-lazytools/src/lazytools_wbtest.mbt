@@ -1,756 +1,392 @@
 ///|
-/// ——— Test helpers ———
+/// ——— Shared fixtures ———
+const WEBFETCH_OWNER : String = "posoco_ext_webfetch"
 
 ///|
-fn deferred_def(name : String, description : String) -> @posoco.ToolDef {
-  @posoco.ToolDef(
-    name=@posoco.ToolName::unchecked(name),
-    description~,
-    input_schema=Json::object({
-      "type": Json::string("object"),
-      "properties": Json::object({
-        "path": Json::object({
-          "type": Json::string("string"),
-          "description": Json::string("A path argument"),
-        }),
-      }),
-      "required": Json::array([Json::string("path")]),
-    }),
-    owner=@posoco.OwnerId::unchecked("test_child"),
-    policy=@posoco.ExecutionPolicy::Parallel,
-    provenance=Some("test_child"),
-  )
-}
-
-///|
-fn recording(
-  defs : Array[@posoco.ToolDef],
-  outcomes : Map[String, @tk.ScriptedToolOutcome],
-) -> @tk.RecordingToolProvider {
-  @tk.RecordingToolProvider(defs, outcomes)
-}
-
-///|
-fn build_ok(providers : Array[&@posoco.ToolProvider]) -> LazyTools raise {
-  match LazyTools::build(providers~) {
-    Ok(ext) => ext
-    Err(msg) => fail("unexpected build error: \{msg}")
-  }
-}
-
-///|
-fn meta_call(name : String, args : Map[String, Json]) -> @posoco.ToolCall {
-  {
-    call_id: @posoco.CallId::unchecked("meta-1"),
-    name: @posoco.ToolName::unchecked(name),
-    arguments: Json::object(args),
-  }
-}
-
-///|
-/// Effect context for meta-tool calls (no-op registrar).
-fn test_ctx(name : String, args : Map[String, Json]) -> @posoco.ToolCallContext {
-  @posoco.ToolCallContext(
-    effect_id=@kernel.EffectId::{ value: 1, },
-    call_id=@posoco.CallId::unchecked("meta-1"),
-    name=@posoco.ToolName::unchecked(name),
-    arguments=Json::object(args),
-    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
-  )
-}
-
-///|
-fn expect_success(outcome : @posoco.ToolOutcome) -> String raise {
-  match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) => content
-    _ => fail("expected a Success outcome")
-  }
-}
-
-///|
-/// Feed one turn event to the gateway's observer view.
-fn observe(ext : LazyTools, call : @posoco.ToolCall) -> Unit {
-  (ext as &@posoco.Observer).on_event(
-    None,
-    @posoco.TurnEvent::ToolCallSucceeded(call~, content="ok", structured=None, attachments=[]),
-  )
-}
-
-///|
-/// ——— build: index and collision diagnostics ———
-
-///|
-test "build_rejects_deferred_name_collision" {
-  let a = recording(
-    [deferred_def("grep", "Search file contents")],
-    Map::from_array([]),
-  )
-  let b = recording([deferred_def("grep", "Another grep")], Map::from_array([]))
-  match LazyTools::build(providers=[a, b]) {
-    Err(msg) => {
-      assert_true(msg.contains("collision"))
-      assert_true(msg.contains("'grep'"))
-    }
-    Ok(_) => fail("expected a deferred name collision error")
-  }
-}
-
-///|
-test "build_rejects_empty_tool_name" {
-  let child = recording([deferred_def("", "nameless")], Map::from_array([]))
-  match LazyTools::build(providers=[child]) {
-    Err(msg) => assert_true(msg.contains("empty name"))
-    Ok(_) => fail("expected an empty-name error")
-  }
-}
-
-///|
-/// ——— list_tools: the meta-tool surface ———
-
-///|
-test "list_tools_exposes_only_two_meta_tools_with_policies" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  let defs = ext.list_tools()
-  assert_eq(defs.length(), 2)
-  assert_eq(defs[0].name.to_string(), "tool_list")
-  assert_eq(defs[1].name.to_string(), "tool_execute")
-  assert_eq(defs[0].policy.to_string(), "Parallel")
-  // Deferred side-effecting tools route through one meta tool; never share
-  // a wave with anything else.
-  assert_eq(defs[1].policy.to_string(), "Sequential")
-  for def in defs {
-    assert_eq(def.owner.to_string(), "posoco_ext_lazytools")
-  }
-  assert_eq(ext.deferred_count(), 1)
-  assert_eq(ext.deferred_names(), ["read"])
-}
-
-///|
-test "meta_tool_descriptions_stay_compact" {
-  let defs = meta_tool_defs()
-  assert_true(defs[0].description.length() < 140)
-  assert_true(defs[1].description.length() < 100)
-  assert_true(defs[0].input_schema.stringify().length() < 300)
-}
-
-///|
-/// ——— tool_list: browse and keyword-search ———
-
-///|
-async test "tool_list_without_keyword_lists_every_group_with_schemas" {
-  fn prov_def(name : String, prov : String) -> @posoco.ToolDef {
-    @posoco.ToolDef(
-      name=@posoco.ToolName::unchecked(name),
-      description="A deferred tool",
-      input_schema=Json::object({ "type": Json::string("object") }),
-      owner=@posoco.OwnerId::unchecked(prov),
-      policy=@posoco.ExecutionPolicy::Parallel,
-      provenance=Some(prov),
-    )
-  }
-
-  let web = recording(
-    [prov_def("webfetch", "posoco_ext_webfetch")],
-    Map::from_array([]),
-  )
-  let nmem = recording(
+fn webfetch_provider() -> @tk.RecordingToolProvider {
+  @tk.RecordingToolProvider(
     [
-      prov_def("memory_search", "posoco_ext_nowledge_mem"),
-      prov_def("memory_add", "posoco_ext_nowledge_mem"),
-    ],
-    Map::from_array([]),
-  )
-  let ext = build_ok([web, nmem])
-  let content = expect_success(
-    ext.execute(test_ctx("tool_list", Map::from_array([]))),
-  )
-  assert_true(content.has_prefix("all 2 folded groups:"))
-  assert_false(content.contains("\n  {"))
-  // Grouped by provenance; display ids strip the packaging prefix.
-  assert_true(content.contains("\"ext\":\"webfetch\""))
-  assert_true(content.contains("\"ext\":\"nowledge_mem\""))
-  // Every tool of a group comes back, with schema for direct execution.
-  assert_true(content.contains("\"webfetch\""))
-  assert_true(content.contains("\"memory_search\""))
-  assert_true(content.contains("\"memory_add\""))
-  assert_true(content.contains("input_schema"))
-  assert_false(content.contains("A deferred tool"))
-}
-
-///|
-async test "tool_list_keyword_returns_whole_matching_groups" {
-  fn prov_def2(name : String, prov : String) -> @posoco.ToolDef {
-    @posoco.ToolDef(
-      name=@posoco.ToolName::unchecked(name),
-      description="A deferred tool",
-      input_schema=Json::object({ "type": Json::string("object") }),
-      owner=@posoco.OwnerId::unchecked(prov),
-      policy=@posoco.ExecutionPolicy::Parallel,
-      provenance=Some(prov),
-    )
-  }
-
-  let nmem = recording(
-    [
-      prov_def2("memory_search", "posoco_ext_nowledge_mem"),
-      prov_def2("memory_add", "posoco_ext_nowledge_mem"),
-    ],
-    Map::from_array([]),
-  )
-  let obsidian = recording(
-    [prov_def2("obsidian_search", "posoco_ext_obsidian")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([nmem, obsidian])
-  // A keyword hit on tool names promotes the WHOLE group.
-  let content = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("memory"))]),
-      ),
-    ),
-  )
-  assert_true(content.contains("1 of 2 folded groups matched 'memory'"))
-  assert_true(content.contains("\"memory_search\""))
-  assert_true(content.contains("\"memory_add\""))
-  assert_false(content.contains("obsidian_search"))
-  // A keyword hit on the display id works too (posoco_ext_ stripped).
-  let by_id = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("nowledge_mem"))]),
-      ),
-    ),
-  )
-  assert_true(by_id.contains("1 of 2 folded groups matched 'nowledge_mem'"))
-  assert_true(by_id.contains("\"memory_search\""))
-  assert_false(by_id.contains("obsidian_search"))
-}
-
-///|
-async test "tool_list_no_match_steers_to_full_browse" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  let content = expect_success(
-    ext.execute(
-      test_ctx("tool_list", Map::from_array([("keyword", Json::string("zzz"))])),
-    ),
-  )
-  assert_true(content.contains("No folded tool group matches 'zzz'"))
-  assert_true(content.contains("without arguments"))
-}
-
-///|
-async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
-  fn prov(
-    name : String,
-    description : String,
-    source : String,
-  ) -> @posoco.ToolDef {
-    @posoco.ToolDef(
-      name=@posoco.ToolName::unchecked(name),
-      description~,
-      input_schema=Json::object({ "type": Json::string("object") }),
-      owner=@posoco.OwnerId::unchecked(source),
-      policy=@posoco.ExecutionPolicy::Parallel,
-      provenance=Some(source),
-    )
-  }
-  let memory = recording(
-    [
-      prov(
-        "memory_search", "Search durable memories", "posoco_ext_nowledge_mem",
+      @tk.tk_tool_def(
+        "webfetch_url", "Fetch a URL and return its readable body",
       ),
     ],
-    Map::from_array([]),
-  )
-  let obsidian = recording(
-    [prov("obsidian_search", "Search markdown notes", "posoco_ext_obsidian")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([memory, obsidian])
-  let decision = @tk.ScriptedDecisionPort([
-    @tk.ScriptedDecisionStep::Return({
-      answers: [
-        @posoco.DecisionAnswer::ChoiceAnswer(
-          id="lazytools.group",
-          selected="posoco_ext_nowledge_mem",
-          probabilities=[
-            { id: "posoco_ext_nowledge_mem", probability: 0.9, },
-            { id: "posoco_ext_obsidian", probability: 0.1, },
-          ],
-          confidence=Some(0.9),
-        ),
-      ],
-      model: None,
-      usage: None,
-    }),
-  ])
-  let model = @tk.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (ext as &@posoco.Lifecycle).on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
-  let content = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("remember previous context"))]),
-      ),
-    ),
-  )
-  assert_true(content.contains("memory_search"))
-  assert_false(content.contains("obsidian_search"))
-  assert_eq(decision.call_count(), 1)
-}
-
-///|
-async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
-  fn prov(name : String, source : String) -> @posoco.ToolDef {
-    @posoco.ToolDef(
-      name=@posoco.ToolName::unchecked(name),
-      description=name + " operation",
-      input_schema=Json::object({ "type": Json::string("object") }),
-      owner=@posoco.OwnerId::unchecked(source),
-      policy=@posoco.ExecutionPolicy::Parallel,
-      provenance=Some(source),
-    )
-  }
-  let a = recording([prov("alpha_tool", "alpha")], Map::from_array([]))
-  let b = recording([prov("beta_tool", "beta")], Map::from_array([]))
-  let ext = build_ok([a, b])
-  let decision = @tk.ScriptedDecisionPort([
-    @tk.ScriptedDecisionStep::Return({
-      answers: [
-        @posoco.DecisionAnswer::ChoiceAnswer(
-          id="lazytools.group",
-          selected="alpha",
-          probabilities=[
-            { id: "alpha", probability: 0.55, },
-            { id: "beta", probability: 0.45, },
-          ],
-          confidence=None,
-        ),
-      ],
-      model: None,
-      usage: None,
-    }),
-  ])
-  let model = @tk.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (ext as &@posoco.Lifecycle).on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
-  let content = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("unrelated semantic phrase"))]),
-      ),
-    ),
-  )
-  assert_true(content.contains("No folded tool group matches"))
-  assert_eq(decision.call_count(), 1)
-}
-
-///|
-/// ——— tool_execute: routing and error mapping ———
-
-///|
-async test "tool_execute_routes_to_owner_and_preserves_call_id" {
-  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
-    (
-      "github_create_issue",
-      @tk.OutcomeOk(
-        @posoco.ToolOutcome::Success(content="created #1", structured=None),
-      ),
-    ),
-  ])
-  let child = recording(
-    [deferred_def("github_create_issue", "Create an issue")],
-    outcomes,
-  )
-  let ext = build_ok([child])
-  let outcome = ext.execute(
-    test_ctx(
-      "tool_execute",
-      Map::from_array([
-        ("tool", Json::string("github_create_issue")),
-        (
-          "arguments",
-          Json::object(Map::from_array([("path", Json::string("/tmp/a"))])),
-        ),
-      ]),
-    ),
-  )
-  match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) =>
-      assert_eq(content, "created #1")
-    _ => fail("expected the child outcome to pass through")
-  }
-  let records = child.exec_records()
-  assert_eq(records.length(), 1)
-  assert_eq(records[0].requested_name, "github_create_issue")
-  assert_eq(records[0].call_id, "meta-1")
-  match records[0].arguments {
-    Json::Object(args) =>
-      assert_eq(args.get("path"), Some(Json::string("/tmp/a")))
-    _ => fail("expected inner arguments to stay an object")
-  }
-}
-
-///|
-async test "tool_execute_defaults_missing_arguments_to_empty_object" {
-  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
-    (
-      "list_all",
-      @tk.OutcomeOk(@posoco.ToolOutcome::Success(content="ok", structured=None)),
-    ),
-  ])
-  let child = recording(
-    [
-      @posoco.ToolDef(
-        name=@posoco.ToolName::unchecked("list_all"),
-        description="Takes no arguments",
-        input_schema=Json::object({
-          "type": Json::string("object"),
-          "properties": Json::object({}),
-        }),
-        owner=@posoco.OwnerId::unchecked("test_child"),
-        policy=@posoco.ExecutionPolicy::Parallel,
-        provenance=Some("test_child"),
-      ),
-    ],
-    outcomes,
-  )
-  let ext = build_ok([child])
-  let _ = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_execute",
-        Map::from_array([("tool", Json::string("list_all"))]),
-      ),
-    ),
-  )
-  let records = child.exec_records()
-  assert_eq(records.length(), 1)
-  match records[0].arguments {
-    Json::Object(args) => assert_eq(args.length(), 0)
-    _ => fail("expected empty object arguments, not null")
-  }
-}
-
-///|
-async test "tool_execute_unknown_tool_is_tool_reported_error_with_steering" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  let outcome = ext.execute(
-    test_ctx("tool_execute", Map::from_array([("tool", Json::string("nope"))])),
-  )
-  match outcome {
-    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-      assert_true(content.contains("Unknown deferred tool 'nope'"))
-      assert_true(content.contains("tool_list"))
-    }
-    _ => fail("expected a ToolReportedError for the unknown deferred tool")
-  }
-}
-
-///|
-async test "child_runtime_error_propagates_verbatim" {
-  let outcomes : Map[String, @tk.ScriptedToolOutcome] = Map::from_array([
-    (
-      "read",
-      @tk.OutcomeErr(@posoco.RuntimeError::InvocationFailed("disk on fire")),
-    ),
-  ])
-  let child = recording([deferred_def("read", "Read a file")], outcomes)
-  let ext = build_ok([child])
-  let outcome = Ok(
-    ext.execute(
-      test_ctx(
-        "tool_execute",
-        Map::from_array([("tool", Json::string("read"))]),
-      ),
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match outcome {
-    Err(@posoco.RuntimeError::InvocationFailed(msg)) =>
-      assert_eq(msg, "disk on fire")
-    _ => fail("expected the child RuntimeError to propagate")
-  }
-}
-
-///|
-/// ——— argument validation (house style: RuntimeError) ———
-
-///|
-async test "meta_argument_mistakes_raise_unknown_tool" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  // tool_execute: missing 'tool'
-  let missing = Ok(ext.execute(test_ctx("tool_execute", Map::from_array([])))) catch {
-    error => Err(error)
-  }
-  match missing {
-    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
-      assert_true(msg.contains("missing 'tool'"))
-    _ => fail("expected missing 'tool' to raise")
-  }
-  // tool_list: blank keyword
-  let blank = Ok(
-    ext.execute(
-      test_ctx("tool_list", Map::from_array([("keyword", Json::string("   "))])),
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match blank {
-    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
-      assert_true(msg.contains("at least one keyword"))
-    _ => fail("expected a blank keyword to raise")
-  }
-}
-
-///|
-/// ——— gateway call convention ———
-
-///|
-/// ——— defer_extensions: whole-extension deferral ———
-
-///|
-/// Minimal extension fake: fixed id and a configurable tool-provider list.
-priv struct FakeToolExt {
-  id : String
-  tools : Array[&@posoco.ToolProvider]
-}
-
-///|
-impl @posoco.Extension for FakeToolExt with fn extension_id(self : FakeToolExt) -> String {
-  self.id
-}
-
-///|
-impl @posoco.Extension for FakeToolExt with fn manifest(self : FakeToolExt) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id=self.id, tools=self.tools)
-}
-
-///|
-test "defer_extensions_moves_tool_views_behind_the_gateway" {
-  let child = recording(
-    [deferred_def("nmem_status", "Memory status")],
-    Map::from_array([]),
-  )
-  let ext : &@posoco.Extension = FakeToolExt::{
-    id: "fake_nmem",
-    tools: [child],
-  }
-  let toolless : &@posoco.Extension = FakeToolExt::{
-    id: "fake_hook_only",
-    tools: [],
-  }
-  let (gateway, views) = match
-    LazyTools::defer_extensions(exts=[ext, toolless]) {
-    Ok(pair) => pair
-    Err(message) => fail("unexpected defer error: \{message}")
-  }
-  assert_eq(gateway.list_tools().length(), 2)
-  assert_eq(gateway.deferred_count(), 1)
-  assert_eq(views.length(), 2)
-  assert_eq(views[0].extension_id(), "fake_nmem")
-  assert_eq(views[0].manifest().tools.length(), 0)
-  assert_eq(views[1].extension_id(), "fake_hook_only")
-}
-
-///|
-test "defer_extensions_fails_on_cross_extension_tool_collision" {
-  let a = recording([deferred_def("dup", "One")], Map::from_array([]))
-  let b = recording([deferred_def("dup", "Two")], Map::from_array([]))
-  let ext_a : &@posoco.Extension = FakeToolExt::{ id: "a", tools: [a], }
-  let ext_b : &@posoco.Extension = FakeToolExt::{ id: "b", tools: [b], }
-  match LazyTools::defer_extensions(exts=[ext_a, ext_b]) {
-    Err(message) => assert_true(message.contains("collision"))
-    Ok(_) => fail("expected a collision across deferred extensions")
-  }
-}
-
-///|
-/// ——— discoverability: the resident deferred-tools prompt ———
-
-///|
-test "system_prompt_lists_folded_groups_with_compact_hints" {
-  let web = recording(
-    [deferred_def("webfetch", "Fetch a URL page")],
-    Map::from_array([]),
-  )
-  let nmem = recording(
-    [
-      deferred_def("memory_search", "Search past memories"),
-      deferred_def("memory_add", "Add a new memory"),
-    ],
-    Map::from_array([]),
-  )
-  let ext = build_ok([web, nmem])
-  let manifest = ext.manifest()
-  assert_eq(manifest.prompt_contributors.length(), 1)
-  let prompt = manifest.prompt_contributors[0].system_prompt()
-  assert_true(prompt.has_prefix("## Deferred tools"))
-  assert_true(prompt.contains("Reuse a schema already shown by `tool_list`"))
-  assert_true(prompt.contains("then `tool_execute`"))
-  assert_true(
-    prompt.contains(
-      "- test_child: webfetch — Fetch a URL page; memory_search — Search past memories; memory_add — Add a new memory",
-    ),
-  )
-}
-
-///|
-test "empty_gateway_prompt_says_the_fold_is_empty" {
-  let empty = build_ok([])
-  let prompt = empty.manifest().prompt_contributors[0].system_prompt()
-  assert_true(prompt.contains("(no folded tools)"))
-}
-
-///|
-/// ——— recent-tools: observer tracking + before_model hint ———
-
-///|
-fn gateway_execute_call(tool : String) -> @posoco.ToolCall {
-  meta_call(
-    "tool_execute",
     Map::from_array([
-      ("tool", Json::string(tool)),
-      ("arguments", Json::object(Map::from_array([]))),
+      (
+        "webfetch_url",
+        @tk.ScriptedToolOutcome::OutcomeOk(@tk.tk_ok_result("fetched body")),
+      ),
     ]),
   )
 }
 
 ///|
-async test "before_model_replaces_the_hint_in_place_and_honors_the_cap" {
-  let defs : Array[@posoco.ToolDef] = []
-  for i in 0..<7 {
-    defs.push(deferred_def("tool_\{i}", "Filler tool \{i}"))
+fn gateway() -> LazyTools {
+  match
+    LazyTools::new(groups=[{ owner: WEBFETCH_OWNER, hint: "fetch URLs", }]) {
+    Ok(ext) => ext
+    Err(message) => abort("unexpected defer error: " + message)
   }
-  let child = recording(defs, Map::from_array([]))
-  let ext = build_ok([child])
-  for i in 0..<7 {
-    observe(ext, gateway_execute_call("tool_\{i}"))
-  }
-  let messages : Array[@posoco.Message] = []
-  let injected = (ext as &@posoco.PipelineHook).before_model(messages)
-  match injected[0] {
-    @posoco.Message::UserMessage(content~) =>
-      match content {
-        [@posoco.Content::Text(text), ..] => {
-          // Only the five most recent survive, most recent first.
-          assert_true(text.contains("tool_6, tool_5, tool_4, tool_3, tool_2"))
-          assert_false(text.contains("tool_0"))
-        }
-        _ => fail("expected text content")
-      }
-    _ => fail("expected a user message")
-  }
-  // A re-render with identical content replaces the existing envelope
-  // instead of appending a second one.
-  let again = (ext as &@posoco.PipelineHook).before_model(injected)
-  assert_eq(again.length(), 1)
 }
 
 ///|
-async test "before_model_is_silent_until_the_first_deferred_execution" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
+fn turn_agent(
+  model : @tk.ScriptedModel,
+  provider : &@posoco.ToolProvider,
+  ext : LazyTools,
+) -> @posoco.Agent raise @posoco.CompositionError {
+  @posoco.Agent(
+    events=@posoco.EventSystem(),
+    exts=[
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @tk.tk_ext(id=WEBFETCH_OWNER, tools=[provider]),
+      ext,
+    ],
+    config=@tk.tk_config(),
   )
-  let ext = build_ok([child])
-  let messages : Array[@posoco.Message] = []
-  let untouched = (ext as &@posoco.PipelineHook).before_model(messages)
-  assert_eq(untouched.length(), 0)
 }
 
 ///|
-/// ——— manifest port contributions ———
-
-///|
-test "manifest_reports_ports_and_declares_optional_decision_capability" {
-  let child = recording(
-    [deferred_def("read", "Read a file")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  let manifest = ext.manifest()
-  assert_eq(manifest.tools.length(), 1)
-  assert_eq(manifest.observers.length(), 1)
-  assert_eq(manifest.hooks.length(), 1)
-  assert_eq(manifest.prompt_contributors.length(), 1)
-  assert_eq(manifest.lifecycle.length(), 1)
-  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
+fn tool_names(defs : Array[@kernel.ToolDef]) -> Array[String] {
+  defs.map(fn(def) { def.name.to_string() })
 }
 
 ///|
-async test "tool_list_semantic_fallback_supports_a_single_folded_group" {
-  let child = recording(
-    [deferred_def("memory_search", "Search durable memories")],
-    Map::from_array([]),
-  )
-  let ext = build_ok([child])
-  let decision = @tk.ScriptedDecisionPort([
-    @tk.ScriptedDecisionStep::Return({
-      answers: [
-        @posoco.DecisionAnswer::BooleanAnswer(
-          id="lazytools.group_relevance",
-          probability_true=0.9,
-        ),
-      ],
-      model: None,
-      usage: None,
-    }),
+/// ——— Construction and the model-visible surface ———
+
+///|
+test "meta_surface_is_exactly_the_two_gateway_tools" {
+  let defs = gateway().list_tools()
+  assert_eq(defs.length(), 2)
+  assert_eq(defs[0].name.to_string(), "tool_list")
+  assert_eq(defs[1].name.to_string(), "tool_execute")
+  assert_true(defs[0].policy is @posoco.ExecutionPolicy::Parallel)
+  assert_true(defs[1].policy is @posoco.ExecutionPolicy::Sequential)
+}
+
+///|
+test "new_rejects_empty_and_duplicate_owner" {
+  match LazyTools::new(groups=[{ owner: "", hint: "nameless", }]) {
+    Err(message) => assert_true(message.contains("empty owner"))
+    Ok(_) => fail("expected an empty-owner error")
+  }
+  match
+    LazyTools::new(groups=[
+      { owner: "posoco_ext_a", hint: "one", },
+      { owner: "posoco_ext_a", hint: "two", },
+    ]) {
+    Err(message) => assert_true(message.contains("duplicate deferred owner"))
+    Ok(_) => fail("expected a duplicate-owner error")
+  }
+}
+
+///|
+test "exposure_defers_declared_owner_only" {
+  let ext = gateway()
+  let deferred : @posoco.ToolDef = @tk.tk_tool_def("webfetch_url", "Fetch")
+  let deferred = {
+    ..deferred,
+    owner: @posoco.OwnerId::unchecked(WEBFETCH_OWNER),
+  }
+  assert_true(ext.tool_exposure(deferred) is @posoco.ToolExposure::Deferred)
+  let resident = {
+    ..deferred,
+    owner: @posoco.OwnerId::unchecked("posoco_ext_read"),
+  }
+  assert_true(ext.tool_exposure(resident) is @posoco.ToolExposure::Direct)
+  for def in ext.list_tools() {
+    assert_true(ext.tool_exposure(def) is @posoco.ToolExposure::Direct)
+  }
+}
+
+///|
+async test "model_request_hides_deferred_schema_but_keeps_meta_tools" {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
   ])
-  let model = @tk.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (ext as &@posoco.Lifecycle).on_compose(
-    @tk.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
+  let provider = webfetch_provider()
+  let agent = turn_agent(model, provider, gateway()) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let _ = agent.run_turn(@tk.tk_user_msg("hello"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  let sent = tool_names(model.received_tools[0])
+  assert_true(sent.contains("tool_list"))
+  assert_true(sent.contains("tool_execute"))
+  assert_false(sent.contains("webfetch_url"))
+}
+
+///|
+async test "direct_call_to_deferred_tool_is_not_offered" {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("webfetch_url", "call_1", {
+        "url": "https://example.com",
+      }),
     ),
-  )
-  let content = expect_success(
-    ext.execute(
-      test_ctx(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("remember context"))]),
-      ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+  ])
+  let provider = webfetch_provider()
+  let agent = turn_agent(model, provider, gateway()) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let result = agent.run_turn(@tk.tk_user_msg("fetch it"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  assert_eq(result.tool_results.length(), 1)
+  match result.tool_results[0] {
+    @posoco.ToolOutcome::NotExecuted(reason~, ..) =>
+      assert_true(reason.to_string().contains("NotOffered"))
+    _ => fail("expected a NotExecuted(NotOffered) outcome")
+  }
+  // The definition lives in the catalog (it was validated as known), so the
+  // provider must never have been entered.
+  assert_eq(provider.exec_records().length(), 0)
+}
+
+///|
+async test "tool_list_reports_the_deferred_group_with_its_schema" {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("tool_list", "call_1", {}),
     ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+  ])
+  let provider = webfetch_provider()
+  let agent = turn_agent(model, provider, gateway()) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let result = agent.run_turn(@tk.tk_user_msg("what can you fetch"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  match result.tool_results[0] {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("webfetch"))
+      assert_true(content.contains("webfetch_url"))
+      assert_true(content.contains("input_schema"))
+    }
+    _ => fail("expected tool_list to succeed")
+  }
+}
+
+///|
+async test "tool_execute_runs_the_child_through_the_kernel" {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("tool_execute", "call_1", {
+        "tool": "webfetch_url",
+        "arguments": { "url": "https://example.com" },
+      }),
+    ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+  ])
+  let provider = webfetch_provider()
+  let agent = turn_agent(model, provider, gateway()) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let result = agent.run_turn(@tk.tk_user_msg("fetch example.com"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  match result.tool_results[0] {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_eq(content, "fetched body")
+    _ => fail("expected the child's success to pass through verbatim")
+  }
+  let records = provider.exec_records()
+  assert_eq(records.length(), 1)
+  assert_eq(records[0].tool_name, "webfetch_url")
+}
+
+///|
+async test "tool_execute_steers_on_a_name_outside_the_face" {
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("tool_execute", "call_1", {
+        "tool": "not_a_tool",
+      }),
+    ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+  ])
+  let provider = webfetch_provider()
+  let agent = turn_agent(model, provider, gateway()) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let result = agent.run_turn(@tk.tk_user_msg("run something"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  match result.tool_results[0] {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("Unknown deferred tool"))
+    _ => fail("expected a ToolReportedError outcome")
+  }
+  assert_eq(provider.exec_records().length(), 0)
+}
+
+///|
+/// ——— A group published after composition ———
+
+///|
+/// Publishes its tool group during `on_start`, i.e. after `LazyTools::new` has
+/// already been composed. The first operation captures the catalog after
+/// `on_start`, so deferral must cover it without any LazyTools refresh.
+priv struct LatePublisher {
+  provider : @tk.RecordingToolProvider
+  mut contributions : @posoco.ToolContributions?
+}
+
+///|
+impl @posoco.Extension for LatePublisher with fn extension_id(_self) -> String {
+  "posoco_ext_late"
+}
+
+///|
+impl @posoco.Extension for LatePublisher with fn manifest(self : LatePublisher) -> @posoco.ExtensionManifest {
+  @posoco.ExtensionManifest(id="posoco_ext_late", lifecycle=[self], requires=[
+    @posoco.Capability::ToolContribution,
+  ])
+}
+
+///|
+impl @posoco.Lifecycle for LatePublisher with fn on_compose(
+  self : LatePublisher,
+  view : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.contributions = view.tool_contributions()
+}
+
+///|
+impl @posoco.Lifecycle for LatePublisher with fn on_start(self : LatePublisher) -> Unit {
+  match self.contributions {
+    // Publication before the first operation's capture is what makes the
+    // group deferrable without a composition-time snapshot.
+    Some(capability) => {
+      let _ = capability.replace(
+        provider=self.provider as &@posoco.ToolProvider,
+      )
+    }
+    None => ()
+  }
+}
+
+///|
+async test "dynamic_group_published_after_composition_is_deferred" {
+  let provider = @tk.RecordingToolProvider(
+    [@tk.tk_tool_def("late_echo", "Echo a value from a runtime toolkit")],
+    Map::from_array([
+      ("late_echo", @tk.ScriptedToolOutcome::OutcomeOk(@tk.tk_ok_result("ok"))),
+    ]),
   )
-  assert_true(content.contains("memory_search"))
-  assert_eq(decision.call_count(), 1)
+  let publisher : LatePublisher = { provider, contributions: None, }
+  let ext = match
+    LazyTools::new(groups=[
+      { owner: "posoco_ext_late", hint: "runtime toolkit", },
+    ]) {
+    Ok(ext) => ext
+    Err(message) => abort("unexpected defer error: " + message)
+  }
+  let model = @tk.ScriptedModel([
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("late_echo", "call_1", {}),
+    ),
+    @tk.ScriptedModelStep::Respond(
+      @tk.tk_tool_call_response("tool_execute", "call_2", {
+        "tool": "late_echo",
+      }),
+    ),
+    @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("done")),
+  ])
+  let agent = @posoco.Agent(
+    events=@posoco.EventSystem(),
+    exts=[
+      @tk.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      publisher,
+      ext,
+    ],
+    config=@tk.tk_config(),
+  ) catch {
+    error => fail("composition failed: \{error}")
+  }
+  let result = agent.run_turn(@tk.tk_user_msg("echo"), "s1") catch {
+    error => fail("turn failed: \{error}")
+  }
+  assert_false(tool_names(model.received_tools[0]).contains("late_echo"))
+  match result.tool_results[0] {
+    @posoco.ToolOutcome::NotExecuted(reason~, ..) =>
+      assert_true(reason.to_string().contains("NotOffered"))
+    _ => fail("expected the published group's direct call to be not offered")
+  }
+  // The gateway reaches the same group through the child pipeline.
+  match result.tool_results[1] {
+    @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "ok")
+    _ => fail("expected tool_execute to reach the late-published tool")
+  }
+}
+
+///|
+/// ——— Resident prompt section ———
+
+///|
+test "prompt_section_lists_owner_groups_with_hints" {
+  let prompt = gateway().system_prompt()
+  assert_true(prompt.contains("## Deferred tools"))
+  assert_true(prompt.contains("- webfetch: fetch URLs"))
+  assert_true(prompt.contains("tool_list"))
+  assert_true(prompt.contains("tool_execute"))
+  assert_true(prompt.contains("Reuse a schema already shown by `tool_list`"))
+  assert_true(prompt.contains("Do not rediscover schemas already in history"))
+}
+
+///|
+test "manifest_declares_the_invocable_face_and_no_observers" {
+  let manifest = gateway().manifest()
+  assert_eq(manifest.tools.length(), 1)
+  assert_eq(manifest.tool_call_owners, [WEBFETCH_OWNER])
+  assert_eq(manifest.observers.length(), 0)
+  assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.hooks.length(), 2)
+}
+
+///|
+test "prompt_section_is_identical_for_equal_declarations" {
+  assert_eq(gateway().system_prompt(), gateway().system_prompt())
+}
+
+///|
+test "prompt_section_matches_the_declared_owner_set" {
+  let ext = match
+    LazyTools::new(groups=[
+      { owner: "posoco_ext_webfetch", hint: "fetch URLs", },
+      { owner: "posoco_ext_mcp", hint: "configured MCP servers", },
+    ]) {
+    Ok(ext) => ext
+    Err(message) => abort("unexpected defer error: " + message)
+  }
+  assert_eq(ext.deferred_owners(), ["posoco_ext_webfetch", "posoco_ext_mcp"])
+  let prompt = ext.system_prompt()
+  assert_true(prompt.contains("- webfetch: fetch URLs"))
+  assert_true(prompt.contains("- mcp: configured MCP servers"))
+}
+
+///|
+/// ——— Legacy transcript migration ———
+
+///|
+async test "legacy_envelope_is_removed_once" {
+  let hooks = gateway().manifest().hooks
+  assert_eq(hooks.length(), 2)
+  let migration = hooks[0]
+  let legacy : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(
+      "<lazytools-context type=\"recent-tools\" trust=\"true\">grep</lazytools-context>",
+    ),
+  ])
+  let keep : @posoco.Message = @tk.tk_user_msg("hello")
+  let rewritten = migration.before_model([legacy, keep]) catch {
+    _ => fail("migration hook must not abort the run")
+  }
+  assert_eq(rewritten.length(), 1)
+  let untouched = migration.before_model([keep]) catch {
+    _ => fail("migration hook must not abort the run")
+  }
+  assert_eq(untouched.length(), 1)
 }

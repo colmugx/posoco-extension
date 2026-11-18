@@ -6,7 +6,7 @@ import {
   "colmugx/posoco@0.24.2",
   "colmugx/acp@0.3.0",
   "posoco/devkit@0.4.1",
-  "colmugx/posoco-ext-permission@0.2.0",
+  "colmugx/posoco-ext-permission@0.2.1",
 }
 
 readme = "README.mbt.md"

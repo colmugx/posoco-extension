@@ -399,6 +399,9 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event(
     }
     @posoco.TurnEvent::TurnCompleted => self.stage_turn_sync("turn_completed")
     @posoco.TurnEvent::TurnFailed(_) => self.stage_turn_sync("turn_failed")
+    // A cancelled turn still produced messages worth syncing; recording the
+    // stage keeps the memory lane from missing everything after a Ctrl+C.
+    @posoco.TurnEvent::TurnCancelled => self.stage_turn_sync("turn_cancelled")
     _ => ()
   }
 }

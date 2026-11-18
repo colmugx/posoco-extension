@@ -8,28 +8,31 @@ pub impl @posoco.Extension for LazyTools with fn extension_id(_self) -> String {
 }
 
 ///|
-/// Declare the stable LazyTools surfaces: one ToolProvider exposing the two
-/// meta tools, one system-prompt section listing the folded groups, and stable
-/// Observer/PipelineHook views that preserve the historical manifest shape
-/// without writing usage-driven recent-tool envelopes into durable history.
+/// Declare the deferral surfaces: the two meta tools, the operation-boundary
+/// exposure projection that hides declared owners from model requests, the
+/// stable prompt section listing those owners, and the migration-only hook
+/// that removes a legacy recent-tools envelope once.
 ///
-/// The public LazyTools Observer/PipelineHook impls remain available to
-/// explicit callers that intentionally opt into the legacy hint behavior.
-/// Normal Agent composition receives the stable views below so provider
-/// prompt-prefix reuse is not invalidated as recent tool usage changes.
+/// `tool_call_owners` is the single source of the invocable face: the kernel
+/// admits `tool_execute`'s child calls per owner and computes what `tool_list`
+/// may show from the same declaration, so the declared face and the reachable
+/// face cannot drift apart.
 ///
-/// Deferred providers stay inside the LazyTools value — the host must NOT
-/// also register them as extensions, or their tools would appear in the
-/// catalog anyway.
+/// Deferred owners are registered by the host as ordinary extensions. The
+/// exposure hook — not composition wiring — is what keeps their schemas out of
+/// the model request.
 pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.ExtensionManifest {
   @posoco.ExtensionManifest(
     id="posoco_ext_lazytools",
     tools=[self],
-    observers=[self.stable_observer as &@posoco.Observer],
-    hooks=[self.stable_hook as &@posoco.PipelineHook],
+    hooks=[
+      self.stable_hook as &@posoco.PipelineHook,
+      self as &@posoco.PipelineHook,
+    ],
     lifecycle=[self],
     prompt_contributors=[self],
     requires=[@posoco.Capability::Decision],
+    tool_call_owners=self.owners,
   )
 }
 

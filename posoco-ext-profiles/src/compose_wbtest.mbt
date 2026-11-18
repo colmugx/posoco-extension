@@ -37,7 +37,9 @@ test "compose_profiles_captures_members_and_preserves_other_deferred_prompts" {
   assert_eq(composition.exts[1].extension_id(), "posoco_ext_profiles")
   assert_eq(composition.exts[2].extension_id(), "profiled")
   assert_eq(composition.exts[2].manifest().prompt_contributors.length(), 0)
-  assert_eq(composition.exts[2].manifest().tools.length(), 0)
+  // Tools stay registered: the gateway hides them from the model, it does not
+  // remove them from the composition.
+  assert_eq(composition.exts[2].manifest().tools.length(), 1)
   assert_eq(composition.exts[3].extension_id(), "unprofiled")
   assert_eq(composition.exts[3].manifest().prompt_contributors.length(), 1)
   assert_eq(composition.exts[4].extension_id(), "posoco_ext_lazytools")

@@ -1,27 +1,9 @@
 ///|
-/// Session usage attribution for `/profile save`: an Observer that
-/// counts successful tool executions per session, unwrapping lazytools
-/// gateway calls to their inner tool name first.
-
-///|
-/// Inner tool identity of an executed call. Gateway calls travel as
-/// `tool_execute` with the real name in the `tool` argument — the same
-/// field convention as lazytools' `unwrap_call` (own copy; no private
-/// imports). Non-gateway calls and malformed gateway envelopes keep their
-/// outer name.
-fn inner_tool_name(name : String, arguments : Json) -> String {
-  if name != "tool_execute" {
-    return name
-  }
-  match arguments {
-    Json::Object(fields) =>
-      match fields.get("tool") {
-        Some(Json::String(inner)) if inner != "" => inner
-        _ => name
-      }
-    _ => name
-  }
-}
+/// Session usage attribution for `/profile save`: an Observer that counts
+/// successful tool executions per session. A deferred tool executes as its own
+/// child call, so `ToolCallSucceeded` already names the real tool — the gateway
+/// envelope (`tool_execute`) is never an attributable name and cannot
+/// double-count.
 
 ///|
 /// Watch committed tool results. Only successful executions count (failed,
@@ -41,7 +23,7 @@ pub impl @posoco.Observer for Profiles with fn on_event(
         Some(s) => s.session_id.to_string()
         None => return
       }
-      let name = inner_tool_name(call.name.to_string(), call.arguments)
+      let name = call.name.to_string()
       if self.attribution.contains(name) {
         let per_session = match self.usage.get(session_id) {
           Some(map) => map

@@ -1,12 +1,12 @@
 name = "colmugx/posoco-ext-plan"
 
-version = "0.5.0"
+version = "0.5.1"
 
 import {
   "colmugx/posoco@0.24.2",
   "posoco/devkit@0.4.1",
   "posoco/kit-events@0.1.0",
-  "colmugx/posoco-ext-lazytools@0.1.0",
+  "colmugx/posoco-ext-lazytools@0.2.0",
   "colmugx/posoco-ext-workspace@0.1.0",
 }
 

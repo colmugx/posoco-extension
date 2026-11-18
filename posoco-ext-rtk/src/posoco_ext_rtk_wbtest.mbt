@@ -235,80 +235,67 @@ test "manifest_registers_as_extension_with_hook" {
 }
 
 ///|
-async test "hook_classifies_gateway_calls_by_inner_tool_name" {
+async test "hook_ignores_the_gateway_envelope_and_judges_the_child" {
   let hook = RTKHook("rtk")
-  // A gateway call carrying a non-shell inner tool passes through.
-  let read_call = @posoco.ToolCall::{
+  // The gateway envelope is not a shell call: rtk leaves it to the gateway,
+  // and the shell child it declares comes back through this hook by name.
+  let envelope = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_g"),
-    name: @posoco.ToolName::unchecked("tool_execute"),
-    arguments: Json::object(
-      Map::from_array([
-        ("tool", Json::string("read")),
-        (
-          "arguments",
-          Json::object(Map::from_array([("path", Json::string("/a"))])),
-        ),
-      ]),
-    ),
-  }
-  match hook.before_tool(read_call) {
-    Approve(_) => ()
-    other =>
-      fail("expected Approve for deferred non-shell, got " + other.to_string())
-  }
-  // A gateway call carrying a shell tool but malformed inner arguments is
-  // rejected loudly (the extract error surfaces as Reject).
-  let malformed = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("call_g2"),
-    name: @posoco.ToolName::unchecked("tool_execute"),
-    arguments: Json::object(Map::from_array([("tool", Json::string("bash"))])),
-  }
-  match hook.before_tool(malformed) {
-    Reject(_) => ()
-    other =>
-      fail(
-        "expected Reject for malformed deferred shell, got " + other.to_string(),
-      )
-  }
-}
-
-///|
-test "gateway_shell_rewrite_composes_unwrap_rewrite_rewrap" {
-  let gateway_call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("call_g3"),
     name: @posoco.ToolName::unchecked("tool_execute"),
     arguments: Json::object(
       Map::from_array([
         ("tool", Json::string("bash")),
         (
           "arguments",
-          Json::object(
-            Map::from_array([
-              ("cmd", Json::string("git status")),
-              ("timeout", Json::number(5.0)),
-            ]),
-          ),
+          Json::object(Map::from_array([("cmd", Json::string("ls"))])),
         ),
       ]),
     ),
   }
-  let (name, effective) = @lazytools.LazyTools::unwrap_call(gateway_call)
-  assert_eq(name, "bash")
-  let rewritten = rewrite_tool_call(effective, "rtk git status")
-  let outer = @lazytools.LazyTools::rewrap_call(gateway_call, rewritten)
-  // The kernel-executable shape: outer name and call id preserved, the
-  // nested cmd rewritten, sibling inner keys intact.
-  assert_eq(outer.name.to_string(), "tool_execute")
-  assert_eq(outer.call_id.to_string(), "call_g3")
-  match outer.arguments {
-    Object(args) =>
-      match args.get("arguments") {
-        Some(Object(inner_args)) => {
-          assert_eq(inner_args.get("cmd"), Some(Json::string("rtk git status")))
-          assert_eq(inner_args.get("timeout"), Some(Json::number(5.0)))
-        }
-        _ => fail("expected nested arguments object")
-      }
-    _ => fail("expected outer arguments object")
+  match hook.before_tool(envelope) {
+    Approve(_) => ()
+    other =>
+      fail(
+        "expected Approve for the gateway envelope, got " + other.to_string(),
+      )
+  }
+  // A malformed shell child is still rejected loudly under its own name.
+  let malformed = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_g2"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(Map::from_array([])),
+  }
+  match hook.before_tool(malformed) {
+    Reject(_) => ()
+    other =>
+      fail(
+        "expected Reject for a malformed shell child, got " + other.to_string(),
+      )
+  }
+}
+
+///|
+test "deferred_shell_child_call_is_rewritten_in_place" {
+  // A deferred shell call reaches the hook as its own child call: the real
+  // name and arguments are already on the call, so the rewrite stays local.
+  let child_call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_g3"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(
+      Map::from_array([
+        ("cmd", Json::string("git status")),
+        ("timeout", Json::number(5.0)),
+      ]),
+    ),
+  }
+  let rewritten = rewrite_tool_call(child_call, "rtk git status")
+  assert_eq(rewritten.name.to_string(), "bash")
+  assert_eq(rewritten.call_id.to_string(), "call_g3")
+  match rewritten.arguments {
+    Object(args) => {
+      assert_eq(args.get("cmd"), Some(Json::string("rtk git status")))
+      assert_eq(args.get("timeout"), Some(Json::number(5.0)))
+    }
+    _ => fail("expected an arguments object")
   }
 }

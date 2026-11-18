@@ -1,41 +1,28 @@
 ///|
-/// posoco-ext-lazytools — tool lazy-loading gateway for Posoco agents.
+/// posoco-ext-lazytools — operation-time deferral of tool schemas.
 ///
-/// A host with many tools (70+) pays for every definition on every model
-/// request. LazyTools collapses N wrapped `ToolProvider`s into exactly two
-/// model-visible meta tools — `tool_list` (browse or keyword-search the
-/// folded catalog) and `tool_execute` (route a deferred call to its owning
-/// provider). Providers that should stay fully loaded are registered directly
-/// on the Agent, not wrapped here.
+/// The gateway owns no provider and enumerates no tool at composition time.
+/// It declares which extension owners are deferred, narrows those definitions
+/// to `ToolExposure::Deferred` at every operation capture, and reaches them
+/// through the kernel child pipeline (`ToolCallContext::invoke`). A deferred
+/// definition stays in the captured catalog but never enters a model request,
+/// so groups published AFTER composition — live MCP connections, runtime
+/// toolkits — are deferred exactly like static ones.
 
 ///|
-/// One deferred tool: its definition and the position of the wrapped
-/// provider that owns it.
-priv struct LazyEntry {
-  def : @posoco.ToolDef
-  provider : Int32
+/// One deferred owner: the manifest id whose tools leave the model request,
+/// plus the one-line hint kept in the resident prompt so keyword discovery
+/// works before any schema has been fetched. An empty hint is allowed.
+pub(all) struct DeferredGroup {
+  owner : String
+  hint : String
 }
 
 ///|
-/// Stable manifest views. LazyTools historically auto-registered its own
-/// usage Observer + before_model hook to inject a changing recent-tools
-/// envelope into the transcript. Keep the manifest shape compatible while
-/// making the default composition cache-friendly: the Observer is inert and
-/// the hook only removes legacy envelopes left by older sessions. The public
-/// LazyTools Observer/PipelineHook impls remain available to explicit callers
-/// that intentionally opt into the legacy hint behavior.
-priv struct StableLazyToolsObserver {}
-
-///|
-impl @posoco.Observer for StableLazyToolsObserver with fn on_event(
-  _self,
-  _scope : @posoco.EventScope?,
-  _event : @posoco.TurnEvent,
-) -> Unit {
-  ()
-}
-
-///|
+/// Stable manifest hook: removes a `<lazytools-context>` envelope older
+/// releases persisted into the transcript. Kept as a one-time migration —
+/// a legacy envelope in history invalidates provider prefix caching from its
+/// position onward.
 priv struct StableLazyToolsHook {}
 
 ///|
@@ -80,117 +67,85 @@ impl @posoco.PipelineHook for StableLazyToolsHook with fn before_model(
 }
 
 ///|
-/// The lazy-loading gateway. Opaque: compose via `LazyTools::build`.
+/// The deferral gateway. Opaque: compose via `LazyTools::new`.
 pub struct LazyTools {
-  priv providers : Array[&@posoco.ToolProvider]
-  priv entries : Array[LazyEntry]
-  priv by_name : Map[String, Int32]
-  /// Recently executed deferred tools, most recent last, deduplicated,
-  /// bounded by RECENT_TOOLS_CAP. This state is used only by the explicit
-  /// legacy Observer/PipelineHook views; normal manifest composition uses the
-  /// stable views above so prompt history is not rewritten per usage.
-  priv recent : Array[String]
-  priv stable_observer : StableLazyToolsObserver
+  priv groups : Array[DeferredGroup]
+  priv owners : Array[String]
+  priv deferred : Map[String, Bool]
   priv stable_hook : StableLazyToolsHook
   /// Optional semantic judgement capability used only after lexical discovery misses.
   priv mut decision : &@posoco.DecisionPort?
 }
 
 ///|
-/// Build the gateway over deferred providers. Each provider's `list_tools()`
-/// is called once here; the returned definitions are indexed for
-/// `tool_list`/`tool_execute` and are NEVER added to the agent's catalog.
+/// Declare the deferred owner set. Every tool whose aggregated owner is one of
+/// these manifest ids is narrowed to `Deferred` at each operation capture and
+/// becomes reachable only through `tool_execute`.
 ///
-/// Fails with `Err` when two deferred providers declare the same tool name
-/// (the agent-level collision check cannot see behind the gateway).
+/// Fails with `Err` for an empty owner (a group that can never match) and for
+/// a duplicate owner (two hints for one face).
 ///
 /// # Example
 /// ```mbt check
 /// test "lazytools exposes exactly the two meta tools" {
-///   let child_def : @posoco.ToolDef = @posoco.ToolDef(
-///     name=@posoco.ToolName::unchecked("github_create_issue"),
-///     description="Create a GitHub issue",
-///     input_schema=Json::object({ "type": Json::string("object") }),
-///     owner=@posoco.OwnerId::unchecked("test_child"),
-///     policy=@posoco.ExecutionPolicy::Parallel,
-///     provenance=Some("test_child"),
-///   )
-///   let child = @posoco.ToolRegistry()
-///   child.register(child_def, fn(_) {
-///     @posoco.ToolOutcome::Success(content="ok", structured=None)
-///   })
-///   let ext = match @posoco-ext-lazytools.LazyTools::build(providers=[child]) {
+///   let ext = match
+///     @posoco-ext-lazytools.LazyTools::new(groups=[
+///       @posoco-ext-lazytools.DeferredGroup::{
+///         owner: "posoco_ext_webfetch",
+///         hint: "fetch URLs",
+///       },
+///     ]) {
 ///     Ok(ext) => ext
-///     Err(msg) => fail("unexpected build error: \{msg}")
+///     Err(msg) => fail("unexpected defer error: \{msg}")
 ///   }
 ///   let names = ext.list_tools().map(fn(def) { def.name.to_string() })
 ///   assert_eq(names.length(), 2)
 ///   assert_true(names.contains("tool_list"))
 ///   assert_true(names.contains("tool_execute"))
-///   assert_eq(ext.deferred_count(), 1)
+///   assert_eq(ext.deferred_owners(), ["posoco_ext_webfetch"])
 /// }
 /// ```
-pub fn LazyTools::build(
-  providers~ : Array[&@posoco.ToolProvider],
+pub fn LazyTools::new(
+  groups~ : Array[DeferredGroup],
 ) -> Result[LazyTools, String] {
-  let entries : Array[LazyEntry] = []
-  let by_name : Map[String, Int32] = Map::from_array([])
-  for i, provider in providers {
-    for def in provider.list_tools() {
-      let name = def.name.to_string()
-      if name == "" {
-        return Err("lazytools: a deferred tool declared an empty name")
-      }
-      match by_name.get(name) {
-        Some(pos) => {
-          let first = entries[pos].def
-          let first_source = match first.provenance {
-            Some(p) => p
-            None => "(unlabeled)"
-          }
-          let other_source = match def.provenance {
-            Some(p) => p
-            None => "(unlabeled)"
-          }
-          return Err(
-            "lazytools: deferred tool name collision '\{name}' between provenance '\{first_source}' and '\{other_source}'",
-          )
-        }
-        None => {
-          by_name[name] = entries.length()
-          entries.push({ def, provider: i, })
-        }
-      }
+  let owners : Array[String] = []
+  let deferred : Map[String, Bool] = Map::from_array([])
+  for group in groups {
+    let owner = group.owner
+    if owner == "" {
+      return Err("lazytools: a deferred group declares an empty owner")
     }
+    if deferred.contains(owner) {
+      return Err("lazytools: duplicate deferred owner '\{owner}'")
+    }
+    deferred[owner] = true
+    owners.push(owner)
   }
   Ok({
-    providers,
-    entries,
-    by_name,
-    recent: [],
-    stable_observer: StableLazyToolsObserver::{ },
+    groups,
+    owners,
+    deferred,
     stable_hook: StableLazyToolsHook::{ },
     decision: None,
   })
 }
 
 ///|
-/// Number of deferred tools hidden behind the gateway.
-pub fn LazyTools::deferred_count(self : LazyTools) -> Int32 {
-  self.entries.length()
+/// The declared deferred owner ids, in declaration order.
+pub fn LazyTools::deferred_owners(self : LazyTools) -> Array[String] {
+  self.owners.copy()
 }
 
 ///|
-/// Deferred tool names in declaration order (diagnostic aid for hosts; the
-/// model sees them only via `tool_list`).
-pub fn LazyTools::deferred_names(self : LazyTools) -> Array[String] {
-  self.entries.map(fn(entry) { entry.def.name.to_string() })
+/// Is `owner` one of the declared deferred owners?
+pub fn LazyTools::is_deferred_owner(self : LazyTools, owner : String) -> Bool {
+  self.deferred.contains(owner)
 }
 
 ///|
-/// Port contribution: exactly the two meta tools. Deferred definitions do
-/// not pass through here — the agent catalog stays flat and small. The
-/// resident catalog index lives in the system prompt (prompt_section.mbt).
+/// Port contribution: exactly the two meta tools. Deferred definitions never
+/// pass through here — they stay in the kernel catalog under their own owner
+/// and are hidden from the model by `tool_exposure`.
 pub impl @posoco.ToolProvider for LazyTools with fn list_tools(
   _self : LazyTools,
 ) -> Array[@posoco.ToolDef] {
@@ -198,11 +153,11 @@ pub impl @posoco.ToolProvider for LazyTools with fn list_tools(
 }
 
 ///|
-/// Route a meta-tool call. `tool_list` answers from the index; `tool_execute`
-/// rebuilds an inner `ToolCall` (same call id, inner name and arguments) and
-/// hands it to the owning provider. The child's outcome is returned
-/// verbatim; a raised `RuntimeError` propagates so the kernel's catch-all
-/// maps it exactly as if the child had been called directly.
+/// Route a meta-tool call. `tool_list` answers from the operation's captured
+/// catalog; `tool_execute` re-enters the kernel child pipeline, so the child
+/// keeps schema validation, the owner gate, the composed hook chain,
+/// budget/depth accounting and cancellation — exactly as if the model had
+/// called it directly.
 pub impl @posoco.ToolProvider for LazyTools with fn execute(
   self : LazyTools,
   ctx : @posoco.ToolCallContext,
@@ -214,11 +169,30 @@ pub impl @posoco.ToolProvider for LazyTools with fn execute(
     arguments: ctx.arguments,
   }
   match name {
-    "tool_list" => self.execute_list(call)
+    "tool_list" => self.execute_list(ctx, call)
     "tool_execute" => self.execute_deferred(ctx, call)
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
         "lazytools: no tool named '\{name}'",
       )
+  }
+}
+
+///|
+/// Operation-boundary projection: declared owners leave the model request.
+/// Hooks may only narrow, so `Direct` stays `Direct` for every other owner and
+/// the gateway's own meta tools can never defer themselves.
+pub impl @posoco.PipelineHook for LazyTools with fn tool_exposure(
+  self : LazyTools,
+  definition : @posoco.ToolDef,
+) -> @posoco.ToolExposure {
+  let name = definition.name.to_string()
+  if name == "tool_list" || name == "tool_execute" {
+    return @posoco.ToolExposure::Direct
+  }
+  if self.is_deferred_owner(definition.owner.to_string()) {
+    @posoco.ToolExposure::Deferred
+  } else {
+    @posoco.ToolExposure::Direct
   }
 }

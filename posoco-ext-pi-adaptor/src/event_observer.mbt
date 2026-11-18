@@ -440,6 +440,9 @@ pub impl @posoco.Observer for PiEventObserver with fn on_event(
       self.run_messages = []
       self.reset_response()
     }
+    // A cancelled turn ends the pi loop too: the guest must not keep the run
+    // open across a cancellation it can only learn about through this event.
+    @posoco.TurnEvent::TurnCancelled => self.reset_agent_run()
     _ => ()
   }
 }

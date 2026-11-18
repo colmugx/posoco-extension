@@ -293,6 +293,11 @@ pub impl @posoco.Observer for RateLimitGuard with fn on_event(
       self.send(TurnFailed(session_id=scope.session_id.to_string()))
     (Some(scope), TurnCompleted) =>
       self.send(TurnCompleted(session_id=scope.session_id.to_string()))
+    // A cancelled turn ends the run like a failed one: a pending recovery
+    // must arm at its deadline instead of waiting for a terminal that never
+    // comes.
+    (Some(scope), TurnCancelled) =>
+      self.send(TurnFailed(session_id=scope.session_id.to_string()))
     _ => ()
   }
 }

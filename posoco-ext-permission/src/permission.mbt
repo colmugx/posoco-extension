@@ -567,16 +567,13 @@ pub extend PermissionPolicy with @posoco.PipelineHook::{
 }
 
 ///|
-/// Resolve the tool identity a call will actually execute, for permission
-/// classification and approval scoping. The lazytools convention is shared
-/// (`LazyTools::unwrap_call`): gateway `execute` calls classify by the
-/// inner tool name — the gateway executes exactly the named tool, so
-/// classifying and scoping by that name is faithful. Malformed gateway
-/// calls classify as `execute` itself and fail downstream at the gateway.
-/// The original call is always returned untouched — the kernel routes
-/// execution by the outer name.
+/// Resolve the tool identity a call will execute, for permission
+/// classification and approval scoping. A deferred tool reaches this gate as
+/// its own child call (the gateway re-enters the kernel child pipeline), so
+/// a call's own name is already the real identity and the call passes through
+/// untouched. Kept as a seam so classification reads one place.
 fn effective_tool(call : @posoco.ToolCall) -> (String, @posoco.ToolCall) {
-  @lazytools.LazyTools::unwrap_call(call)
+  (call.name.to_string(), call)
 }
 
 ///|
@@ -901,13 +898,11 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
   let (name, effective) = effective_tool(call)
-  // Gateway meta tools skip this gate: tool_list only browses the folded
-  // catalog, and a well-formed tool_execute never reaches this check under
-  // its own name — effective_tool already unwrapped it to the inner tool,
-  // which is classified and gated below. The literal name survives
-  // unwrapping only for a malformed call, which executes nothing and fails
-  // at the gateway with a precise argument error.
-  if @lazytools.LazyTools::is_meta_tool(name) {
+  // Gateway meta tools skip this gate: `tool_list` only browses the operation's
+  // deferred face, and `tool_execute` has no side effects of its own — the
+  // real tool arrives as a child call and is classified and gated under its
+  // own name, so a deferred call is authorized exactly once.
+  if @lazytools.LazyTools::is_meta_tool(call.name.to_string()) {
     return @posoco.ToolDecision::Approve(call~)
   }
   // Escalated mbtx is intercepted before the exemption lookup below: the

@@ -166,6 +166,9 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
     @posoco.TurnEvent::UserRequestFinished(..) => self.emit(Working)
     @posoco.TurnEvent::TurnCompleted => self.emit(Idle)
     @posoco.TurnEvent::TurnFailed(_) => self.emit(Idle)
+    // A cancelled turn ends the run like any other terminal: herdr must go
+    // idle instead of reporting "working" until the next turn starts.
+    @posoco.TurnEvent::TurnCancelled => self.emit(Idle)
     _ => ()
   }
 }

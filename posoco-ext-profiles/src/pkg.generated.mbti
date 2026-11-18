@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-profiles"
 
 import {
+  "colmugx/posoco-ext-lazytools",
   "colmugx/posoco/error",
   "colmugx/posoco/events",
   "colmugx/posoco/kernel",
@@ -14,9 +15,11 @@ import {
 // Values
 pub fn activation_header(String) -> String
 
-pub fn compose_profiles(resident~ : Array[&@port.Extension], deferred~ : Array[&@port.Extension], manifests~ : Array[ProfileManifest], events? : @events.Events?, store? : &ProfileStore?, activation_sink? : &ProfileActivationSink?, summarizer? : ((Array[(String, Int32)]) -> (String, String))?) -> Result[ProfileComposition, String]
+pub fn compose_profiles(resident~ : Array[&@port.Extension], deferred~ : Array[&@port.Extension], manifests~ : Array[ProfileManifest], events? : @events.Events?, store? : &ProfileStore?, activation_sink? : &ProfileActivationSink?, summarizer? : ((Array[(String, Int32)]) -> (String, String))?, deferred_hints? : Map[String, String], extra_deferred_owners? : Array[String]) -> Result[ProfileComposition, String]
 
 pub fn deep_defer_extensions(exts~ : Array[&@port.Extension]) -> (Map[String, String], Array[&@port.Extension])
+
+pub fn deferred_gateway(deferred~ : Array[&@port.Extension], extra_owners? : Array[String], hints? : Map[String, String]) -> Result[@posoco-ext-lazytools.LazyTools, String]
 
 pub fn find_pending_activations(Array[@kernel.Message]) -> Array[String]
 

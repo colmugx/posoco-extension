@@ -5,7 +5,6 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
-  "colmugx/posoco/types",
 }
 
 // Values
@@ -13,33 +12,30 @@ import {
 // Errors
 
 // Types and methods
+pub(all) struct DeferredGroup {
+  owner : String
+  hint : String
+}
+
 pub struct LazyTools {
   // private fields
 }
-pub async fn LazyTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
-pub async fn LazyTools::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
-pub fn LazyTools::build(providers~ : Array[&@port.ToolProvider]) -> Result[Self, String]
-pub fn LazyTools::defer_extensions(exts~ : Array[&@port.Extension]) -> Result[(Self, Array[&@port.Extension]), String]
-pub fn LazyTools::deferred_count(Self) -> Int32
-pub fn LazyTools::deferred_names(Self) -> Array[String]
+pub fn LazyTools::deferred_owners(Self) -> Array[String]
 pub async fn LazyTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn LazyTools::extension_id(Self) -> String
+pub fn LazyTools::is_deferred_owner(Self, String) -> Bool
 pub fn LazyTools::is_meta_tool(String) -> Bool
 pub fn LazyTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn LazyTools::manifest(Self) -> @port.ExtensionManifest
+pub fn LazyTools::new(groups~ : Array[DeferredGroup]) -> Result[Self, String]
 pub fn LazyTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn LazyTools::on_event(Self, @types.EventScope?, @types.TurnEvent) -> Unit
-pub async fn LazyTools::on_post_event(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
 pub async fn LazyTools::on_shutdown(Self) -> Unit
 pub async fn LazyTools::on_start(Self) -> Unit
-pub async fn LazyTools::on_turn_begin(Self) -> Unit
-pub async fn LazyTools::on_turn_end(Self) -> Unit
-pub fn LazyTools::rewrap_call(@kernel.ToolCall, @kernel.ToolCall) -> @kernel.ToolCall
 pub fn LazyTools::system_prompt(Self) -> String
-pub fn LazyTools::unwrap_call(@kernel.ToolCall) -> (String, @kernel.ToolCall)
+pub fn LazyTools::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub impl @port.Extension for LazyTools
 pub impl @port.Lifecycle for LazyTools
-pub impl @port.Observer for LazyTools
+pub impl @port.PipelineHook for LazyTools
 pub impl @port.SystemPromptContributor for LazyTools
 pub impl @port.ToolProvider for LazyTools
 

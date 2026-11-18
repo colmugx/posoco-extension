@@ -127,7 +127,9 @@ pub impl @posoco.Observer for Stats with fn on_event(
       }
       self.close_round(usage)
     }
-    TurnFailed(_) | TurnCompleted => self.reset_round()
+    // Every terminal closes the round; a cancelled turn is not a failure but
+    // it must not leave the round open into the next turn either.
+    TurnFailed(_) | TurnCancelled | TurnCompleted => self.reset_round()
     _ => ()
   }
 }
