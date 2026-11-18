@@ -11,6 +11,8 @@ fn reason_json_v2(reason : @posoco.NotExecutedReason) -> Json {
     @posoco.NotExecutedReason::InvocationLimit => fields["kind"] = Json::string("invocation_limit")
     @posoco.NotExecutedReason::PolicyConflict => fields["kind"] = Json::string("policy_conflict")
     @posoco.NotExecutedReason::Revoked => fields["kind"] = Json::string("revoked")
+    @posoco.NotExecutedReason::SupersededByMessage =>
+      fields["kind"] = Json::string("superseded_by_message")
     @posoco.NotExecutedReason::SchemaMismatch(json_path~, expected~, actual~) => {
       fields["kind"] = Json::string("schema_mismatch")
       fields["json_path"] = Json::string(json_path)
@@ -36,6 +38,8 @@ fn reason_from_json_v2(json : Json) -> @posoco.NotExecutedReason? {
         Some(Json::String("invocation_limit")) => Some(@posoco.NotExecutedReason::InvocationLimit)
         Some(Json::String("policy_conflict")) => Some(@posoco.NotExecutedReason::PolicyConflict)
         Some(Json::String("revoked")) => Some(@posoco.NotExecutedReason::Revoked)
+        Some(Json::String("superseded_by_message")) =>
+          Some(@posoco.NotExecutedReason::SupersededByMessage)
         Some(Json::String("schema_mismatch")) =>
           match (fields.get("json_path"), fields.get("expected"), fields.get("actual")) {
             (Some(Json::String(path)), Some(Json::String(expected)), Some(Json::String(actual))) =>
