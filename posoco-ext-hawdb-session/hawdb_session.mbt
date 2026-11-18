@@ -8,6 +8,16 @@ pub(all) struct HawdbSessionStore {
 }
 
 ///|
+/// HawDB Value is intentionally not Eq (it contains non-comparable values).
+/// Match the text variant before comparing schema catalog fields.
+fn catalog_text_is(value : @hawdb.Value?, expected : String) -> Bool {
+  match value {
+    Some(@hawdb.Value::Text(actual)) => actual == expected
+    _ => false
+  }
+}
+
+///|
 /// The upstream engine deliberately rejects IF NOT EXISTS for content-store
 /// tables because that would silently accept schema drift. Inspect first,
 /// create only when absent, and verify the full table contract on every open.
@@ -28,7 +38,7 @@ fn ensure_session_schema(db : @hawdb.Database) -> Result[Unit, String] {
       Err(error) => return Err(error.describe())
     }
   } else if existing.rows.length() != 1 ||
-    existing.get(0, "table_type") != Some(@hawdb.Value::Text("BASE TABLE")) {
+    !catalog_text_is(existing.get(0, "table_type"), "BASE TABLE") {
     return Err("posoco_sessions must be a single ordinary table")
   }
 
@@ -40,11 +50,11 @@ fn ensure_session_schema(db : @hawdb.Database) -> Result[Unit, String] {
     Err(error) => return Err(error.describe())
   }
   if columns.rows.length() != 2 ||
-    columns.get(0, "column_name") != Some(@hawdb.Value::Text("id")) ||
-    columns.get(0, "data_type") != Some(@hawdb.Value::Text("text")) ||
-    columns.get(0, "is_nullable") != Some(@hawdb.Value::Text("NO")) ||
-    columns.get(1, "column_name") != Some(@hawdb.Value::Text("document")) ||
-    columns.get(1, "data_type") != Some(@hawdb.Value::Text("text")) {
+    !catalog_text_is(columns.get(0, "column_name"), "id") ||
+    !catalog_text_is(columns.get(0, "data_type"), "text") ||
+    !catalog_text_is(columns.get(0, "is_nullable"), "NO") ||
+    !catalog_text_is(columns.get(1, "column_name"), "document") ||
+    !catalog_text_is(columns.get(1, "data_type"), "text") {
     return Err("posoco_sessions schema drift: expected id TEXT PRIMARY KEY, document TEXT")
   }
 
@@ -56,7 +66,7 @@ fn ensure_session_schema(db : @hawdb.Database) -> Result[Unit, String] {
     Err(error) => return Err(error.describe())
   }
   if indexes.rows.length() != 1 ||
-    indexes.get(0, "indexname") != Some(@hawdb.Value::Text("posoco_sessions_pkey")) {
+    !catalog_text_is(indexes.get(0, "indexname"), "posoco_sessions_pkey") {
     return Err("posoco_sessions schema drift: expected id PRIMARY KEY")
   }
   Ok(())
