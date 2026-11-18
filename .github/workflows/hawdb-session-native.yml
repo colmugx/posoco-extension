@@ -56,7 +56,7 @@ jobs:
           assert lines[0].strip() == "members = ["
           extra = '  "./_hawdb_checkout/bindings/moonbit",'
           assert extra not in lines
-          lines.insert(1, extra)
+          lines[1:1] = [extra, '  "./posoco-ext-hawdb-session",']
           p.write_text(chr(10).join(lines) + chr(10))
           PY
           moon update
