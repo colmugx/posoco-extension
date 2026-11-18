@@ -143,12 +143,12 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn save(
 ) -> Unit raise @posoco.SessionError {
   let result = self.db.with_transaction(fn(tx) {
     match transaction_write(tx, id, session) {
-      Ok(()) => Ok(())
+      Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
   })
   match result {
-    Ok(()) => ()
+    Ok(_) => ()
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
@@ -176,12 +176,12 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn checkpoint(
       Some(metadata) => metadata
     }
     match transaction_write(tx, id, { messages: tail, metadata, }) {
-      Ok(()) => Ok(())
+      Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
   })
   match result {
-    Ok(()) => ()
+    Ok(_) => ()
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
@@ -227,12 +227,12 @@ pub impl @posoco.SessionStore for HawdbSessionStore with fn truncate(
       messages: next,
       metadata: before.metadata,
     }) {
-      Ok(()) => Ok(())
+      Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
   })
   match result {
-    Ok(()) => ()
+    Ok(_) => ()
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
