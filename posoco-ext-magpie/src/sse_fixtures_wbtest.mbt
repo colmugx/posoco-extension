@@ -349,6 +349,31 @@ fn chat_usage_chunk() -> Array[String] {
 }
 
 ///|
+/// Streaming Chat Completions lines carrying one text answer: the text
+/// delta, the finish, usage, and the terminal marker.
+fn chat_text_stream(text~ : String) -> Array[String] {
+  let lines : Array[String] = []
+  for
+    line in chat_chunk(
+      delta=Json::object({
+        "role": Json::string("assistant"),
+        "content": Json::string(text),
+      }),
+      finish=None,
+    ) {
+    lines.push(line)
+  }
+  for line in chat_chunk(delta=Json::object({}), finish=Some("stop")) {
+    lines.push(line)
+  }
+  for line in chat_usage_chunk() {
+    lines.push(line)
+  }
+  lines.push("data: [DONE]")
+  lines
+}
+
+///|
 /// Streaming Chat Completions lines: text, then two parallel tool calls,
 /// then finish and usage.
 fn chat_parallel_tool_stream() -> Array[String] {

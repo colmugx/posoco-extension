@@ -864,3 +864,62 @@ async test "messages requests carry the stream flag in the body" {
   inspect(transport.post_calls.length(), content="2")
   inspect(transport.post_calls[1].contains("\"stream\":false"), content="true")
 }
+
+///|
+/// Regression: compaction must stream. The buffered POST path is bounded by
+/// the transport's connect timeout, so a head-sized summary sent buffered is
+/// cancelled mid-flight and reaches the gateway as a client-closed request
+/// (HTTP 499).
+async test "compact streams the summary instead of buffering it" {
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=chat_text_stream(text="the summary")),
+  ])
+  let manager = manager_with(transport~, config=local_config())
+  refresh_ok(manager)
+  let port = select_and_port(manager, "openai/gpt-chat")
+  // A head larger than the keep-recent budget, so there is something to
+  // summarize: the cut lands on the assistant turn head at index 1.
+  let long_reply = StringBuilder()
+  for _ in 0..<22500 {
+    long_reply.write_string("xxxx")
+  }
+  let messages : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("first question"),
+    ]),
+    @posoco.Message::AssistantMessage(
+      content=[@posoco.Content::Text(long_reply.to_string())],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+    ),
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("recent question"),
+    ]),
+  ]
+  let result = port.compact(
+    exec_scope(session="sess-compact"),
+    messages,
+    [],
+    chat_options(),
+    @posoco.CompactTrigger::Manual,
+  )
+  inspect(transport.post_calls.length(), content="1")
+  inspect(transport.post_calls[0].contains("\"stream\":true"), content="true")
+  inspect(result.mode, content="Replace")
+  let summary = match result.compacted_messages[0] {
+    @posoco.Message::UserMessage(content~) =>
+      content
+      .filter_map(fn(block) {
+        match block {
+          @posoco.Content::Text(text) => Some(text)
+          _ => None
+        }
+      })
+      .join("")
+    _ => ""
+  }
+  inspect(summary.contains("the summary"), content="true")
+  // The kept tail rides verbatim behind the summary message.
+  inspect(result.compacted_messages.length(), content="3")
+}

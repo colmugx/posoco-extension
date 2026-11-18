@@ -389,7 +389,7 @@ test "submission reads the live revision and sends the correlated record command
         command_id: "cmd-uuid-1",
         revision: 2L,
         kind: PendingReview(attempt_id="a"),
-      }
+      },
     ),
   )
   // No optimistic projection: the replica only changes from Board frames.

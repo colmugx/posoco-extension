@@ -147,9 +147,14 @@ fn mcp_append_bounded_fragment(
 /// visit every character when a whole fragment fits the remaining budget.
 /// Large trailing text is walked only until the configured character cap.
 /// Separators and truncation semantics match the previous renderer.
+///
+/// Image blocks are also collected into `attachments`: their base64 payload is
+/// the tool result, and a text placeholder alone would leave a multimodal tool
+/// (a browser or computer screenshot from a federated server) unreadable.
 fn mcp_content_model_text(
   items : Array[@types.ContentBlock],
   limit : Int32,
+  attachments : Array[@posoco.Content],
 ) -> (String, Bool) {
   let out = StringBuilder()
   let mut used = 0
@@ -170,6 +175,7 @@ fn mcp_content_model_text(
         }
       }
       @types.ContentBlock::Image(data, mime_type~, ..) => {
+        push_mcp_image_attachment(attachments, mime_type, data)
         let placeholder = "[Image: \{mime_type}, \{data.length()} chars]"
         let (next, cut) = mcp_append_bounded_fragment(
           out, placeholder, used, limit,
@@ -219,6 +225,10 @@ fn mcp_content_model_text(
             }
           }
           @types.ResourceData::Blob(blob) => {
+            match contents.mime_type {
+              Some(mime) => push_mcp_image_attachment(attachments, mime, blob)
+              None => ()
+            }
             let placeholder = "[Resource \{contents.uri}]: [blob \{blob.length()} chars]"
             let (next, cut) = mcp_append_bounded_fragment(
               out, placeholder, used, limit,
@@ -241,6 +251,32 @@ fn mcp_content_model_text(
     }
   }
   (out.to_string(), false)
+}
+
+///|
+/// Bound on media carried by one tool result. A server that streams frames
+/// (screenshots from a browser step) must not turn a single call into an
+/// unbounded attachment burst.
+const MCP_MAX_RESULT_ATTACHMENTS : Int32 = 8
+
+///|
+/// Forward one base64 image block as a multimodal attachment. Only a real
+/// image media type qualifies: `Content` has no audio or document variant, and
+/// a mislabelled blob would fail the provider request instead of informing the
+/// model.
+fn push_mcp_image_attachment(
+  attachments : Array[@posoco.Content],
+  mime_type : String,
+  data : String,
+) -> Unit {
+  if data.length() == 0 || attachments.length() >= MCP_MAX_RESULT_ATTACHMENTS {
+    return
+  }
+  let mime = mime_type.trim().to_lower().to_owned()
+  if !mime.has_prefix("image/") {
+    return
+  }
+  attachments.push(@posoco.Content::Image(media_type=mime, data~))
 }
 
 ///|
@@ -1791,6 +1827,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       raise mcp_call_failure(failure, original_name)
   }
   let is_error = result.is_error.unwrap_or(false)
+  let attachments : Array[@posoco.Content] = []
   let (content, truncated) = mcp_content_model_text(
     result.content,
     if is_error {
@@ -1798,10 +1835,17 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
     } else {
       MCP_SUCCESS_OUTPUT_CHARS
     },
+    attachments,
   )
   let structured = mcp_outcome_structured(truncated)
   if is_error {
     @posoco.ToolOutcome::ToolReportedError(content~, structured~)
+  } else if attachments.length() > 0 {
+    @posoco.ToolOutcome::SuccessWithAttachments(
+      content~,
+      structured~,
+      attachments~,
+    )
   } else {
     @posoco.ToolOutcome::Success(content~, structured~)
   }

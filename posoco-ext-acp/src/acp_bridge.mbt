@@ -103,7 +103,7 @@ pub struct AcpBridge {
   /// The turn's own terminal said cancelled. `FinishReason` has no cancelled
   /// variant (cancellation is its own terminal since Posoco 0.24.1), so this
   /// is tracked beside it and cleared at the next turn.
-  mut cancelled : Bool
+  priv mut cancelled : Bool
 }
 
 ///|

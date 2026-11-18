@@ -561,6 +561,13 @@ pub(all) struct SkillsConfig {
   /// catalog through their own SystemPromptContributor (for example an XML
   /// envelope) without duplicate prompt disclosure.
   contribute_prompt : Bool
+  /// If true, `$name` mentions of discovered skill names in the turn's user
+  /// input activate that skill at harness level: `before_model` injects the
+  /// SKILL.md instructions as a context envelope ahead of the user message,
+  /// with no model tool-call round. Users invoke skills explicitly and can
+  /// mention several skills in one prompt; unknown `$tokens` pass through
+  /// untouched.
+  explicit_activation : Bool
   activate_tool_name : String
   read_resource_tool_name : String
   /// Maximum total SKILL.md characters accepted during activation.
@@ -591,6 +598,7 @@ pub fn SkillsConfig::default() -> SkillsConfig {
   {
     catalog_max_chars: 8000,
     contribute_prompt: true,
+    explicit_activation: true,
     activate_tool_name: "activate_skill",
     read_resource_tool_name: "read_skill_resource",
     max_activation_file_chars: 1000000,

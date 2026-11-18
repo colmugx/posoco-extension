@@ -203,7 +203,7 @@ test "rejected result keeps the draft and baseline without rollback" {
         command_id: "cmd-uuid-1",
         kind: PendingEdit(task_id="t"),
         revision: 1L,
-      }
+      },
     ),
   )
   let (settled, _) = update(
@@ -332,7 +332,7 @@ test "persistence failure at the same revision keeps the baseline" {
         severity: Error,
         text: "The board could not save this change. Nothing was retried.",
         ..
-      }
+      },
     ),
   )
 }
@@ -684,7 +684,7 @@ test "editor lifecycle prefills drafts and closes on missing authoritative targe
   assert_true(
     missing.notice
     is Some(
-      { severity: Error, text: "That task is no longer on the board.", .. }
+      { severity: Error, text: "That task is no longer on the board.", .. },
     ),
   )
   // A snapshot without the target closes the draft with the same notice.
@@ -704,7 +704,7 @@ test "editor lifecycle prefills drafts and closes on missing authoritative targe
   assert_true(
     replaced.notice
     is Some(
-      { severity: Error, text: "That task is no longer on the board.", .. }
+      { severity: Error, text: "That task is no longer on the board.", .. },
     ),
   )
   // An empty reconciliation baseline never closes the draft on its own.
@@ -736,7 +736,7 @@ test "move submissions stamp kind stage and live revision" {
         command_id: "cmd-uuid-1",
         kind: PendingMove(task_id="t", to=Running),
         revision: 1L,
-      }
+      },
     ),
   )
   assert_true(moved.editor is None)

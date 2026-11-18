@@ -1,9 +1,10 @@
-///|
+----
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/shell",
 }
+----
 
 ///|
 /// Local directories that never describe frontend sources: build output,
@@ -15,7 +16,7 @@ fn ignored_dir(name : String) -> Bool {
 
 ///|
 async fn copy_tree(source : String, target : String) -> Unit {
-  @fs.mkdir(target, recursive=true, allow_exist=true)
+  @fs.mkdir(target, recursive=true, allow_existing=true)
   for
     name in @fs.readdir(
       source,
@@ -183,7 +184,7 @@ async fn main {
   let source = ensure_dist(web)
   let dist = "_build/browser-assets-dist"
   if @fs.exists(dist) {
-    @fs.rmdir(dist, recursive=true)
+    @fs.remove(dist, recursive=true)
   }
   copy_tree(source, dist)
   @shell.Cmd("moon", [

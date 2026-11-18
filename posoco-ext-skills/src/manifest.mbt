@@ -26,9 +26,17 @@ pub impl @posoco.Extension for Skills with fn manifest(self) -> @posoco.Extensio
       }
     }
   }
+  // Harness-level explicit activation: `$name` mentions inject SKILL.md
+  // instructions before the model runs. Registered only for a populated
+  // catalog; an empty catalog has nothing to mention.
+  let hooks : Array[&@posoco.PipelineHook] = []
+  if !self.catalog.skills.is_empty() && self.config.explicit_activation {
+    hooks.push(self)
+  }
   @posoco.ExtensionManifest(
     id="posoco_ext_skills",
     tools~,
+    hooks~,
     commands=[self],
     prompt_contributors=prompts,
   )

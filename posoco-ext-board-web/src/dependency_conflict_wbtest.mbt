@@ -126,7 +126,7 @@ test "unrelated revisions use live revision without resetting the dependency dra
         command_id: "cmd-uuid-1",
         kind: PendingDependencies(task_id="t"),
         revision: 2L,
-      }
+      },
     ),
   )
   let expected = @client.set_task_dependencies_command(

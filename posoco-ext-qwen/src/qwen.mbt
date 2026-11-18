@@ -27,10 +27,11 @@ async fn QwenModelPort::post_chat_json(
         "qwen transport failure (stage=post): " + err.to_string(),
       )
   }
-  let body_text = @utf8enc.decode(body_data) catch {
+  let body_bytes = body_data.binary()
+  let body_text = @utf8enc.decode(body_bytes) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
-        "qwen response parse failure (stage=decode_utf8, body_bytes=\{body_data.length()})",
+        "qwen response parse failure (stage=decode_utf8, body_bytes=\{body_bytes.length()})",
       )
   }
   if !is_qwen_http_success(response.code) {
@@ -86,7 +87,7 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
         options,
         true,
       )
-      let client = @http.post(
+      let client = @http.post_stream(
         chat_url(self.config),
         headers=build_headers(self.config),
       ) catch {
@@ -99,7 +100,8 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "qwen transport failure (stage=write_body): " + err.to_string(),
+            "qwen transport failure (stage=write_body): " +
+            @debug.Repr(err).to_string(),
           )
         }
       }
@@ -134,7 +136,8 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
           err => {
             client.close()
             raise @posoco.ModelError::Transport(
-              "qwen transport failure (stage=read_stream): " + err.to_string(),
+              "qwen transport failure (stage=read_stream): " +
+              @debug.Repr(err).to_string(),
             )
           }
         }

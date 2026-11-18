@@ -9,6 +9,15 @@ pub const MEMOH_TOOLS_MCP_NAME : String = "Memoh Tools"
 pub const MEMOH_TOOLS_MCP_SLUG : String = "Memoh_Tools"
 
 ///|
+/// Deadline for one gateway round trip. Memoh's catalog is not a set of fast
+/// lookups: `ask_user` waits up to ten minutes for a human answer, `wait_until`
+/// up to two, and `exec`/`browser_action`/`generate_*` routinely outlive a
+/// default request deadline. The gateway is local and the call stays
+/// cancellable (session/cancel unwinds it), so the deadline only has to sit
+/// above Memoh's own ceiling instead of cutting a working call short.
+const MEMOH_TOOLS_CALL_TIMEOUT_MS : Int32 = 660_000
+
+///|
 fn is_memoh_tools_name(name : String) -> Bool {
   let normalized = name.trim().to_owned().to_lower()
   normalized == "memoh tools" || normalized == "memoh_tools"
@@ -46,6 +55,7 @@ fn memoh_http_mcp_config(
       ),
     ),
     auth=@mcp.ServerAuth::NoAuth,
+    timeout_ms=MEMOH_TOOLS_CALL_TIMEOUT_MS,
   )
 }
 

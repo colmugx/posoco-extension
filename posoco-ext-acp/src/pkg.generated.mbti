@@ -79,7 +79,6 @@ pub struct AcpBridge {
   mut used_tokens : Int32
   mut last_finish : @kernel.FinishReason?
   mut last_failure : String?
-  mut cancelled : Bool
   // private fields
 }
 pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> @json.Json?)?, context_window? : Int32?) -> Self

@@ -55,9 +55,31 @@ test "mcp bounded content renders audio and unknown blocks" {
     @types.ContentBlock::audio("0101", mime_type="audio/wav"),
     @types.ContentBlock::Unknown(Json::number(1)),
   ]
-  let (result, truncated) = mcp_content_model_text(items, 100)
+  let atts : Array[@posoco.Content] = []
+  let (result, truncated) = mcp_content_model_text(items, 100, atts)
   assert_eq(result, "[Audio: audio/wav, 4 chars]\n[Unknown content]")
   assert_true(!truncated)
+  // `Content` has no audio variant, so an audio block stays text; only an
+  // image payload may become an attachment.
+  assert_eq(atts.length(), 0)
+}
+
+///|
+test "mcp image blocks become multimodal attachments" {
+  let items = [
+    @types.ContentBlock::image("iVBORw0KGgo=", mime_type="image/png"),
+    @types.ContentBlock::text("after"),
+  ]
+  let atts : Array[@posoco.Content] = []
+  let (content, truncated) = mcp_content_model_text(items, 100, atts)
+  assert_eq(content, "[Image: image/png, 12 chars]\nafter")
+  assert_true(!truncated)
+  assert_eq(atts.length(), 1)
+  guard atts[0] is @posoco.Content::Image(media_type~, data~) else {
+    fail("expected image attachment")
+  }
+  assert_eq(media_type, "image/png")
+  assert_eq(data, "iVBORw0KGgo=")
 }
 
 ///|
@@ -555,16 +577,23 @@ test "http_connect_params_preserves_injected_header_order" {
 test "mcp bounded content caps success and error surfaces" {
   let raw = "HEAD-" + "x".repeat(MCP_SUCCESS_OUTPUT_CHARS + 500) + "-TAIL"
   let items = [@types.ContentBlock::text(raw)]
+  let success_atts : Array[@posoco.Content] = []
   let (success, success_cut) = mcp_content_model_text(
     items,
     MCP_SUCCESS_OUTPUT_CHARS,
+    success_atts,
   )
   assert_true(success_cut)
   assert_true(success.has_prefix("HEAD-"))
   assert_true(success.has_suffix("…[cut]"))
   assert_true(success.length() < raw.length())
 
-  let (error, error_cut) = mcp_content_model_text(items, MCP_ERROR_OUTPUT_CHARS)
+  let atts : Array[@posoco.Content] = []
+  let (error, error_cut) = mcp_content_model_text(
+    items,
+    MCP_ERROR_OUTPUT_CHARS,
+    atts,
+  )
   assert_true(error_cut)
   assert_true(error.length() < success.length())
 }
@@ -576,13 +605,16 @@ test "mcp bounded content preserves separators and exact cutoff" {
     @types.ContentBlock::text("cd"),
     @types.ContentBlock::text("ef"),
   ]
-  let (exact, exact_cut) = mcp_content_model_text(items, 5)
+  let atts : Array[@posoco.Content] = []
+  let (exact, exact_cut) = mcp_content_model_text(items, 5, atts)
   assert_eq(exact, "ab\ncd\n…[cut]")
   assert_true(exact_cut)
-  let (complete, complete_cut) = mcp_content_model_text(items, 8)
+  let atts : Array[@posoco.Content] = []
+  let (complete, complete_cut) = mcp_content_model_text(items, 8, atts)
   assert_eq(complete, "ab\ncd\nef")
   assert_true(!complete_cut)
-  let (empty, empty_cut) = mcp_content_model_text([], 8)
+  let empty_atts : Array[@posoco.Content] = []
+  let (empty, empty_cut) = mcp_content_model_text([], 8, empty_atts)
   assert_eq(empty, "")
   assert_true(!empty_cut)
 }
@@ -593,7 +625,8 @@ test "mcp bounded content keeps Unicode codepoint boundaries" {
     @types.ContentBlock::text("😀é甲"),
     @types.ContentBlock::text("z"),
   ]
-  let (content, truncated) = mcp_content_model_text(items, 3)
+  let atts : Array[@posoco.Content] = []
+  let (content, truncated) = mcp_content_model_text(items, 3, atts)
   assert_eq(content, "😀é甲\n…[cut]")
   assert_true(truncated)
 }
@@ -606,7 +639,8 @@ test "mcp bounded content stops before unneeded large tail" {
     @types.ContentBlock::text(huge),
     @types.ContentBlock::text("NEVER_VISIBLE"),
   ]
-  let (content, truncated) = mcp_content_model_text(items, 64)
+  let atts : Array[@posoco.Content] = []
+  let (content, truncated) = mcp_content_model_text(items, 64, atts)
   assert_true(truncated)
   assert_true(content.has_prefix("prefix\n"))
   assert_true(!content.contains("NEVER_VISIBLE"))
@@ -620,7 +654,8 @@ test "mcp bounded renderer fast path preserves complete fragments" {
     @types.ContentBlock::text("second"),
     @types.ContentBlock::text("third"),
   ]
-  let (content, truncated) = mcp_content_model_text(items, 18)
+  let atts : Array[@posoco.Content] = []
+  let (content, truncated) = mcp_content_model_text(items, 18, atts)
   assert_eq(content, "first\nsecond\nthird")
   assert_true(!truncated)
 }
@@ -632,7 +667,8 @@ test "mcp bounded renderer truncates only the final oversized fragment" {
     @types.ContentBlock::text("head"),
     @types.ContentBlock::text(huge),
   ]
-  let (content, truncated) = mcp_content_model_text(items, 8)
+  let atts : Array[@posoco.Content] = []
+  let (content, truncated) = mcp_content_model_text(items, 8, atts)
   assert_true(truncated)
   assert_eq(content, "head\n😀😀😀\n…[cut]")
 }

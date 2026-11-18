@@ -1,10 +1,11 @@
-///|
+----
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
 }
+----
 
 ///|
 /// Dist URL paths that must exist as nonempty assets. Extra dist files are

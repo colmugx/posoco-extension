@@ -184,7 +184,7 @@ test "queue draft uses an independent secure UUID and submit reads the live revi
         command_id: "cmd-uuid-2",
         revision: 2L,
         kind: PendingAttemptQueue(task_id="t", attempt_id="attempt-uuid-1"),
-      }
+      },
     ),
   )
   assert_true(submitted.replica == live.replica)

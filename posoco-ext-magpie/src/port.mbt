@@ -139,9 +139,14 @@ pub impl @posoco.ModelPort for MagpieModelPort with fn chat(
 }
 
 ///|
-/// Compaction rides the selected protocol as a plain non-streaming
-/// summarization call: keep the recent tail verbatim, summarize the head
-/// with the structured template, replace in place.
+/// Compaction rides the selected protocol as a streamed summarization call:
+/// keep the recent tail verbatim, summarize the head with the structured
+/// template, replace in place.
+///
+/// The summary streams like any other reply on purpose. The gateway
+/// transport bounds the buffered POST path with a connect timeout, and a
+/// head-sized prompt always outlives it; a buffered summary would be
+/// cancelled mid-flight and come back as a client-cancelled request.
 pub impl @posoco.ModelPort for MagpieModelPort with fn compact(
   self : MagpieModelPort,
   scope : @posoco.InvocationScope,
@@ -171,6 +176,7 @@ pub impl @posoco.ModelPort for MagpieModelPort with fn compact(
   )
   let requirements = MagpieRequirements::MagpieRequirements(
     reasoning_effort=self.manager.active_selection().effort,
+    streaming=true,
     cancellation=true,
   )
   let call = self.prepare_execution(scope, entry_requirements=requirements)
@@ -179,7 +185,7 @@ pub impl @posoco.ModelPort for MagpieModelPort with fn compact(
     prompt,
     [],
     options,
-    NoStream,
+    Stream(fn(_chunk) { () }),
   )
   (self.report_sink)(report)
   let summary_text = call_result.completion.message.content

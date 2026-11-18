@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-mcp"
 
-version = "0.6.0"
+version = "0.6.1"
 
 import {
   "colmugx/posoco@0.24.2",

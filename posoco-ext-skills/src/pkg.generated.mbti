@@ -126,6 +126,7 @@ pub struct Skills {
   config : SkillsConfig
 }
 pub async fn Skills::activate_skill(Self, String) -> @kernel.ToolOutcome noraise
+pub async fn Skills::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub fn Skills::catalog(Self) -> SkillCatalog
 pub fn Skills::commands(Self) -> Array[@port.CommandDef]
 pub fn Skills::config(Self) -> SkillsConfig
@@ -146,6 +147,7 @@ pub impl @port.ToolProvider for Skills
 pub(all) struct SkillsConfig {
   catalog_max_chars : Int32
   contribute_prompt : Bool
+  explicit_activation : Bool
   activate_tool_name : String
   read_resource_tool_name : String
   max_activation_file_chars : Int32

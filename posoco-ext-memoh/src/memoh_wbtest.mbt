@@ -176,6 +176,11 @@ test "Memoh Tools maps to host-scoped HTTP MCP config" {
   )
   assert_eq(config.name, MEMOH_TOOLS_MCP_SLUG)
   assert_true(config.auth is @mcp.ServerAuth::NoAuth)
+  // Memoh's gateway serves blocking tools (`ask_user` waits up to ten
+  // minutes), so the per-call deadline clears that ceiling instead of the
+  // 30s default that would cut every such call short.
+  assert_eq(config.timeout_ms, MEMOH_TOOLS_CALL_TIMEOUT_MS)
+  assert_true(config.timeout_ms > 600_000)
   match config.transport {
     @transport.AnyTransport::HttpClient(http) => {
       assert_eq(http.extra_headers.length(), 1)
