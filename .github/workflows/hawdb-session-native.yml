@@ -45,11 +45,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("moon.work")
-          body = p.read_text()
-          assert '  "./_hawdb_checkout/bindings/moonbit",\n' not in body
-          needle = 'members = [\n'
-          assert body.count(needle) == 1
-          p.write_text(body.replace(needle, needle + '  "./_hawdb_checkout/bindings/moonbit",\n'))
+          lines = p.read_text().splitlines()
+          assert lines[0].strip() == "members = ["
+          extra = '  "./_hawdb_checkout/bindings/moonbit",'
+          assert extra not in lines
+          lines.insert(1, extra)
+          p.write_text(chr(10).join(lines) + chr(10))
           PY
           moon update
       - name: Build current HawDB Rust staticlib
