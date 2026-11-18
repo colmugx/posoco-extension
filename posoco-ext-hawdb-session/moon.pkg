@@ -4,10 +4,13 @@ import {
   "nowledge-co/hawdb" @hawdb,
 }
 
+// The integration build configures this field after compiling the *current*
+// upstream HawDB source. Do not reference a checkout-relative path in final
+// packages: moon invokes the linker from the workspace root, not here.
 options(
   link: {
     "native": {
-      "cc-link-flags": "../_hawdb_checkout/bindings/moonbit/native/target/release/libhawdb_moonbit.a -ldl -lpthread -lm",
+      "cc-link-flags": "_hawdb_checkout/bindings/moonbit/native/target/release/libhawdb_moonbit.a -ldl -lpthread -lm",
     },
   },
 )
