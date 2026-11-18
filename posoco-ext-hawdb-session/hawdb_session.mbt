@@ -8,38 +8,84 @@ pub(all) struct HawdbSessionStore {
 }
 
 ///|
-pub fn HawdbSessionStore::open(path : String) -> Result[HawdbSessionStore, String] {
-  let db = match @hawdb.open(path) {
-    Ok(db) => db
-    Err(error) => return Err(error.describe())
-  }
-  match db.query_sql(
-    "CREATE TABLE IF NOT EXISTS posoco_sessions (id TEXT PRIMARY KEY, document TEXT)",
+/// The upstream engine deliberately rejects IF NOT EXISTS for content-store
+/// tables because that would silently accept schema drift. Inspect first,
+/// create only when absent, and verify the full table contract on every open.
+fn ensure_session_schema(db : @hawdb.Database) -> Result[Unit, String] {
+  let existing = match db.query_sql(
+    "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'posoco_sessions'",
     [],
   ) {
+    Ok(rows) => rows
+    Err(error) => return Err(error.describe())
+  }
+  if existing.rows.length() == 0 {
+    match db.query_sql(
+      "CREATE TABLE posoco_sessions (id TEXT PRIMARY KEY, document TEXT)",
+      [],
+    ) {
+      Ok(_) => ()
+      Err(error) => return Err(error.describe())
+    }
+  } else if existing.rows.length() != 1 ||
+    existing.get(0, "table_type") != Some(@hawdb.Value::Text("BASE TABLE")) {
+    return Err("posoco_sessions must be a single ordinary table")
+  }
+
+  let columns = match db.query_sql(
+    "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'posoco_sessions' ORDER BY ordinal_position",
+    [],
+  ) {
+    Ok(rows) => rows
+    Err(error) => return Err(error.describe())
+  }
+  if columns.rows.length() != 2 ||
+    columns.get(0, "column_name") != Some(@hawdb.Value::Text("id")) ||
+    columns.get(0, "data_type") != Some(@hawdb.Value::Text("text")) ||
+    columns.get(0, "is_nullable") != Some(@hawdb.Value::Text("NO")) ||
+    columns.get(1, "column_name") != Some(@hawdb.Value::Text("document")) ||
+    columns.get(1, "data_type") != Some(@hawdb.Value::Text("text")) {
+    return Err("posoco_sessions schema drift: expected id TEXT PRIMARY KEY, document TEXT")
+  }
+
+  let indexes = match db.query_sql(
+    "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'posoco_sessions'",
+    [],
+  ) {
+    Ok(rows) => rows
+    Err(error) => return Err(error.describe())
+  }
+  if indexes.rows.length() != 1 ||
+    indexes.get(0, "indexname") != Some(@hawdb.Value::Text("posoco_sessions_pkey")) {
+    return Err("posoco_sessions schema drift: expected id PRIMARY KEY")
+  }
+  Ok(())
+}
+
+///|
+fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String] {
+  match ensure_session_schema(db) {
     Ok(_) => Ok({ db, })
-    Err(error) => {
+    Err(reason) => {
       db.close()
-      Err(error.describe())
+      Err(reason)
     }
   }
 }
 
 ///|
-pub fn HawdbSessionStore::open_in_memory() -> Result[HawdbSessionStore, String] {
-  let db = match @hawdb.open_in_memory() {
-    Ok(db) => db
-    Err(error) => return Err(error.describe())
+pub fn HawdbSessionStore::open(path : String) -> Result[HawdbSessionStore, String] {
+  match @hawdb.open(path) {
+    Ok(db) => finish_session_open(db)
+    Err(error) => Err(error.describe())
   }
-  match db.query_sql(
-    "CREATE TABLE IF NOT EXISTS posoco_sessions (id TEXT PRIMARY KEY, document TEXT)",
-    [],
-  ) {
-    Ok(_) => Ok({ db, })
-    Err(error) => {
-      db.close()
-      Err(error.describe())
-    }
+}
+
+///|
+pub fn HawdbSessionStore::open_in_memory() -> Result[HawdbSessionStore, String] {
+  match @hawdb.open_in_memory() {
+    Ok(db) => finish_session_open(db)
+    Err(error) => Err(error.describe())
   }
 }
 
