@@ -1,0 +1,22 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/json",
+}
+
+import {
+  "posoco/devkit/testkit" @tk,
+} for "wbtest"
+
+supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+  ],
+  targets: {
+    "kitesurf_wbtest.mbt": [ "native" ],
+  },
+)
