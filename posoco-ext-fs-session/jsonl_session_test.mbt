@@ -689,6 +689,10 @@ test "serde: lossless canonical tool outcomes" {
       original_call_id=@posoco.CallId::unchecked("call-5"),
     ),
     @posoco.ToolOutcome::NotExecuted(
+      reason=@posoco.NotExecutedReason::SupersededByMessage,
+      original_call_id=@posoco.CallId::unchecked("call-superseded"),
+    ),
+    @posoco.ToolOutcome::NotExecuted(
       reason=@posoco.NotExecutedReason::RejectedByHook(reason="policy"),
       original_call_id=@posoco.CallId::unchecked("call-6"),
     ),
