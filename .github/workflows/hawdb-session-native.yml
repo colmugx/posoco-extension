@@ -60,6 +60,11 @@ jobs:
           p.write_text(chr(10).join(lines) + chr(10))
           PY
           moon update
+      - name: Typecheck Posoco/HawDB SessionStore before Rust release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          moon check --target native posoco-ext-hawdb-session
       - name: Build current HawDB Rust staticlib
         working-directory: _hawdb_checkout/bindings/moonbit/native
         shell: bash
@@ -73,5 +78,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon check --target native posoco-ext-hawdb-session
           moon test --target native posoco-ext-hawdb-session
