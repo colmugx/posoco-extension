@@ -2,21 +2,24 @@ name: HawDB native Posoco SessionStore integration
 
 on:
   push:
-    branches: [feat/hawdb-session-store]
+    branches: [main]
     paths:
+      - "posoco-ext-fs-session/**"
       - "posoco-ext-hawdb-session/**"
       - "moon.work"
       - ".github/workflows/hawdb-session-native.yml"
   pull_request:
     paths:
+      - "posoco-ext-fs-session/**"
       - "posoco-ext-hawdb-session/**"
       - "moon.work"
       - ".github/workflows/hawdb-session-native.yml"
   workflow_dispatch:
 
 concurrency:
-  group: hawdb-session-native-${{ github.ref }}
-  cancel-in-progress: true
+  # PR revisions may supersede obsolete checks; production mainline runs never do.
+  group: hawdb-session-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

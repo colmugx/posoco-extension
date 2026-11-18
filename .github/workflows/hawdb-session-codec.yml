@@ -2,7 +2,7 @@ name: HawDB SessionStore codec contract
 
 on:
   push:
-    branches: [feat/hawdb-session-store]
+    branches: [main]
     paths:
       - "posoco-ext-fs-session/**"
       - ".github/workflows/hawdb-session-codec.yml"
@@ -11,6 +11,11 @@ on:
       - "posoco-ext-fs-session/**"
       - ".github/workflows/hawdb-session-codec.yml"
   workflow_dispatch:
+
+concurrency:
+  # Preserve mainline verification, but cancel superseded revisions of the same PR.
+  group: hawdb-session-codec-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
