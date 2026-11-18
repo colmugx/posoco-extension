@@ -44,6 +44,6 @@ Cursor Automations, `/loop`, cloud agents, Bugbot, hooks, provider model-slug co
 
 The adapter does not automatically execute upstream opening-a-pr, babysit, shipping, or autonomous orchestration instructions. PR creation or merging requires the user's explicit request and an installed Posoco host integration. Skip unsupported steps transparently rather than inventing their results.
 
-## Session toggle
+## Invocation and status
 
-`/poteto-mode` toggles mode status. First invocation activates this file-backed Skill and its routing instructions. Second invocation clears the active status. Previously delivered instructions still exist in conversation history; true context removal must be implemented by the Posoco Agent if needed.
+The user invokes this Skill explicitly with its `$`-mention in a prompt; Posoco's Skills layer injects these instructions into that turn. A successful activation also publishes `🥔 Mode` on the status bar for the rest of the session. There is no separate command and no toggle, so nothing needs to be turned off. Previously delivered instructions still exist in conversation history; true context removal must be implemented by the Posoco Agent if needed.
