@@ -1,0 +1,69 @@
+name: HawDB native Posoco SessionStore integration
+
+on:
+  push:
+    branches: [feat/hawdb-session-store]
+    paths:
+      - "posoco-ext-hawdb-session/**"
+      - "moon.work"
+      - ".github/workflows/hawdb-session-native.yml"
+  pull_request:
+    paths:
+      - "posoco-ext-hawdb-session/**"
+      - "moon.work"
+      - ".github/workflows/hawdb-session-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout rolling HawDB SDK source
+        uses: actions/checkout@v4
+        with:
+          repository: colmugx/hawdb
+          ref: feat/moonbit-native-sdk
+          path: _hawdb_checkout
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install current MoonBit
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Assemble rolling local workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("moon.work")
+          body = p.read_text()
+          assert '  "./_hawdb_checkout/bindings/moonbit",\n' not in body
+          needle = 'members = [\n'
+          assert body.count(needle) == 1
+          p.write_text(body.replace(needle, needle + '  "./_hawdb_checkout/bindings/moonbit",\n'))
+          PY
+          moon update
+      - name: Build current HawDB Rust staticlib
+        working-directory: _hawdb_checkout/bindings/moonbit/native
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test --release --lib
+          cargo build --release
+          test -s target/release/libhawdb_moonbit.a
+      - name: Check and test HawDB SessionStore module
+        shell: bash
+        run: |
+          set -euo pipefail
+          moon check --target native posoco-ext-hawdb-session
+          moon test --target native posoco-ext-hawdb-session
