@@ -106,7 +106,7 @@ class Frames {
     const data = Buffer.from(JSON.stringify(frame) + "\n");
     if (data.length > frameLimit) throw new Error("oversized Posoco frame");
     await new Promise<void>((resolve, reject) => {
-      this.socket.write(data, (error) => error === undefined ? resolve() : reject(error));
+      this.socket.write(data, (error) => error == null ? resolve() : reject(error));
     });
   }
   close(): void { this.socket.destroy(); }
