@@ -1,0 +1,209 @@
+// Package sessionbridge carries a read-only Session feed over a host-provided
+// same-user Unix socket or Windows named pipe. It never owns Agents or journals.
+package sessionbridge
+
+import (
+    "bufio"
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "net"
+    "sync"
+    "time"
+)
+
+const Protocol = "posoco.session/1"
+const Capability = "session.observe.v1"
+const MaxFrameSize = 4 << 20
+var ErrProtocol = errors.New("invalid Posoco session bridge protocol")
+var ErrResnapshot = errors.New("Session stream requires a new owner snapshot")
+
+type Envelope struct {
+    Type string
+    Protocol string
+    Host string
+    ClientInstanceID string
+    OwnerInstanceID string
+    RuntimeEpoch string
+    Capabilities []string
+    RequestID string
+    Command string
+    Args json.RawMessage
+    Result json.RawMessage
+    Event json.RawMessage
+    Error string
+}
+
+type codec struct {
+    r *bufio.Reader
+    w io.Writer
+    mu sync.Mutex
+}
+
+func newCodec(r io.Reader,w io.Writer)*codec{return &codec{r:bufio.NewReaderSize(r,64<<10),w:w}}
+func (c *codec) read()(map[string]json.RawMessage,error){
+    var data []byte
+    for {
+        p,err:=c.r.ReadSlice('\n')
+        if len(data)+len(p)>MaxFrameSize+1{return nil,ErrProtocol}
+        data=append(data,p...)
+        if err==nil {
+            if len(data)<2||data[0]!='{'{return nil,ErrProtocol}
+            var f map[string]json.RawMessage
+            if err:=json.Unmarshal(data,&f);err!=nil{return nil,ErrProtocol}
+            return f,nil
+        }
+        if errors.Is(err,bufio.ErrBufferFull){continue}
+        if errors.Is(err,io.EOF)&&len(data)==0{return nil,io.EOF}
+        if errors.Is(err,io.EOF){return nil,ErrProtocol}
+        return nil,err
+    }
+}
+func (c *codec) write(f any)error{
+    data,err:=json.Marshal(f)
+    if err!=nil{return err}
+    if len(data)>MaxFrameSize{return ErrProtocol}
+    data=append(data,'\n')
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    for len(data)>0 {
+        n,e:=c.w.Write(data)
+        if e!=nil{return e}
+        if n<=0{return io.ErrShortWrite}
+        data=data[n:]
+    }
+    return nil
+}
+func stringField(f map[string]json.RawMessage,key string)string{
+    var value string
+    _=json.Unmarshal(f[key],&value)
+    return value
+}
+func hasCap(raw json.RawMessage)bool{
+    var values []string
+    _=json.Unmarshal(raw,&values)
+    for _,v:=range values{if v==Capability{return true}}
+    return false
+}
+type Owner struct{ InstanceID, RuntimeEpoch string }
+// Subscribe MUST install its bounded event subscription before taking the
+// snapshot. A closed event channel forces reconnection/resnapshot; it must
+// never silently discard an overflowing broadcast.
+type Subscription struct {
+    Snapshot json.RawMessage
+    Events <-chan json.RawMessage
+    Close func()
+}
+type Subscribe func(context.Context,string)(Subscription,error)
+
+// ServeConn only accepts session.observe. OS peer authentication is enforced
+// by the host's local listener, never by trusting a client-provided identity.
+func ServeConn(ctx context.Context,conn net.Conn,owner Owner,subscribe Subscribe)error{
+    defer conn.Close()
+    if owner.InstanceID==""||owner.RuntimeEpoch==""||subscribe==nil{return ErrProtocol}
+    _=conn.SetDeadline(time.Now().Add(5*time.Second))
+    stop:=context.AfterFunc(ctx,func(){_ = conn.Close()})
+    defer stop()
+    c:=newCodec(conn,conn)
+    hello,err:=c.read()
+    if err!=nil{return err}
+    if stringField(hello,"type")!="hello"||stringField(hello,"protocol")!=Protocol||
+       stringField(hello,"host")==""||stringField(hello,"client_instance_id")==""||
+       !hasCap(hello["capabilities"]) {
+        _=c.write(map[string]any{"type":"reject","error":"incompatible Session bridge"})
+        return ErrProtocol
+    }
+    if err:=c.write(map[string]any{"type":"welcome","protocol":Protocol,
+        "owner_instance_id":owner.InstanceID,"runtime_epoch":owner.RuntimeEpoch,
+        "capabilities":[]string{Capability}});err!=nil{return err}
+    request,err:=c.read()
+    if err!=nil{return err}
+    var args map[string]string
+    _=json.Unmarshal(request["args"],&args)
+    sessionID:=args["session_id"]
+    requestID:=stringField(request,"request_id")
+    if stringField(request,"type")!="request"||stringField(request,"command")!="session.observe"||
+       sessionID==""||requestID==""{
+        _=c.write(map[string]any{"type":"reject","error":"read-only session.observe required"})
+        return ErrProtocol
+    }
+    sub,err:=subscribe(ctx,sessionID)
+    if err!=nil{
+        _=c.write(map[string]any{"type":"reject","error":err.Error(),"request_id":requestID})
+        return err
+    }
+    if sub.Close!=nil{defer sub.Close()}
+    var snap map[string]json.RawMessage
+    if json.Unmarshal(sub.Snapshot,&snap)!=nil||
+       stringField(snap,"type")!="session.snapshot"||
+       stringField(snap,"session_id")!=sessionID||
+       stringField(snap,"runtime_epoch")!=owner.RuntimeEpoch{
+        return ErrProtocol
+    }
+    if err:=c.write(map[string]any{"type":"response","request_id":requestID,"result":sub.Snapshot});err!=nil{return err}
+    _=conn.SetDeadline(time.Time{})
+    for {
+        select {
+        case <-ctx.Done():return ctx.Err()
+        case event,ok:=<-sub.Events:
+            if !ok{return ErrResnapshot}
+            var f map[string]json.RawMessage
+            if json.Unmarshal(event,&f)!=nil||stringField(f,"session_id")!=sessionID||
+               stringField(f,"runtime_epoch")!=owner.RuntimeEpoch{return ErrProtocol}
+            _=conn.SetWriteDeadline(time.Now().Add(5*time.Second))
+            if err:=c.write(map[string]any{"type":"event","event":json.RawMessage(event)});err!=nil{return err}
+        }
+    }
+}
+
+// ObserveConn returns the authoritative snapshot before any streamed events.
+// Its session is read-only; a disconnect never creates a competing Agent.
+type Observer struct {
+    conn net.Conn
+    codec *codec
+    Snapshot json.RawMessage
+    Epoch string
+    SessionID string
+}
+func (o *Observer) Close()error{return o.conn.Close()}
+func (o *Observer) Next()(json.RawMessage,error){
+    frame,err:=o.codec.read()
+    if err!=nil{return nil,err}
+    if stringField(frame,"type")!="event"{return nil,ErrProtocol}
+    var event map[string]json.RawMessage
+    if json.Unmarshal(frame["event"],&event)!=nil||
+       stringField(event,"session_id")!=o.SessionID||
+       stringField(event,"runtime_epoch")!=o.Epoch{return nil,ErrProtocol}
+    return frame["event"],nil
+}
+func ObserveConn(ctx context.Context,conn net.Conn,sessionID,clientID string)(*Observer,error){
+    fail:=func(err error)(*Observer,error){_ = conn.Close();return nil,err}
+    if sessionID==""||clientID==""{return fail(ErrProtocol)}
+    _=conn.SetDeadline(time.Now().Add(5*time.Second))
+    stop:=context.AfterFunc(ctx,func(){_ = conn.Close()})
+    defer stop()
+    c:=newCodec(conn,conn)
+    if err:=c.write(map[string]any{"type":"hello","protocol":Protocol,"host":"posoco-ext",
+        "client_instance_id":clientID,"capabilities":[]string{Capability}});err!=nil{return fail(err)}
+    welcome,err:=c.read()
+    if err!=nil{return fail(err)}
+    if stringField(welcome,"type")=="reject"{return fail(ErrProtocol)}
+    epoch:=stringField(welcome,"runtime_epoch")
+    if stringField(welcome,"type")!="welcome"||stringField(welcome,"protocol")!=Protocol||
+       epoch==""||!hasCap(welcome["capabilities"]){return fail(ErrProtocol)}
+    if err:=c.write(map[string]any{"type":"request","request_id":"attach",
+        "command":"session.observe","args":map[string]string{"session_id":sessionID}});err!=nil{return fail(err)}
+    reply,err:=c.read()
+    if err!=nil{return fail(err)}
+    if stringField(reply,"type")=="reject"{return fail(fmt.Errorf("%w: %s",ErrProtocol,stringField(reply,"error")))}
+    if stringField(reply,"type")!="response"||stringField(reply,"request_id")!="attach"{return fail(ErrProtocol)}
+    var snap map[string]json.RawMessage
+    if json.Unmarshal(reply["result"],&snap)!=nil||
+       stringField(snap,"type")!="session.snapshot"||
+       stringField(snap,"session_id")!=sessionID||
+       stringField(snap,"runtime_epoch")!=epoch{return fail(ErrProtocol)}
+    _=conn.SetDeadline(time.Time{})
+    return &Observer{conn:conn,codec:c,Snapshot:reply["result"],Epoch:epoch,SessionID:sessionID},nil
+}
