@@ -4,13 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "posoco-ext-fs-session/**"
       - "posoco-ext-hawdb-session/**"
       - "moon.work"
       - ".github/workflows/hawdb-session-native.yml"
   pull_request:
     paths:
-      - "posoco-ext-fs-session/**"
       - "posoco-ext-hawdb-session/**"
       - "moon.work"
       - ".github/workflows/hawdb-session-native.yml"
