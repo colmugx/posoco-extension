@@ -2,6 +2,7 @@ import {
   "colmugx/posoco",
   "nowledge-co/hawdb" @hawdb,
   "moonbitlang/core/async",
+  "moonbitlang/core/json" @json,
 }
 
 warnings = "-unused_package"
