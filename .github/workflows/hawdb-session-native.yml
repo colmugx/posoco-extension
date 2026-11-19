@@ -62,6 +62,11 @@ jobs:
           moon version --all
           rustc --version
           moon update
+          pushd posoco-ext-hawdb-session
+          moon add --upgrade colmugx/posoco
+          moon add --upgrade colmugx/posoco-ext-fs-session
+          moon add --upgrade nowledge-co/hawdb
+          popd
           moon check --target native posoco-ext-hawdb-session
       - name: Build and test current upstream HawDB MoonBit Rust adapter
         shell: bash
@@ -118,6 +123,14 @@ jobs:
           rustc --version
           moon update
           if ($LASTEXITCODE -ne 0) { throw "MoonBit dependency update failed" }
+          Push-Location posoco-ext-hawdb-session
+          moon add --upgrade colmugx/posoco
+          if ($LASTEXITCODE -ne 0) { throw "Posoco dependency upgrade failed" }
+          moon add --upgrade colmugx/posoco-ext-fs-session
+          if ($LASTEXITCODE -ne 0) { throw "filesystem session dependency upgrade failed" }
+          moon add --upgrade nowledge-co/hawdb
+          if ($LASTEXITCODE -ne 0) { throw "HawDB dependency upgrade failed" }
+          Pop-Location
           moon check --target native posoco-ext-hawdb-session
           if ($LASTEXITCODE -ne 0) { throw "Native typecheck failed" }
       - name: Build and test current upstream HawDB MoonBit Rust adapter
