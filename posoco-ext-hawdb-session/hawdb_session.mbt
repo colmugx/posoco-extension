@@ -68,9 +68,9 @@ fn ensure_hawdb_schema(db : @hawdb.Database) -> Result[Unit, String] {
   match ensure_hawdb_table(
     db,
     "posoco_hawdb_sessions",
-    "CREATE TABLE posoco_hawdb_sessions (id TEXT PRIMARY KEY, metadata TEXT, next_seq BIGINT)",
-    ["id", "metadata", "next_seq"],
-    ["text", "text", "bigint"],
+    "CREATE TABLE posoco_hawdb_sessions (id TEXT PRIMARY KEY, metadata TEXT, next_seq BIGINT, revision BIGINT)",
+    ["id", "metadata", "next_seq", "revision"],
+    ["text", "text", "bigint", "bigint"],
   ) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
@@ -85,13 +85,28 @@ fn ensure_hawdb_schema(db : @hawdb.Database) -> Result[Unit, String] {
 }
 
 ///|
+fn ensure_hawdb_receipts(db : @hawdb.Database) -> Result[Unit, String] {
+  ensure_hawdb_table(
+    db,
+    "posoco_hawdb_operations",
+    "CREATE TABLE posoco_hawdb_operations (entry_key TEXT PRIMARY KEY, id TEXT, expected_revision BIGINT, payload TEXT, resulting_revision BIGINT)",
+    ["entry_key", "id", "expected_revision", "payload", "resulting_revision"],
+    ["text", "text", "bigint", "text", "bigint"],
+  )
+}
+
+///|
 pub(all) struct HawdbSessionStore {
   db : @hawdb.Database
 }
 
 ///|
 fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String] {
-  match ensure_hawdb_schema(db) {
+  let schema = match ensure_hawdb_schema(db) {
+    Ok(_) => ensure_hawdb_receipts(db)
+    Err(reason) => Err(reason)
+  }
+  match schema {
     Ok(_) => Ok({ db, })
     Err(reason) => {
       db.close()
@@ -135,9 +150,9 @@ fn message_key(id : String, seq : Int64) -> String {
 fn read_session_head(
   tx : @hawdb.Transaction,
   id : String,
-) -> Result[(Int64, Map[String, Json])?, String] {
+) -> Result[(Int64, Map[String, Json], Int64)?, String] {
   let rows = match tx.query_sql(
-    "SELECT next_seq, metadata FROM posoco_hawdb_sessions WHERE id = $1",
+    "SELECT next_seq, metadata, revision FROM posoco_hawdb_sessions WHERE id = $1",
     [@hawdb.Value::Text(id)],
   ) {
     Ok(value) => value
@@ -149,10 +164,14 @@ fn read_session_head(
   if rows.rows.length() != 1 {
     return Err("duplicate session head")
   }
-  match (rows.get(0, "next_seq"), rows.get(0, "metadata")) {
-    (Some(@hawdb.Value::Int(next_seq)), Some(@hawdb.Value::Text(data))) if next_seq >= 0L =>
+  match (rows.get(0, "next_seq"), rows.get(0, "metadata"), rows.get(0, "revision")) {
+    (
+      Some(@hawdb.Value::Int(next_seq)),
+      Some(@hawdb.Value::Text(data)),
+      Some(@hawdb.Value::Int(revision)),
+    ) if next_seq >= 0L && revision >= 0L =>
       match hawdb_decode_metadata(data) {
-        Ok(metadata) => Ok(Some((next_seq, metadata)))
+        Ok(metadata) => Ok(Some((next_seq, metadata, revision)))
         Err(reason) => Err(reason)
       }
     _ => Err("invalid session head")
@@ -176,7 +195,7 @@ fn read_session(
     Err(error) => return Err(error.describe())
   }
   let (expected, metadata) = match head {
-    Some((count, metadata)) => (count, metadata)
+    Some((count, metadata, _)) => (count, metadata)
     None => {
       if !rows.rows.is_empty() {
         return Err("orphan session messages")
@@ -228,25 +247,28 @@ fn write_head(
   id : String,
   next_seq : Int64,
   metadata : Map[String, Json],
+  revision : Int64,
   exists : Bool,
 ) -> Result[Unit, String] {
   let document = hawdb_encode_metadata(metadata)
   let result = if exists {
     tx.query_sql(
-      "UPDATE posoco_hawdb_sessions SET next_seq = $1, metadata = $2 WHERE id = $3",
+      "UPDATE posoco_hawdb_sessions SET next_seq = $1, metadata = $2, revision = $3 WHERE id = $4",
       [
         @hawdb.Value::Int(next_seq),
         @hawdb.Value::Text(document),
+        @hawdb.Value::Int(revision),
         @hawdb.Value::Text(id),
       ],
     )
   } else {
     tx.query_sql(
-      "INSERT INTO posoco_hawdb_sessions (id, metadata, next_seq) VALUES ($1, $2, $3)",
+      "INSERT INTO posoco_hawdb_sessions (id, metadata, next_seq, revision) VALUES ($1, $2, $3, $4)",
       [
         @hawdb.Value::Text(id),
         @hawdb.Value::Text(document),
         @hawdb.Value::Int(next_seq),
+        @hawdb.Value::Int(revision),
       ],
     )
   }
