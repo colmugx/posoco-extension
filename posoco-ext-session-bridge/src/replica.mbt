@@ -11,12 +11,13 @@ pub struct SessionReplica {
 }
 
 ///|
+#derive(Debug, Eq)
 pub enum ApplyDecision {
   Applied
   Duplicate
   Ignored
   NeedsSnapshot(String)
-} derive(Show, Eq)
+}
 
 ///|
 pub fn SessionReplica::new(session_id : String) -> SessionReplica {
@@ -73,7 +74,7 @@ fn number_field(fields : Map[String, Json], key : String) -> Int32 {
 ///|
 fn bool_field(fields : Map[String, Json], key : String) -> Bool {
   match fields.get(key) {
-    Some(Json::Boolean(value)) => value
+    Some(Json::True) => true
     _ => false
   }
 }
