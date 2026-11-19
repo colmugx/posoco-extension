@@ -1,7 +1,7 @@
 ///|
 fn checkpoint_payload(checkpoint : @posoco.SessionCheckpoint) -> String {
   let data : Map[String, Json] = Map([])
-  data["from_index"] = Json::number(checkpoint.from_index)
+  data["from_index"] = Json::number(checkpoint.from_index.to_double())
   data["messages"] = Json::array(checkpoint.messages.map(fn(message) {
     hawdb_message_json(message)
   }))
