@@ -1,8 +1,7 @@
 ///|
-/// Native HawDB-backed SessionStore (Stage B0/B2 correctness baseline).
-/// This implementation uses a single transactional snapshot row per session.
-/// B3 will replace full-document rewrites with ordered per-message storage.
-/// Only a caller-owned instance (not shared across threads) is supported.
+/// Native HawDB-backed SessionPort: B2 snapshot compatibility with a B3
+/// transactional message delta journal. The archive is not shared across
+/// MoonBit threads; multi-writer qualification is a separate production gate.
 pub(all) struct HawdbSessionStore {
   db : @hawdb.Database
 }
@@ -74,7 +73,11 @@ fn ensure_session_schema(db : @hawdb.Database) -> Result[Unit, String] {
 
 ///|
 fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String] {
-  match ensure_session_schema(db) {
+  let result = match ensure_session_schema(db) {
+    Ok(_) => ensure_delta_schema(db)
+    Err(reason) => Err(reason)
+  }
+  match result {
     Ok(_) => Ok({ db, })
     Err(reason) => {
       db.close()
@@ -179,31 +182,31 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
-  let rows = match self.db.query_sql(
-    "SELECT document FROM posoco_sessions WHERE id = $1",
-    [@hawdb.Value::Text(id)],
-  ) {
-    Ok(rows) => rows
+  let result = self.db.with_read_transaction(fn(tx) {
+    match transaction_load_complete(tx, id) {
+      Ok(session) => Ok(session)
+      Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
+    }
+  })
+  match result {
+    Ok(session) => session
     Err(error) => raise @posoco.SessionError::Load(error.describe())
-  }
-  match rows.get(0, "document") {
-    None => empty_session()
-    Some(@hawdb.Value::Text(document)) =>
-      match decode_document(document) {
-        Ok(session) => session
-        Err(reason) => raise @posoco.SessionError::Load(reason)
-      }
-    _ => raise @posoco.SessionError::Load("session document column is not TEXT")
   }
 }
 
 ///|
+/// Whole-session replacement remains the canonical compact/fork/recovery
+/// operation. Replacing the snapshot and clearing its journal is atomic.
 pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
   self,
   id : String,
   session : @posoco.Session,
 ) -> Unit raise @posoco.SessionError {
   let result = self.db.with_transaction(fn(tx) {
+    match transaction_clear_delta(tx, id) {
+      Ok(_) => ()
+      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
+    }
     match transaction_write(tx, id, session) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
@@ -216,28 +219,15 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
 }
 
 ///|
-/// Logical from_index is intentionally not equated with physical row count:
-/// replay fixation can insert non-persisted transient messages. The snapshot
-/// and metadata replacement are committed in the same HawDB transaction.
+/// Append only new owned message rows and an optional metadata override.
+/// from_index is an Agent logical cursor, not a physical database index.
 pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
   self,
   id : String,
   checkpoint : @posoco.SessionCheckpoint,
 ) -> Unit raise @posoco.SessionError {
   let result = self.db.with_transaction(fn(tx) {
-    let before = match transaction_load(tx, id) {
-      Ok(session) => session
-      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
-    }
-    let tail = before.messages.copy()
-    for msg in checkpoint.messages {
-      tail.push(msg)
-    }
-    let metadata = match checkpoint.metadata {
-      None => before.metadata
-      Some(metadata) => metadata
-    }
-    match transaction_write(tx, id, { messages: tail, metadata, }) {
+    match transaction_append_delta(tx, id, checkpoint) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
@@ -248,6 +238,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
   }
 }
 
+///|
 ///|
 pub impl @posoco.SessionPort for HawdbSessionStore with fn append_messages(
   self,
@@ -269,26 +260,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
   from_index : Int32,
 ) -> Unit raise @posoco.SessionError {
   let result = self.db.with_transaction(fn(tx) {
-    let before = match transaction_load(tx, id) {
-      Ok(session) => session
-      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
-    }
-    let len = before.messages.length()
-    let keep = if from_index < 0 {
-      0
-    } else if from_index > len {
-      len
-    } else {
-      from_index
-    }
-    let next : Array[@posoco.Message] = []
-    for i in 0..<keep {
-      next.push(before.messages[i])
-    }
-    match transaction_write(tx, id, {
-      messages: next,
-      metadata: before.metadata,
-    }) {
+    match transaction_truncate_delta(tx, id, from_index) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
