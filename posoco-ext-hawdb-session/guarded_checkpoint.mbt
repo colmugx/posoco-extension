@@ -45,7 +45,7 @@ fn read_receipt(
       Some(@hawdb.Value::Int(expected)),
       Some(@hawdb.Value::Text(payload)),
       Some(@hawdb.Value::Int(resulting)),
-    ) if expected >= 0L && resulting > expected =>
+    ) if expected >= 0L && resulting >= expected =>
       Ok(Some((expected, payload, resulting)))
     _ => Err("corrupt checkpoint receipt")
   }
