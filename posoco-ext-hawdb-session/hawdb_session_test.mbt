@@ -170,3 +170,146 @@ async test "hawdb session: incomplete snapshot cannot be silently recovered" {
   }
   store.close()
 }
+
+///|
+/// B3 append stores one row per new message; historical snapshot is untouched.
+async test "hawdb B3: append-only checkpoints keep baseline unchanged" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(store) => store
+    Err(reason) => fail("open: " + reason)
+  }
+  let first = @posoco.Message::UserMessage(content=[@posoco.Content::Text("first")])
+  let second = @posoco.Message::UserMessage(content=[@posoco.Content::Text("second 世界")])
+  let third = @posoco.Message::UserMessage(content=[@posoco.Content::Text("third")])
+  store.save("delta", {
+    messages: [first],
+    metadata: {"name": Json::string("old")},
+  }) catch { reason => fail("initial save: \{reason}") }
+  store.checkpoint("delta", {
+    from_index: 999,
+    messages: [second, third],
+    metadata: Some({"name": Json::string("new")}),
+  }) catch { reason => fail("append: \{reason}") }
+
+  let document = store.db.query_sql(
+    "SELECT document FROM posoco_sessions WHERE id = $1",
+    [@hawdb.Value::Text("delta")],
+  )
+  let base = match document {
+    Ok(rows) => rows
+    Err(reason) => fail("read legacy base: \{reason.describe()}")
+  }
+  match base.get(0, "document") {
+    Some(@hawdb.Value::Text(jsonl)) => {
+      let decoded = match @codec.session_from_jsonl(jsonl) {
+        Ok(session) => session
+        Err(reason) => fail("decode legacy base: \{reason}")
+      }
+      assert_eq(decoded.messages.length(), 1)
+      assert_true(decoded.messages[0] == first)
+      assert_true(decoded.metadata.get("name") == Some(Json::string("old")))
+    }
+    _ => fail("legacy base not available")
+  }
+  let journal = store.db.query_sql(
+    "SELECT seq FROM posoco_session_delta_rows WHERE id = $1 ORDER BY seq",
+    [@hawdb.Value::Text("delta")],
+  )
+  match journal {
+    Ok(rows) => {
+      assert_eq(rows.rows.length(), 2)
+      match rows.get(0, "seq") {
+        Some(@hawdb.Value::Int(seq)) => assert_true(seq == 0L)
+        _ => fail("first sequence")
+      }
+      match rows.get(1, "seq") {
+        Some(@hawdb.Value::Int(seq)) => assert_true(seq == 1L)
+        _ => fail("second sequence")
+      }
+    }
+    Err(reason) => fail("journal query: \{reason.describe()}")
+  }
+  let restored = store.load("delta") catch {
+    reason => fail("rebuild: \{reason}")
+  }
+  assert_eq(restored.messages.length(), 3)
+  assert_true(restored.messages[0] == first)
+  assert_true(restored.messages[1] == second)
+  assert_true(restored.messages[2] == third)
+  assert_true(restored.metadata.get("name") == Some(Json::string("new")))
+
+  store.truncate("delta", 2) catch { reason => fail("truncate journal: \{reason}") }
+  let cut = store.load("delta") catch { reason => fail("reload cut: \{reason}") }
+  assert_eq(cut.messages.length(), 2)
+  assert_true(cut.metadata.get("name") == Some(Json::string("new")))
+  store.checkpoint("delta", {
+    from_index: 0,
+    messages: [third],
+    metadata: None,
+  }) catch { reason => fail("append after truncate: \{reason}") }
+  let again = store.load("delta") catch { reason => fail("reload appended: \{reason}") }
+  assert_eq(again.messages.length(), 3)
+  assert_true(again.messages[2] == third)
+  store.close()
+}
+
+///|
+/// Full save atomically clears prior append rows, including metadata overrides.
+async test "hawdb B3: full save replaces journal without stale messages" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(store) => store
+    Err(reason) => fail("open: " + reason)
+  }
+  let msg = @posoco.Message::UserMessage(content=[@posoco.Content::Text("old")])
+  store.append_messages("reset", 0, [msg][:]) catch {
+    reason => fail("append: \{reason}")
+  }
+  store.checkpoint("reset", {
+    from_index: 4,
+    messages: [],
+    metadata: Some({"name": Json::string("before")}),
+  }) catch { reason => fail("metadata: \{reason}") }
+  store.save("reset", {
+    messages: [],
+    metadata: {"name": Json::string("after")},
+  }) catch { reason => fail("reset: \{reason}") }
+  let session = store.load("reset") catch { reason => fail("load: \{reason}") }
+  assert_true(session.messages.is_empty())
+  assert_true(session.metadata.get("name") == Some(Json::string("after")))
+  let journal = store.db.query_sql(
+    "SELECT entry_key FROM posoco_session_delta_rows WHERE id = $1",
+    [@hawdb.Value::Text("reset")],
+  )
+  match journal {
+    Ok(rows) => assert_true(rows.rows.is_empty())
+    Err(reason) => fail("journal query: \{reason.describe()}")
+  }
+  store.close()
+}
+
+///|
+/// No head/row mismatches can be mistaken for an empty session.
+async test "hawdb B3: corruption fails closed" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(store) => store
+    Err(reason) => fail("open: " + reason)
+  }
+  let msg = @posoco.Message::UserMessage(content=[@posoco.Content::Text("durable")])
+  store.append_messages("corrupt-delta", 0, [msg][:]) catch {
+    reason => fail("append: \{reason}")
+  }
+  match store.db.query_sql(
+    "DELETE FROM posoco_session_delta_rows WHERE id = $1",
+    [@hawdb.Value::Text("corrupt-delta")],
+  ) {
+    Ok(_) => ()
+    Err(reason) => fail("corrupt fixture: \{reason.describe()}")
+  }
+  try store.load("corrupt-delta") catch {
+    @posoco.SessionError::Load(_) => ()
+    reason => fail("expected Load, got \{reason}")
+  } noraise {
+    _ => fail("missing journal row must fail load")
+  }
+  store.close()
+}
