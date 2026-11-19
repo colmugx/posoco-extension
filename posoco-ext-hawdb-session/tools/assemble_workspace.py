@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Expose local upstream HawDB and Posoco's integration module to moon.work.
+"""Expose local fs-session, upstream HawDB, and Posoco integration modules to moon.work.
 
 CI checks out the latest upstream main. This edits only the ephemeral runner
 workspace and does not pin or publish an engine version.
@@ -9,6 +9,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2]
 work = root / "moon.work"
 members = [
+    '  "./posoco-ext-fs-session",',
     '  "./_hawdb_checkout/bindings/moonbit",',
     '  "./posoco-ext-hawdb-session",',
 ]
