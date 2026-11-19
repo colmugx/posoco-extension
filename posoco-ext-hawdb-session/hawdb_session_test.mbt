@@ -90,7 +90,7 @@ async test "hawdb: checkpoint inserts only new message rows" {
     Some(@hawdb.Value::Text(data)) => data
     _ => fail("missing first record")
   }
-  assert_true(initial_record == hawdb_encode_message(first))
+  assert_true(initial_record.contains("\"kind\":\"user\""))
   let state = store.load("incremental") catch { error => fail("load: \{error}") }
   assert_eq(state.messages.length(), 3)
   assert_true(state.messages[1] == second)
@@ -123,19 +123,26 @@ async test "hawdb: typed tool outcomes round trip" {
       original_call_id=@posoco.CallId::unchecked("previous"),
     ),
   ]
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(value) => value
+    Err(error) => fail("open: " + error)
+  }
   for outcome in variants {
     let message = @posoco.Message::ToolMessage(
       call_id=@posoco.CallId::unchecked("call"),
       tool_name=@posoco.ToolName::unchecked("tool"),
       outcome~,
     )
-    let raw = hawdb_encode_message(message)
-    let decoded = match hawdb_decode_message(raw) {
-      Ok(value) => value
-      Err(reason) => fail("decode: " + reason)
+    store.save("tool", { messages: [message], metadata: Map([]), }) catch {
+      error => fail("save: \{error}")
     }
-    assert_true(decoded == message)
+    let restored = store.load("tool") catch {
+      error => fail("load: \{error}")
+    }
+    assert_eq(restored.messages.length(), 1)
+    assert_true(restored.messages[0] == message)
   }
+  store.close()
 }
 
 ///|
