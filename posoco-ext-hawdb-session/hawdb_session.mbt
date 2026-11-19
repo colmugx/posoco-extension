@@ -310,11 +310,21 @@ fn write_session(
   id : String,
   session : @posoco.Session,
 ) -> Result[Unit, String] {
+  let revision = match read_session_head(tx, id) {
+    Ok(Some((_, _, previous))) => {
+      if previous == 9223372036854775807L {
+        return Err("session revision overflow")
+      }
+      previous + 1L
+    }
+    Ok(None) => 1L
+    Err(reason) => return Err(reason)
+  }
   match clear_session(tx, id) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
-  match write_head(tx, id, session.messages.length().to_int64(), session.metadata, false) {
+  match write_head(tx, id, session.messages.length().to_int64(), session.metadata, revision, false) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
@@ -335,9 +345,12 @@ fn append_checkpoint(
     Ok(value) => value
     Err(reason) => return Err(reason)
   }
-  let (start, previous_metadata) = match head {
-    Some((count, metadata)) => (count, metadata)
-    None => (0L, Map([]))
+  let (start, previous_metadata, revision) = match head {
+    Some((count, metadata, revision)) => (count, metadata, revision)
+    None => (0L, Map([]), 0L)
+  }
+  if revision == 9223372036854775807L {
+    return Err("session revision overflow")
   }
   let count = checkpoint.messages.length().to_int64()
   let next = start + count
@@ -348,7 +361,7 @@ fn append_checkpoint(
     Some(value) => value
     None => previous_metadata
   }
-  match write_head(tx, id, next, metadata, head is Some(_)) {
+  match write_head(tx, id, next, metadata, revision + 1L, head is Some(_)) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
@@ -365,7 +378,7 @@ fn truncate_session(
     Ok(value) => value
     Err(reason) => return Err(reason)
   }
-  let (count, metadata) = match head {
+  let (count, metadata, revision) = match head {
     Some(value) => value
     None => return Ok(())
   }
@@ -386,7 +399,10 @@ fn truncate_session(
     Ok(_) => ()
     Err(error) => return Err(error.describe())
   }
-  write_head(tx, id, keep, metadata, true)
+  if revision == 9223372036854775807L {
+    return Err("session revision overflow")
+  }
+  write_head(tx, id, keep, metadata, revision + 1L, true)
 }
 
 ///|
