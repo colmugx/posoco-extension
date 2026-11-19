@@ -6,12 +6,26 @@ Native HawDB implementation of Posoco SessionPort.
 
 The database owns two tables:
 
-- posoco_hawdb_sessions: session id, metadata JSON, next message sequence.
+- posoco_hawdb_sessions: session id, metadata JSON, next message sequence, revision.
 - posoco_hawdb_messages: session id, sequence, and canonical message JSON.
+- posoco_hawdb_operations: guarded checkpoint receipts.
 
 Every checkpoint appends only new message rows and atomically updates session metadata and sequence. save replaces a session, truncate deletes message rows at and after the specified index, and load verifies the contiguous message sequence under a read transaction. SessionCheckpoint.from_index is an Agent cursor; the storage sequence is independent.
 
 HawDB session data is not a JSONL document. The package does not import posoco-ext-fs-session, read fs-session files, or implement format migration.
+
+## Guarded checkpoints
+
+The native extension offers `revision(session_id)` and
+`checkpoint_guarded(session_id, expected_revision, operation_id, checkpoint)`.
+A guarded checkpoint rejects stale revisions. A repeated operation ID with
+the same expected revision and canonical payload returns its original receipt
+without appending again. Reusing an operation ID with a different payload
+fails. A no-op checkpoint can also be retried.
+
+The SessionPort checkpoint method remains available without a revision
+precondition. Consumers requiring concurrency control must use the guarded
+method and test ownership and transaction conflicts in their host.
 
 ## Development
 
@@ -21,7 +35,7 @@ A published MoonBit package must supply verified precompiled native binaries wit
 
 ## Production gates
 
-- Multiwriter revision checks and retry idempotency.
+- Multi-process competing writer tests, unknown-commit recovery, and receipt retention policy.
 - Process crash/restart and transaction failure injection.
 - Agent integration, replay, compaction and SessionCatalog.
 - Independent Mooncakes consumer without Rust.
