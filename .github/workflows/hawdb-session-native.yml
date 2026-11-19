@@ -41,6 +41,12 @@ jobs:
           repository: nowledge-co/hawdb
           ref: main
           path: _hawdb_checkout
+      - name: Checkout current upstream Posoco main
+        uses: actions/checkout@v4
+        with:
+          repository: colmugx/posoco
+          ref: main
+          path: _posoco_checkout
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -95,6 +101,12 @@ jobs:
           ref: main
           path: _hawdb_checkout
       - uses: ilammy/msvc-dev-cmd@v1
+      - name: Checkout current upstream Posoco main
+        uses: actions/checkout@v4
+        with:
+          repository: colmugx/posoco
+          ref: main
+          path: _posoco_checkout
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
