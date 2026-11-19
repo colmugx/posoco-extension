@@ -1,15 +1,9 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco-ext-fs-session" @codec,
   "nowledge-co/hawdb" @hawdb,
   "moonbitlang/core/async",
 }
 
-// The integration build configures this field after compiling the *current*
-// upstream HawDB source. Do not reference a checkout-relative path in final
-// packages: moon invokes the linker from the workspace root, not here.
-// Async whitebox tests require the root core/async package. It is imported
-// for the test runner, and intentionally has no explicit symbol use.
 warnings = "-unused_package"
 
 options(
