@@ -190,8 +190,7 @@ fn read_session(
   let messages : Array[@posoco.Message] = []
   for i in 0..<rows.rows.length() {
     match (rows.get(i, "seq"), rows.get(i, "document")) {
-      (Some(@hawdb.Value::Int(seq)), Some(@hawdb.Value::Text(data)))
-        if seq == i.to_int64() =>
+      (Some(@hawdb.Value::Int(seq)), Some(@hawdb.Value::Text(data))) if seq == i.to_int64() =>
         match hawdb_decode_message(data) {
           Ok(message) => messages.push(message)
           Err(reason) => return Err(reason)
