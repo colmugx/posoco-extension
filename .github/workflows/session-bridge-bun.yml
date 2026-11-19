@@ -1,0 +1,23 @@
+name: Posoco Session Bridge (Bun)
+
+on:
+  pull_request:
+    paths:
+      - 'posoco-ext-session-bridge/ts/**'
+      - '.github/workflows/session-bridge-bun.yml'
+  push:
+    paths:
+      - 'posoco-ext-session-bridge/ts/**'
+      - '.github/workflows/session-bridge-bun.yml'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun test posoco-ext-session-bridge/ts/bridge.test.ts
