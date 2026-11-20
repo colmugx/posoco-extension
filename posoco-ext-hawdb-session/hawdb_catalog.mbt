@@ -129,7 +129,7 @@ pub fn HawdbSessionStore::set_session_name(
     if revision == 9223372036854775807L {
       return Err(@hawdb.HawdbError::Codec("session revision overflow"))
     }
-    let updated = metadata.copy()
+    let updated = hawdb_metadata_with_cwd(metadata, self.cwd).copy()
     updated["name"] = Json::string(name)
     match write_head(tx, id, length, updated, revision + 1L, head is Some(_)) {
       Ok(_) => Ok(())
