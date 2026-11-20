@@ -99,16 +99,20 @@ fn ensure_hawdb_receipts(db : @hawdb.Database) -> Result[Unit, String] {
 pub(all) struct HawdbSessionStore {
   db : @hawdb.Database
   mut current_id : String?
+  cwd : String?
 }
 
 ///|
-fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String] {
+fn finish_session_open(
+  db : @hawdb.Database,
+  cwd : String?,
+) -> Result[HawdbSessionStore, String] {
   let schema = match ensure_hawdb_schema(db) {
     Ok(_) => ensure_hawdb_receipts(db)
     Err(reason) => Err(reason)
   }
   match schema {
-    Ok(_) => Ok({ db, current_id: None, })
+    Ok(_) => Ok({ db, current_id: None, cwd, })
     Err(reason) => {
       db.close()
       Err(reason)
@@ -117,17 +121,22 @@ fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String
 }
 
 ///|
-pub fn HawdbSessionStore::open(path : String) -> Result[HawdbSessionStore, String] {
+pub fn HawdbSessionStore::open(
+  path : String,
+  cwd~ : String? = None,
+) -> Result[HawdbSessionStore, String] {
   match @hawdb.open(path) {
-    Ok(db) => finish_session_open(db)
+    Ok(db) => finish_session_open(db, cwd)
     Err(error) => Err(error.describe())
   }
 }
 
 ///|
-pub fn HawdbSessionStore::open_in_memory() -> Result[HawdbSessionStore, String] {
+pub fn HawdbSessionStore::open_in_memory(
+  cwd~ : String? = None,
+) -> Result[HawdbSessionStore, String] {
   match @hawdb.open_in_memory() {
-    Ok(db) => finish_session_open(db)
+    Ok(db) => finish_session_open(db, cwd)
     Err(error) => Err(error.describe())
   }
 }
@@ -154,6 +163,26 @@ pub fn HawdbSessionStore::check_id(id : String) -> Result[Unit, String] {
 ///|
 fn empty_session() -> @posoco.Session {
   { messages: [], metadata: Map([]), }
+}
+
+///|
+fn hawdb_metadata_with_cwd(
+  metadata : Map[String, Json],
+  cwd : String?,
+) -> Map[String, Json] {
+  let path = match cwd {
+    Some(value) if !value.is_empty() => value
+    _ => return metadata
+  }
+  let normalized = path.replace_all(old="\\", new="/")
+  let trimmed = normalized.trim_end(chars="/")
+  let recorded = if trimmed.is_empty() { "/" } else { trimmed.to_owned() }
+  if metadata.get("cetas.cwd") == Some(Json::string(recorded)) {
+    return metadata
+  }
+  let updated = metadata.copy()
+  updated["cetas.cwd"] = Json::string(recorded)
+  updated
 }
 
 ///|
@@ -352,6 +381,7 @@ fn append_checkpoint(
   tx : @hawdb.Transaction,
   id : String,
   checkpoint : @posoco.SessionCheckpoint,
+  cwd : String?,
 ) -> Result[Unit, String] {
   let head = match read_session_head(tx, id) {
     Ok(value) => value
@@ -360,7 +390,7 @@ fn append_checkpoint(
   if checkpoint.messages.is_empty() && checkpoint.metadata is None {
     return match head {
       Some(_) => Ok(())
-      None => write_head(tx, id, 0L, Map([]), 1L, false)
+      None => write_head(tx, id, 0L, hawdb_metadata_with_cwd(Map([]), cwd), 1L, false)
     }
   }
   let (start, previous_metadata, revision) = match head {
@@ -376,8 +406,8 @@ fn append_checkpoint(
     return Err("session sequence overflow")
   }
   let metadata = match checkpoint.metadata {
-    Some(value) => value
-    None => previous_metadata
+    Some(value) => hawdb_metadata_with_cwd(value, cwd)
+    None => hawdb_metadata_with_cwd(previous_metadata, cwd)
   }
   match write_head(tx, id, next, metadata, revision + 1L, head is Some(_)) {
     Ok(_) => ()
@@ -459,8 +489,12 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
     Ok(_) => ()
     Err(reason) => raise @posoco.SessionError::Save(reason)
   }
+  let persisted : @posoco.Session = {
+    messages: session.messages,
+    metadata: hawdb_metadata_with_cwd(session.metadata, self.cwd),
+  }
   let result = self.db.with_transaction(fn(tx) {
-    match write_session(tx, id, session) {
+    match write_session(tx, id, persisted) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
@@ -482,7 +516,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
     Err(reason) => raise @posoco.SessionError::Save(reason)
   }
   let result = self.db.with_transaction(fn(tx) {
-    match append_checkpoint(tx, id, checkpoint) {
+    match append_checkpoint(tx, id, checkpoint, self.cwd) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
