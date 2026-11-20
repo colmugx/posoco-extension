@@ -21,13 +21,7 @@ pub enum ApplyDecision {
 
 ///|
 pub fn SessionReplica::new(session_id : String) -> SessionReplica {
-  {
-    session_id,
-    epoch: "",
-    cursor: 0,
-    working: false,
-    attached: false,
-  }
+  { session_id, epoch: "", cursor: 0, working: false, attached: false, }
 }
 
 ///|
@@ -139,8 +133,7 @@ pub fn SessionReplica::apply(
   }
   match kind {
     "turn.accepted" | "turn.started" => self.working = true
-    "turn.completed" | "turn.failed" | "turn.cancelled" =>
-      self.working = false
+    "turn.completed" | "turn.failed" | "turn.cancelled" => self.working = false
     _ => ()
   }
   Applied

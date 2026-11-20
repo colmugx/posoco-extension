@@ -100,7 +100,7 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
   let buf : FixedArray[Byte] = FixedArray::make(size, b'\x00')
   let mut filled = 0
   while filled < size {
-    let n = file.read_into(buf.mut_view(start=filled)) catch {
+    let n = file.read_into(buf, offset=filled) catch {
       error => {
         file.close()
         raise read_failure("read", path, @debug.Repr(error).to_string())

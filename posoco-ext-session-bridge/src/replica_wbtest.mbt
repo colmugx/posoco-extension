@@ -21,7 +21,9 @@ fn session_frame(
 ///|
 test "Go to Go: joining a working Session gets working from snapshot" {
   let b = SessionReplica::new("s-1")
-  let frame = session_frame("s-1", "session.snapshot", "epoch-a", 7, false, true)
+  let frame = session_frame(
+    "s-1", "session.snapshot", "epoch-a", 7, false, true,
+  )
   assert_eq(b.apply(frame), Applied)
   assert_true(b.attached())
   assert_true(b.working())
@@ -32,7 +34,9 @@ test "Go to Go: joining a working Session gets working from snapshot" {
 test "Go to JS and JS to Go: host-neutral events carry contiguous deltas" {
   let b = SessionReplica::new("s-1")
   assert_eq(
-    b.apply(session_frame("s-1", "session.snapshot", "epoch-a", 4, false, false)),
+    b.apply(
+      session_frame("s-1", "session.snapshot", "epoch-a", 4, false, false),
+    ),
     Applied,
   )
   assert_eq(
@@ -41,7 +45,9 @@ test "Go to JS and JS to Go: host-neutral events carry contiguous deltas" {
   )
   assert_true(b.working())
   assert_eq(
-    b.apply(session_frame("s-1", "assistant.text_delta", "epoch-a", 6, true, false)),
+    b.apply(
+      session_frame("s-1", "assistant.text_delta", "epoch-a", 6, true, false),
+    ),
     Applied,
   )
   assert_eq(b.cursor(), 6)
@@ -71,7 +77,9 @@ test "per-Surface cursors isolate observers and reject gaps" {
   )
   assert_eq(b.cursor(), 2)
   assert_eq(
-    a.apply(session_frame("s-a", "assistant.text_delta", "epoch", 13, true, false)),
+    a.apply(
+      session_frame("s-a", "assistant.text_delta", "epoch", 13, true, false),
+    ),
     NeedsSnapshot("session cursor gap"),
   )
   assert_false(a.attached())
@@ -84,14 +92,18 @@ test "per-Surface cursors isolate observers and reject gaps" {
 ///|
 test "epoch replacement always requires a new snapshot" {
   let b = SessionReplica::new("s-1")
-  ignore(b.apply(session_frame("s-1", "session.snapshot", "epoch-a", 9, false, true)))
+  ignore(
+    b.apply(session_frame("s-1", "session.snapshot", "epoch-a", 9, false, true)),
+  )
   assert_eq(
     b.apply(session_frame("s-1", "turn.completed", "epoch-b", 10, true, false)),
     NeedsSnapshot("runtime epoch changed"),
   )
   assert_false(b.attached())
   assert_eq(
-    b.apply(session_frame("s-1", "session.snapshot", "epoch-b", 1, false, false)),
+    b.apply(
+      session_frame("s-1", "session.snapshot", "epoch-b", 1, false, false),
+    ),
     Applied,
   )
   assert_false(b.working())
@@ -101,7 +113,9 @@ test "epoch replacement always requires a new snapshot" {
 ///|
 test "unicast state does not invent broadcast cursor advancement" {
   let b = SessionReplica::new("s-1")
-  ignore(b.apply(session_frame("s-1", "session.snapshot", "epoch", 3, false, false)))
+  ignore(
+    b.apply(session_frame("s-1", "session.snapshot", "epoch", 3, false, false)),
+  )
   assert_eq(
     b.apply(session_frame("s-1", "session.notice", "epoch", 3, false, false)),
     Applied,
