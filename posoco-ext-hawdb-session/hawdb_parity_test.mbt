@@ -146,3 +146,37 @@ async test "hawdb: name command edits active session metadata" {
   }
   store.close()
 }
+
+///|
+async test "hawdb: initial empty append creates a session" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(value) => value
+    Err(error) => fail("open: " + error)
+  }
+  let empty : Array[@posoco.Message] = []
+  store.append_messages("initial", 0, empty[:]) catch {
+    error => fail("append: \{error}")
+  }
+  let ids = store.list_ids() catch { error => fail("list: \{error}") }
+  assert_eq(ids.length(), 1)
+  assert_eq(ids[0], "initial")
+  let session = store.load("initial") catch { error => fail("load: \{error}") }
+  assert_true(session.messages.is_empty())
+  store.close()
+}
+
+///|
+async test "hawdb: truncate missing session creates an empty session" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(value) => value
+    Err(error) => fail("open: " + error)
+  }
+  store.truncate("empty-after-truncate", 100) catch {
+    error => fail("truncate: \{error}")
+  }
+  let ids = store.list_ids() catch { error => fail("list: \{error}") }
+  assert_eq(ids.length(), 1)
+  assert_eq(ids[0], "empty-after-truncate")
+  assert_true(store.load("empty-after-truncate").messages.is_empty())
+  store.close()
+}
