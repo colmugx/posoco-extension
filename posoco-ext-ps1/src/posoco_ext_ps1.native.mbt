@@ -158,7 +158,7 @@ async fn ps1_read_drained(reader : @process.ReadFromProcess) -> Bytes {
       break
     }
     let got : Int32? = @async.with_timeout_opt(remaining.to_int(), async fn() {
-      reader.read_into(buf)
+      reader.read_into(buf.mut_view())
     })
     match got {
       None => eof = true
