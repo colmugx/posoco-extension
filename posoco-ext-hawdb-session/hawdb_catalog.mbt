@@ -83,7 +83,7 @@ pub fn HawdbSessionStore::list_ids(
 }
 
 ///|
-pub fn HawdbSessionStore::summary(
+pub async fn HawdbSessionStore::summary(
   self : HawdbSessionStore,
   id : String,
 ) -> HawdbSessionSummary raise @posoco.SessionError {
