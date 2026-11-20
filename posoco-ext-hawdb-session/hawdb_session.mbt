@@ -98,6 +98,7 @@ fn ensure_hawdb_receipts(db : @hawdb.Database) -> Result[Unit, String] {
 ///|
 pub(all) struct HawdbSessionStore {
   db : @hawdb.Database
+  mut current_id : String?
 }
 
 ///|
@@ -107,7 +108,7 @@ fn finish_session_open(db : @hawdb.Database) -> Result[HawdbSessionStore, String
     Err(reason) => Err(reason)
   }
   match schema {
-    Ok(_) => Ok({ db, })
+    Ok(_) => Ok({ db, current_id: None, })
     Err(reason) => {
       db.close()
       Err(reason)
@@ -134,6 +135,20 @@ pub fn HawdbSessionStore::open_in_memory() -> Result[HawdbSessionStore, String] 
 ///|
 pub fn HawdbSessionStore::close(self : HawdbSessionStore) -> Unit {
   self.db.close()
+}
+
+///|
+pub fn HawdbSessionStore::check_id(id : String) -> Result[Unit, String] {
+  if id.is_empty() {
+    return Err("session id must not be empty")
+  }
+  if id == "." || id == ".." {
+    return Err("session id must not be a relative path segment")
+  }
+  if id.contains("/") || id.contains("\\") {
+    return Err("session id must not contain path separators")
+  }
+  Ok(())
 }
 
 ///|
@@ -415,6 +430,10 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Load(reason)
+  }
   let result = self.db.with_read_transaction(fn(tx) {
     match read_session(tx, id) {
       Ok(session) => Ok(session)
@@ -433,6 +452,10 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
   id : String,
   session : @posoco.Session,
 ) -> Unit raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
   let result = self.db.with_transaction(fn(tx) {
     match write_session(tx, id, session) {
       Ok(_) => Ok(())
@@ -440,7 +463,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
     }
   })
   match result {
-    Ok(_) => ()
+    Ok(_) => self.current_id = Some(id)
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
@@ -451,6 +474,10 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
   id : String,
   checkpoint : @posoco.SessionCheckpoint,
 ) -> Unit raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
   let result = self.db.with_transaction(fn(tx) {
     match append_checkpoint(tx, id, checkpoint) {
       Ok(_) => Ok(())
@@ -458,7 +485,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn checkpoint(
     }
   })
   match result {
-    Ok(_) => ()
+    Ok(_) => self.current_id = Some(id)
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
@@ -479,6 +506,10 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
   id : String,
   from_index : Int32,
 ) -> Unit raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
   let result = self.db.with_transaction(fn(tx) {
     match truncate_session(tx, id, from_index) {
       Ok(_) => Ok(())
@@ -486,7 +517,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
     }
   })
   match result {
-    Ok(_) => ()
+    Ok(_) => self.current_id = Some(id)
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
