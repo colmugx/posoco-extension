@@ -12,6 +12,7 @@ pub impl @posoco.Extension for HawdbSessionStore with fn manifest(
   @posoco.ExtensionManifest(
     id="posoco_ext_hawdb_session",
     sessions=[self],
+    commands=[self],
   )
 }
 
