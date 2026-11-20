@@ -21,8 +21,9 @@ It contributes a session capability and a `/name` command to Agent composition.
 
 The native `list_ids`, `summary`, `set_session_name`, and `check_id`
 methods support session discovery, display titles, renaming, and session ID
-validation. Metadata carries automatic titles, names, project directories,
-and recorded model selection independently of its physical storage.
+validation. `open(path, cwd=Some(project_dir))` records the normalized project
+directory on session writes. Model selection fields passed in session metadata
+are retained.
 
 ## Guarded checkpoints
 
