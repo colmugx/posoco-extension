@@ -4,7 +4,7 @@ Native HawDB implementation of Posoco SessionPort.
 
 ## Storage
 
-The database owns two tables:
+The database owns three tables:
 
 - posoco_hawdb_sessions: session id, metadata JSON, next message sequence, revision.
 - posoco_hawdb_messages: session id, sequence, and canonical message JSON.
@@ -13,6 +13,16 @@ The database owns two tables:
 Every checkpoint appends only new message rows and atomically updates session metadata and sequence. save replaces a session, truncate deletes message rows at and after the specified index, and load verifies the contiguous message sequence under a read transaction. SessionCheckpoint.from_index is an Agent cursor; the storage sequence is independent.
 
 HawDB session data is not a JSONL document. The package does not import posoco-ext-fs-session, read fs-session files, or implement format migration.
+
+## Session management
+
+The store implements Posoco `SessionPort`, `Extension`, and `CommandPort`.
+It contributes a session capability and a `/name` command to Agent composition.
+
+The native `list_ids`, `summary`, `set_session_name`, and `check_id`
+methods support session discovery, display titles, renaming, and session ID
+validation. Metadata carries automatic titles, names, project directories,
+and recorded model selection independently of its physical storage.
 
 ## Guarded checkpoints
 
@@ -37,7 +47,8 @@ A published MoonBit package must supply verified precompiled native binaries wit
 
 - Multi-process competing writer tests, unknown-commit recovery, and receipt retention policy.
 - Process crash/restart and transaction failure injection.
-- Agent integration, replay, compaction and SessionCatalog.
+- Host selection of HawDB, SessionCatalog wiring, streaming rewind, and full Agent replay/compaction tests.
+- Model-selection event capture and session status announcements.
 - Independent Mooncakes consumer without Rust.
 - Native distribution, provenance, licenses, and lifecycle/GC qualification.
 
