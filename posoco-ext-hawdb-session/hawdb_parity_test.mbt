@@ -27,7 +27,7 @@ async test "hawdb: list, summary and rename preserve session data" {
   store.save("b-session", {
     messages: [alpha],
     metadata: {
-      @posoco.SESSION_TITLE_METADATA_KEY: Json::string("  Automatic  title "),
+      "posoco.title": Json::string("  Automatic  title "),
       "cetas.cwd": Json::string("/work/project"),
       "posoco.model_selection": Json::object({
         "slot_id": Json::string("openai/test"),
