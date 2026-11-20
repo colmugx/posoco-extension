@@ -7,7 +7,7 @@ async test "hawdb: extension contributes the SessionPort" {
   let ext : &@posoco.Extension = store
   assert_eq(ext.extension_id(), "posoco_ext_hawdb_session")
   assert_eq(ext.manifest().sessions.length(), 1)
-  assert_true(ext.manifest().commands.is_empty())
+  assert_eq(ext.manifest().commands.length(), 1)
   store.close()
 }
 
@@ -107,5 +107,39 @@ async test "hawdb: renaming a missing session does not create it" {
   }
   let ids = store.list_ids() catch { error => fail("list: \{error}") }
   assert_true(ids.is_empty())
+  store.close()
+}
+
+///|
+async test "hawdb: name command edits active session metadata" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(value) => value
+    Err(reason) => fail("open: " + reason)
+  }
+  assert_eq(store.commands().length(), 1)
+  let first = store.invoke("name", Json::string("before"))
+  match first {
+    @posoco.CommandOutcome::Failure(..) => ()
+    _ => fail("name without active session succeeded")
+  }
+  store.save("command", { messages: [], metadata: Map([]), }) catch {
+    error => fail("save: \{error}")
+  }
+  let result = store.invoke("name", Json::object({
+    "value": Json::string("Renamed"),
+  }))
+  match result {
+    @posoco.CommandOutcome::Success(..) => ()
+    other => fail("rename: \{other}")
+  }
+  let summary = store.summary("command") catch {
+    error => fail("summary: \{error}")
+  }
+  assert_eq(hawdb_display_title(summary), "Renamed")
+  let invalid = store.invoke("name", Json::string("  "))
+  match invalid {
+    @posoco.CommandOutcome::Failure(..) => ()
+    _ => fail("blank name accepted")
+  }
   store.close()
 }
