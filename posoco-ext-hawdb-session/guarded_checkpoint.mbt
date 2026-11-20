@@ -84,6 +84,7 @@ fn apply_guarded_checkpoint(
   expected_revision : Int64,
   operation_id : String,
   checkpoint : @posoco.SessionCheckpoint,
+  cwd : String?,
 ) -> Result[Int64, String] {
   if expected_revision < 0L || operation_id == "" {
     return Err("invalid checkpoint revision or operation id")
@@ -114,7 +115,7 @@ fn apply_guarded_checkpoint(
     return Err("session revision overflow")
   }
   if !(checkpoint.messages.is_empty() && checkpoint.metadata is None) {
-    match append_checkpoint(tx, id, checkpoint) {
+    match append_checkpoint(tx, id, checkpoint, cwd) {
       Ok(_) => ()
       Err(reason) => return Err(reason)
     }
@@ -166,7 +167,7 @@ pub fn HawdbSessionStore::checkpoint_guarded(
     Err(reason) => raise @posoco.SessionError::Save(reason)
   }
   let result = self.db.with_transaction(fn(tx) {
-    match apply_guarded_checkpoint(tx, id, expected_revision, operation_id, checkpoint) {
+    match apply_guarded_checkpoint(tx, id, expected_revision, operation_id, checkpoint, self.cwd) {
       Ok(value) => Ok(value)
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
