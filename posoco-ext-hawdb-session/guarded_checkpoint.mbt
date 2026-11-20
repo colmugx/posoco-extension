@@ -133,6 +133,10 @@ pub fn HawdbSessionStore::revision(
   self : HawdbSessionStore,
   id : String,
 ) -> Int64 raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Load(reason)
+  }
   let result = self.db.with_read_transaction(fn(tx) {
     match read_session_head(tx, id) {
       Ok(Some((_, _, revision))) => Ok(revision)
@@ -155,6 +159,10 @@ pub fn HawdbSessionStore::checkpoint_guarded(
   operation_id : String,
   checkpoint : @posoco.SessionCheckpoint,
 ) -> Int64 raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
   let result = self.db.with_transaction(fn(tx) {
     match apply_guarded_checkpoint(tx, id, expected_revision, operation_id, checkpoint) {
       Ok(value) => Ok(value)
@@ -162,7 +170,10 @@ pub fn HawdbSessionStore::checkpoint_guarded(
     }
   })
   match result {
-    Ok(value) => value
+    Ok(value) => {
+      self.current_id = Some(id)
+      value
+    }
     Err(error) => raise @posoco.SessionError::Save(error.describe())
   }
 }
