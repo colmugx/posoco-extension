@@ -133,7 +133,7 @@ async test "hawdb: name command edits active session metadata" {
   }))
   match result {
     @posoco.CommandOutcome::Success(..) => ()
-    other => fail("rename: \{other}")
+    _ => fail("rename command did not succeed")
   }
   let summary = store.summary("command") catch {
     error => fail("summary: \{error}")
