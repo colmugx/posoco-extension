@@ -113,9 +113,11 @@ fn apply_guarded_checkpoint(
   if actual_revision == 9223372036854775807L {
     return Err("session revision overflow")
   }
-  match append_checkpoint(tx, id, checkpoint) {
-    Ok(_) => ()
-    Err(reason) => return Err(reason)
+  if !(checkpoint.messages.is_empty() && checkpoint.metadata is None) {
+    match append_checkpoint(tx, id, checkpoint) {
+      Ok(_) => ()
+      Err(reason) => return Err(reason)
+    }
   }
   let resulting_revision = if checkpoint.messages.is_empty() && checkpoint.metadata is None {
     actual_revision
