@@ -180,3 +180,32 @@ async test "hawdb: truncate missing session creates an empty session" {
   assert_true(store.load("empty-after-truncate").messages.is_empty())
   store.close()
 }
+
+///|
+async test "hawdb: project directory is recorded on first append and save" {
+  let store = match HawdbSessionStore::open_in_memory(
+    cwd=Some("/work/project/"),
+  ) {
+    Ok(value) => value
+    Err(error) => fail("open: " + error)
+  }
+  let message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("message"),
+  ])
+  store.append_messages("new", 0, [message][:]) catch {
+    error => fail("append: \{error}")
+  }
+  let first = store.load("new") catch { error => fail("load: \{error}") }
+  assert_true(first.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  store.save("saved", { messages: [], metadata: Map([]), }) catch {
+    error => fail("save: \{error}")
+  }
+  let second = store.load("saved") catch { error => fail("load: \{error}") }
+  assert_true(second.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  store.set_session_name("named", "name") catch {
+    error => fail("name: \{error}")
+  }
+  let third = store.load("named") catch { error => fail("load: \{error}") }
+  assert_true(third.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  store.close()
+}
