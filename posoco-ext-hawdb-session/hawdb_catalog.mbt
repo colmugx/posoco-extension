@@ -124,14 +124,14 @@ pub fn HawdbSessionStore::set_session_name(
     }
     let (length, metadata, revision) = match head {
       Some(value) => value
-      None => return Err(@hawdb.HawdbError::Codec("session not found"))
+      None => (0L, Map([]), 0L)
     }
     if revision == 9223372036854775807L {
       return Err(@hawdb.HawdbError::Codec("session revision overflow"))
     }
     let updated = metadata.copy()
     updated["name"] = Json::string(name)
-    match write_head(tx, id, length, updated, revision + 1L, true) {
+    match write_head(tx, id, length, updated, revision + 1L, head is Some(_)) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
