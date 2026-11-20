@@ -94,19 +94,22 @@ async test "hawdb: invalid session IDs are rejected at storage boundary" {
 }
 
 ///|
-async test "hawdb: renaming a missing session does not create it" {
+async test "hawdb: naming creates an empty session" {
   let store = match HawdbSessionStore::open_in_memory() {
     Ok(value) => value
     Err(reason) => fail("open: " + reason)
   }
-  try store.set_session_name("missing", "name") catch {
-    @posoco.SessionError::Save(_) => ()
-    error => fail("expected Save: \{error}")
-  } noraise {
-    _ => fail("renamed nonexistent session")
+  store.set_session_name("new", "name") catch {
+    error => fail("name: \{error}")
   }
   let ids = store.list_ids() catch { error => fail("list: \{error}") }
-  assert_true(ids.is_empty())
+  assert_eq(ids.length(), 1)
+  assert_eq(ids[0], "new")
+  let session = store.load("new") catch {
+    error => fail("load named session: \{error}")
+  }
+  assert_true(session.messages.is_empty())
+  assert_true(session.metadata.get("name") == Some(Json::string("name")))
   store.close()
 }
 
