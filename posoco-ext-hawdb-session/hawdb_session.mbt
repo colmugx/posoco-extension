@@ -353,12 +353,15 @@ fn append_checkpoint(
   id : String,
   checkpoint : @posoco.SessionCheckpoint,
 ) -> Result[Unit, String] {
-  if checkpoint.messages.is_empty() && checkpoint.metadata is None {
-    return Ok(())
-  }
   let head = match read_session_head(tx, id) {
     Ok(value) => value
     Err(reason) => return Err(reason)
+  }
+  if checkpoint.messages.is_empty() && checkpoint.metadata is None {
+    return match head {
+      Some(_) => Ok(())
+      None => write_head(tx, id, 0L, Map([]), 1L, false)
+    }
   }
   let (start, previous_metadata, revision) = match head {
     Some((count, metadata, revision)) => (count, metadata, revision)
@@ -395,7 +398,7 @@ fn truncate_session(
   }
   let (count, metadata, revision) = match head {
     Some(value) => value
-    None => return Ok(())
+    None => return write_head(tx, id, 0L, Map([]), 1L, false)
   }
   let keep = if from_index < 0 {
     0L
