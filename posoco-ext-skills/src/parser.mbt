@@ -298,6 +298,20 @@ fn metadata_map(
 }
 
 ///|
+/// Frontmatter `disable-model-invocation`. Strictly a YAML boolean: only the
+/// literal `true` sets the flag. Absent values, `false`, and any other scalar
+/// (a quoted `"true"`, a number, garbage) keep the skill model-invocable.
+/// Unknown values are silently tolerated rather than diagnosed, so an
+/// unrecognized spelling can neither fail discovery nor hide a skill the user
+/// expects to be offered proactively.
+fn disable_model_invocation(mapping : Map[String, @yaml.Yaml]) -> Bool {
+  match mapping.get("disable-model-invocation") {
+    Some(@yaml.Yaml::Boolean(true)) => true
+    _ => false
+  }
+}
+
+///|
 fn parse_skill_file_with_expected_dir_name(
   source : String,
   skill_md_path~ : String,
@@ -372,6 +386,7 @@ fn parse_skill_file_with_expected_dir_name(
       mapping, "allowed-tools", skill_md_path, diagnostics,
     ),
     metadata=metadata_map(mapping, skill_md_path, diagnostics),
+    user_invoked_only=disable_model_invocation(mapping),
   )
   Ok({ descriptor, body: parts.body, diagnostics, })
 }

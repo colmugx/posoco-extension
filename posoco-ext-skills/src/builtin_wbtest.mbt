@@ -165,3 +165,38 @@ test "merge: discovered skill shadows same-name builtin; others pass through" {
     None => fail("non-colliding builtin must be kept")
   }
 }
+
+///|
+test "builtin: user_invoked_only descriptors stay out of the model prompt but stay listed" {
+  let builtin = SkillDescriptor::builtin(
+    name="cetas-secret-manual",
+    description="Manual the user must ask for",
+    body="Manual body",
+    user_invoked_only=true,
+  )
+  let catalog = catalog_of([builtin])
+  assert_eq(catalog.validate(), Ok(()))
+  assert_eq(catalog.render_prompt_body(max_chars=8000), "")
+  assert_true(catalog.find("cetas-secret-manual") is Some(_))
+}
+
+///|
+async test "builtin: user_invoked_only descriptors still activate" {
+  let skills = must_skills(
+    FakeFs(),
+    catalog_of([
+      SkillDescriptor::builtin(
+        name="cetas-secret-manual",
+        description="Manual the user must ask for",
+        body="Manual body",
+        user_invoked_only=true,
+      ),
+    ]),
+  )
+  assert_eq(skills.system_prompt(), "")
+  match skills.activate("cetas-secret-manual") {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("Manual body"))
+    _ => fail("user-invoked-only builtin must stay activatable")
+  }
+}

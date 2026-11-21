@@ -49,6 +49,21 @@ fn count_scope(skills : Array[SkillDescriptor], scope : String) -> Int32 {
 }
 
 ///|
+/// Skills that only the user's explicit invocation (mention / host command) is
+/// expected to use. They stay listed here so humans can discover them; the
+/// summary calls them out separately because they are absent from the
+/// model-facing prompt catalog.
+fn count_user_invoked_only(skills : Array[SkillDescriptor]) -> Int32 {
+  let mut count = 0
+  for skill in skills {
+    if skill.user_invoked_only {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
 fn Skills::command_list(self : Skills) -> @posoco.CommandOutcome {
   let entries : Array[Json] = []
   for skill in self.catalog.skills {
@@ -61,6 +76,9 @@ fn Skills::command_list(self : Skills) -> @posoco.CommandOutcome {
       Extra(root) => fields.push(("root", Json::string(root)))
       _ => ()
     }
+    // Additive field: existing panel consumers keep parsing the old shape,
+    // user-invocation-aware consumers can render a marker for these skills.
+    fields.push(("user_invoked_only", Json::boolean(skill.user_invoked_only)))
     entries.push(Json::object(Map::from_array(fields)))
   }
   let feedback = if self.catalog.skills.is_empty() {
@@ -70,7 +88,13 @@ fn Skills::command_list(self : Skills) -> @posoco.CommandOutcome {
     let project = count_scope(self.catalog.skills, "project")
     let user = count_scope(self.catalog.skills, "user")
     let extension = count_scope(self.catalog.skills, "extension")
-    "\{total} skills (project \{project}, user \{user}, extension \{extension})"
+    let counts = "\{total} skills (project \{project}, user \{user}, extension \{extension}"
+    let invoked = count_user_invoked_only(self.catalog.skills)
+    if invoked > 0 {
+      counts + "; \{invoked} user-invoked only)"
+    } else {
+      counts + ")"
+    }
   }
   @posoco.CommandOutcome::Success(
     feedback~,

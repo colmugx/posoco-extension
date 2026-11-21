@@ -296,3 +296,39 @@ async test "explicit: unknown skill names reach the model untouched" {
   let rewritten = (skills as &@posoco.PipelineHook).before_model(messages)
   assert_eq(rewritten, messages)
 }
+
+///|
+async test "explicit: a user-invoked-only skill still injects on $mention" {
+  let dir = "/skills/figure-it-out"
+  let fs = FakeFs()
+  fs.add_dir(dir, ["SKILL.md"])
+  fs.add_file(
+    dir + "/SKILL.md",
+    "---\nname: figure-it-out\ndescription: Playbook\n---\nUser-only body.",
+  )
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("figure-it-out", "Playbook", dir, user_invoked_only=true),
+    ]),
+  )
+  // Invisible to the model's proactive startup catalog…
+  assert_eq(skills.system_prompt(), "")
+  // …but the user's `$name` mention still activates and injects the envelope.
+  let messages = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("use $figure-it-out for this task"),
+    ]),
+  ]
+  let rewritten = (skills as &@posoco.PipelineHook).before_model(messages)
+  assert_eq(rewritten.length(), 2)
+  let envelope_text = single_user_text(rewritten, 0)
+  assert_true(
+    envelope_text.has_prefix(
+      "<cetas-context type=\"skill_activation\" trust=\"false\"",
+    ),
+  )
+  assert_true(envelope_text.contains("source=\"skill:figure-it-out\""))
+  assert_true(envelope_text.contains("invocation=\"explicit\""))
+  assert_true(envelope_text.contains("User-only body."))
+}

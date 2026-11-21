@@ -47,6 +47,9 @@ fn catalog_description_preview(value : String) -> String {
 /// wrapper. Because activation is a dedicated tool, absolute filesystem paths
 /// are intentionally omitted from the startup catalog. Skill-controlled text
 /// is quoted and explicitly treated as untrusted metadata until activation.
+/// User-invoked-only descriptors (`disable-model-invocation: true`) are
+/// excluded entirely and never count toward the omitted-entries notice: they
+/// remain activatable, but the model is never proactively offered them.
 pub fn SkillCatalog::render_prompt_body(
   self : SkillCatalog,
   max_chars~ : Int32,
@@ -73,8 +76,14 @@ pub fn SkillCatalog::render_prompt_body(
   if header.length() + guidance.length() > max_chars {
     return ""
   }
+  // Model-facing catalog entries only. User-invoked-only skills are dropped
+  // before budget accounting, so truncation notices count only skills the
+  // model could actually have been offered.
   let items : Array[String] = []
   for skill in self.skills {
+    if skill.user_invoked_only {
+      continue
+    }
     items.push(
       "- " +
       quote_prompt_scalar(skill.name) +
@@ -84,6 +93,9 @@ pub fn SkillCatalog::render_prompt_body(
       quote_prompt_scalar(render_scope(skill.scope)) +
       "]\n",
     )
+  }
+  if items.is_empty() {
+    return ""
   }
   let mut count = 0
   let mut used = header.length()

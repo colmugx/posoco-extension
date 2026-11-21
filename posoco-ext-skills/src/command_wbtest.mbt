@@ -44,6 +44,7 @@ async test "command: list returns catalog snapshot with scope labels" {
                       ("name", Json::string("review-pr")),
                       ("description", Json::string("Review a PR")),
                       ("scope", Json::string("project")),
+                      ("user_invoked_only", Json::boolean(false)),
                     ]),
                   ),
                   Json::object(
@@ -51,6 +52,7 @@ async test "command: list returns catalog snapshot with scope labels" {
                       ("name", Json::string("tdd")),
                       ("description", Json::string("Test first")),
                       ("scope", Json::string("project")),
+                      ("user_invoked_only", Json::boolean(false)),
                     ]),
                   ),
                   Json::object(
@@ -58,6 +60,7 @@ async test "command: list returns catalog snapshot with scope labels" {
                       ("name", Json::string("ego-browser")),
                       ("description", Json::string("Browse")),
                       ("scope", Json::string("user")),
+                      ("user_invoked_only", Json::boolean(false)),
                     ]),
                   ),
                   Json::object(
@@ -66,6 +69,7 @@ async test "command: list returns catalog snapshot with scope labels" {
                       ("description", Json::string("Extra root")),
                       ("scope", Json::string("extension")),
                       ("root", Json::string("/opt/skills")),
+                      ("user_invoked_only", Json::boolean(false)),
                     ]),
                   ),
                 ]),
@@ -74,6 +78,72 @@ async test "command: list returns catalog snapshot with scope labels" {
           ),
         ),
       )
+    }
+    _ => fail("expected success outcome")
+  }
+}
+
+///|
+async test "command: user-invoked-only skills list with a marker and a summary count" {
+  let skills = must_skills(
+    FakeFs(),
+    catalog_of([
+      descriptor("review-pr", "Review a PR", "/repo/.agents/skills/review-pr"),
+      descriptor(
+        "figure-it-out",
+        "Design an auditable playbook",
+        "/repo/.agents/skills/figure-it-out",
+        user_invoked_only=true,
+      ),
+    ]),
+  )
+  match skills.invoke("skills", Json::object(Map([]))) {
+    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
+      // Humans see the user-invoked-only count in the summary line.
+      assert_eq(
+        feedback, "2 skills (project 2, user 0, extension 0; 1 user-invoked only)",
+      )
+      match structured {
+        Some(
+          Json::Object(
+            {
+              "kind": Json::String("skills_catalog"),
+              "skills": Json::Array(entries),
+              ..
+            },
+          ),
+        ) => {
+          assert_eq(entries.length(), 2)
+          // The user-invoked-only entry keeps its scope field and gains the
+          // additive marker; the model-invocable entry keeps false.
+          match entries[1] {
+            Json::Object(fields) => {
+              assert_eq(fields.get("name"), Some(Json::string("figure-it-out")))
+              assert_eq(fields.get("scope"), Some(Json::string("project")))
+              assert_eq(
+                fields.get("user_invoked_only"),
+                Some(Json::boolean(true)),
+              )
+            }
+            other =>
+              fail("expected a JSON object entry, got: " + other.stringify())
+          }
+          match entries[0] {
+            Json::Object(fields) =>
+              assert_eq(
+                fields.get("user_invoked_only"),
+                Some(Json::boolean(false)),
+              )
+            other =>
+              fail("expected a JSON object entry, got: " + other.stringify())
+          }
+        }
+        other =>
+          fail(
+            "unexpected structured payload: " +
+            other.map(value => value.stringify()).unwrap_or("None"),
+          )
+      }
     }
     _ => fail("expected success outcome")
   }

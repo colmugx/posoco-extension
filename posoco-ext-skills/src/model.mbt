@@ -196,6 +196,13 @@ pub(all) struct SkillDescriptor {
   /// `read_skill_resource` accepts. Discovered skills are always empty; their
   /// resources are read from the skill directory instead.
   resources : Map[String, String]
+  /// Frontmatter `disable-model-invocation: true` (upstream Agent Skills /
+  /// Cursor convention): only the user's explicit invocation — a host
+  /// activation or a `$name` mention — is expected to use this skill. It stays
+  /// in the catalog and remains activatable through every guarded path, but it
+  /// is omitted from the model-facing startup catalog, so the model never sees
+  /// it offered proactively.
+  user_invoked_only : Bool
 }
 
 ///|
@@ -214,6 +221,7 @@ pub fn SkillDescriptor::SkillDescriptor(
   metadata~ : Map[String, String] = Map([]),
   body~ : String? = None,
   resources~ : Map[String, String] = Map([]),
+  user_invoked_only~ : Bool = false,
 ) -> SkillDescriptor {
   {
     name,
@@ -227,6 +235,7 @@ pub fn SkillDescriptor::SkillDescriptor(
     metadata,
     body,
     resources,
+    user_invoked_only,
   }
 }
 
@@ -235,11 +244,15 @@ pub fn SkillDescriptor::SkillDescriptor(
 /// with the binary instead of living on the filesystem, so hosts can embed
 /// skills without any install step. The virtual paths pass catalog validation
 /// lexically and are never touched by activation or resource reads.
+/// `user_invoked_only` carries the same semantics as on discovered
+/// descriptors: pass `true` for skills that must stay out of the model-facing
+/// catalog and activate only through explicit user invocation.
 pub fn SkillDescriptor::builtin(
   name~ : String,
   description~ : String,
   body~ : String,
   resources~ : Map[String, String] = Map([]),
+  user_invoked_only~ : Bool = false,
 ) -> SkillDescriptor {
   SkillDescriptor::SkillDescriptor(
     name~,
@@ -249,6 +262,7 @@ pub fn SkillDescriptor::builtin(
     scope=Extra("builtin"),
     body=Some(body),
     resources~,
+    user_invoked_only~,
   )
 }
 

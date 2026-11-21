@@ -218,6 +218,7 @@ fn descriptor(
   description : String,
   dir : String,
   scope~ : SkillScope = SkillScope::Repository,
+  user_invoked_only~ : Bool = false,
 ) -> SkillDescriptor {
   SkillDescriptor::SkillDescriptor(
     name~,
@@ -225,6 +226,7 @@ fn descriptor(
     skill_md_path=dir + "/SKILL.md",
     skill_dir=dir,
     scope~,
+    user_invoked_only~,
   )
 }
 
@@ -392,6 +394,71 @@ test "prompt: hard budget never emits a partial catalog" {
   assert_eq(catalog.render_prompt_body(max_chars=10), "")
   let rendered = catalog.render_prompt_body(max_chars=8000)
   assert_true(rendered.length() <= 8000)
+}
+
+///|
+test "prompt: user-invoked-only skills stay out of the model-facing catalog" {
+  let catalog = catalog_of([
+    descriptor(
+      "review-pr", "Review pull requests", "/repo/.agents/skills/review-pr",
+    ),
+    descriptor(
+      "figure-it-out",
+      "Design an auditable playbook",
+      "/repo/.agents/skills/figure-it-out",
+      user_invoked_only=true,
+    ),
+  ])
+  let prompt = catalog.render_prompt_body(max_chars=8000)
+  // The model-invocable entry renders normally.
+  assert_true(prompt.contains("\"review-pr\""))
+  assert_true(prompt.contains("Review pull requests"))
+  // The user-invoked-only entry is omitted entirely, not truncated.
+  assert_false(prompt.contains("figure-it-out"))
+  assert_false(prompt.contains("Design an auditable playbook"))
+  assert_false(prompt.contains("skills omitted"))
+  // Omission is catalog exclusion only: the skill stays activatable.
+  assert_true(catalog.find("figure-it-out") is Some(_))
+}
+
+///|
+test "prompt: a catalog of only user-invoked skills contributes no prompt" {
+  let catalog = catalog_of([
+    descriptor(
+      "figure-it-out",
+      "Design an auditable playbook",
+      "/skills/figure-it-out",
+      user_invoked_only=true,
+    ),
+  ])
+  assert_eq(catalog.render_prompt_body(max_chars=8000), "")
+}
+
+///|
+test "parser: disable-model-invocation parses strict YAML booleans" {
+  fn flag_of(frontmatter : String) -> Result[Bool, String] {
+    let source = "---\nname: probe\ndescription: Probe\n" +
+      frontmatter +
+      "\n---\nbody"
+    match
+      parse_skill_file(
+        source,
+        skill_md_path="/x/probe/SKILL.md",
+        skill_dir="/x/probe",
+        scope=SkillScope::Repository,
+      ) {
+      Ok(parsed) => Ok(parsed.descriptor.user_invoked_only)
+      Err(reason) => Err(reason)
+    }
+  }
+  // Literal true sets the flag.
+  assert_eq(flag_of("disable-model-invocation: true"), Ok(true))
+  // False, absent, and unknown scalars stay model-invocable.
+  assert_eq(flag_of("disable-model-invocation: false"), Ok(false))
+  assert_eq(flag_of("metadata:\n  author: ok"), Ok(false))
+  assert_eq(flag_of("disable-model-invocation: maybe"), Ok(false))
+  assert_eq(flag_of("disable-model-invocation: \"true\""), Ok(false))
+  assert_eq(flag_of("disable-model-invocation: 1"), Ok(false))
 }
 
 ///|
@@ -738,6 +805,43 @@ async test "activation: stale metadata requires rediscovery" {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("metadata changed"))
     _ => fail("stale metadata must fail")
+  }
+}
+
+///|
+async test "activation: user-invoked-only skills still inject their body" {
+  let dir = "/skills/figure-it-out"
+  let fs = FakeFs()
+  fs.add_dir(dir, ["SKILL.md"])
+  fs.add_file(
+    dir + "/SKILL.md",
+    "---\nname: figure-it-out\ndescription: Playbook\ndisable-model-invocation: true\n---\nDesign the workflow first.",
+  )
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("figure-it-out", "Playbook", dir, user_invoked_only=true),
+    ]),
+  )
+  // Discovered through the flag-bearing frontmatter.
+  match skills.catalog().find("figure-it-out") {
+    Some(skill) => assert_true(skill.user_invoked_only)
+    None => fail("user-invoked-only skill must stay in the catalog")
+  }
+  // It contributes no model-facing catalog prose at all.
+  assert_eq(skills.system_prompt(), "")
+  assert_true(skills.manifest().prompt_contributors.is_empty())
+  // …but the guarded activation path still injects the full instructions.
+  match skills.activate_skill("figure-it-out") {
+    @posoco.ToolOutcome::Success(content~, structured~) => {
+      assert_true(content.contains("Design the workflow first."))
+      match structured {
+        Some(Object(values)) =>
+          assert_eq(values.get("summary"), Some(Json::string("figure-it-out")))
+        _ => fail("expected structured activation metadata")
+      }
+    }
+    _ => fail("user-invoked-only skills must remain activatable")
   }
 }
 
