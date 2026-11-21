@@ -24,6 +24,8 @@ pub fn embedded_skill_resource_sets() -> Map[String, Map[String, String]]
 
 pub fn embedded_skill_resources() -> Map[String, String]
 
+pub fn embedded_skill_user_invoked_only() -> Map[String, Bool]
+
 pub fn pstack_discovery_options(String, base? : @posoco-ext-skills.SkillDiscoveryOptions) -> @posoco-ext-skills.SkillDiscoveryOptions
 
 // Errors

@@ -1,6 +1,7 @@
 ---
 name: poteto-help
 description: User guidance entry for the PStack workflow set. Answer how-to, routing, and setup questions about the PStack skills and hand back a prompt to send; it does not start work.
+disable-model-invocation: true
 ---
 
 # Poteto help for Posoco

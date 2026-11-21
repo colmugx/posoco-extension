@@ -1,6 +1,7 @@
 ---
 name: poteto-mode
 description: Run PStack's task-specific engineering playbooks on Posoco. Select investigation, bug fix, feature, refactoring, performance, or prototype workflows and verify the result.
+disable-model-invocation: true
 ---
 
 # Poteto Mode for Posoco

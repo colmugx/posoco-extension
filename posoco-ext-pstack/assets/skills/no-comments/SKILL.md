@@ -1,6 +1,7 @@
 ---
 name: no-comments
 description: Read-only comment review via the comment-sicko subagent kind. Spawn the reviewer on the diff and act on its accepted findings; the kind's own instructions carry the review policy.
+disable-model-invocation: true
 ---
 
 # No comments for Posoco

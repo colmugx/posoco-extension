@@ -196,6 +196,26 @@ fn add_bundle_skill(fs : PstackFakeFs) -> Unit {
 }
 
 ///|
+/// A bundle plus one generated-style wrapper skill: frontmatter carries the
+/// upstream `disable-model-invocation: true` flag and no resources of its
+/// own; its instructions route back through poteto-mode's upstream tree.
+fn add_bundle_wrapper_skill(fs : PstackFakeFs) -> Unit {
+  add_bundle_skill(fs)
+  fs.add_dir("/bundle/skills", ["poteto-mode", "architect"])
+  fs.add_dir("/bundle/skills/architect", ["SKILL.md"])
+  let skill_md =
+    #|---
+    #|name: architect
+    #|description: "Plan before building: turn the task into a reviewed design."
+    #|disable-model-invocation: true
+    #|---
+    #|# architect (PStack upstream skill)
+    #|
+    #|Read the full upstream instructions with read_skill_resource(name="poteto-mode", path="resources/upstream/skills/architect/SKILL.md").
+  fs.add_file("/bundle/skills/architect/SKILL.md", skill_md)
+}
+
+///|
 async test "discover: PStack bundle becomes a native skill catalog" {
   let fs = PstackFakeFs::new()
   add_bundle_skill(fs)
@@ -220,6 +240,33 @@ async test "discover: PStack bundle becomes a native skill catalog" {
       assert_eq(extension.extension_id(), "posoco_ext_pstack")
     }
   }
+}
+
+///|
+async test "discover: disable-model-invocation frontmatter marks a file-backed skill user-invoked-only" {
+  let fs = PstackFakeFs::new()
+  add_bundle_wrapper_skill(fs)
+  let options : @skills.SkillDiscoveryOptions = {
+    ..@skills.SkillDiscoveryOptions::default(),
+    include_repository: false,
+    include_user: false,
+  }
+  let pstack = Pstack::discover(
+    fs,
+    cwd="/workspace",
+    home="/home/test",
+    assets_root="/bundle",
+    discovery_options=options,
+  ).unwrap()
+  let catalog = pstack.catalog()
+  // The wrapper's frontmatter flag lands on the discovered descriptor.
+  assert_true(catalog.find("architect").unwrap().user_invoked_only)
+  // The unflagged adapter stays model-invocable, and poteto-mode still keys
+  // the Pstack runtime regardless of wrapper flags.
+  assert_false(catalog.find("poteto-mode").unwrap().user_invoked_only)
+  // File-backed wrappers own no resources: upstream content is read through
+  // poteto-mode's resource tree, as their instructions say.
+  assert_true(catalog.find("architect").unwrap().resources.is_empty())
 }
 
 ///|
@@ -387,9 +434,23 @@ async test "kinds: missing preset fails loudly instead of silently dropping a ro
 ///|
 test "embedded: descriptors carry every bundled skill without any files" {
   let descriptors = Pstack::embedded_descriptors()
-  assert_eq(descriptors.map(d => d.name), [
-    "poteto-mode", "poteto-help", "no-comments",
-  ])
+  // 58 upstream skills minus the make-bot-ui exclusion (pure Cursor
+  // Automations/plugin UI machinery with no portable workflow prose,
+  // scripts/bundle-config.mjs) = 57 registered: the three hand adapters in
+  // their fixed registration order, then the generated wrappers.
+  assert_eq(descriptors.length(), 57)
+  assert_eq(descriptors[0].name, "poteto-mode")
+  assert_eq(descriptors[1].name, "poteto-help")
+  assert_eq(descriptors[2].name, "no-comments")
+  for name in ["tdd", "architect", "swarm", "unslop", "setup-pstack"] {
+    let mut found = false
+    for descriptor in descriptors {
+      if descriptor.name == name {
+        found = true
+      }
+    }
+    assert_true(found)
+  }
   // The first entry must stay identical to the single-skill descriptor hosts
   // already register, so adding skills cannot change poteto-mode's shape.
   let single = Pstack::embedded_descriptor()
@@ -397,12 +458,16 @@ test "embedded: descriptors carry every bundled skill without any files" {
   assert_eq(descriptors[0].description, single.description)
   assert_eq(descriptors[0].body, single.body)
   assert_eq(descriptors[0].resources, single.resources)
-  // Each descriptor serves exactly the bundle the standalone accessors read.
+  assert_eq(descriptors[0].user_invoked_only, single.user_invoked_only)
+  // Each descriptor serves exactly the bundle the standalone accessors read,
+  // and its flag matches the bundle metadata generated from frontmatter.
   let frontmatter : Map[String, String] = Map::from_array(
     embedded_skill_frontmatter(),
   )
+  let flags = embedded_skill_user_invoked_only()
   for descriptor in descriptors {
     assert_eq(descriptor.description, frontmatter.get(descriptor.name).unwrap())
+    assert_eq(descriptor.user_invoked_only, flags.get(descriptor.name).unwrap())
     assert_eq(
       descriptor.body.unwrap(),
       embedded_skill_bodies().get(descriptor.name).unwrap(),
@@ -412,6 +477,62 @@ test "embedded: descriptors carry every bundled skill without any files" {
       embedded_skill_resource_sets().get(descriptor.name).unwrap(),
     )
   }
+}
+
+///|
+test "embedded: invocation flags follow upstream frontmatter" {
+  let flags : Map[String, Bool] = Map::from_array(
+    Pstack::embedded_descriptors().map(fn(descriptor) {
+      (descriptor.name, descriptor.user_invoked_only)
+    }),
+  )
+  // Upstream marks tdd user-invoked-only; setup-pstack is the one upstream
+  // skill without the frontmatter flag and stays model-invocable; the three
+  // hand adapters align with their (flagged) upstream copies.
+  assert_true(flags.get("tdd").unwrap())
+  assert_false(flags.get("setup-pstack").unwrap())
+  assert_true(flags.get("poteto-mode").unwrap())
+  assert_true(flags.get("poteto-help").unwrap())
+  assert_true(flags.get("no-comments").unwrap())
+  // Exactly setup-pstack is model-invocable; every other registered skill
+  // carries disable-model-invocation: true, and the excluded make-bot-ui is
+  // absent entirely.
+  let mut user_only = 0
+  let mut model_invocable = 0
+  for descriptor in Pstack::embedded_descriptors() {
+    if descriptor.user_invoked_only {
+      user_only = user_only + 1
+    } else {
+      model_invocable = model_invocable + 1
+      assert_eq(descriptor.name, "setup-pstack")
+    }
+  }
+  assert_eq(user_only, 56)
+  assert_eq(model_invocable, 1)
+  assert_true(flags.get("make-bot-ui") is None)
+}
+
+///|
+test "embedded: the Skills prompt offers setup-pstack but never a user-invoked-only skill" {
+  let fs = PstackFakeFs::new()
+  let catalog : @skills.SkillCatalog = {
+    skills: Pstack::embedded_descriptors(),
+    diagnostics: [],
+  }
+  let skills = @skills.Skills::from_catalog(fs, catalog~).unwrap()
+  let manifest = @posoco.Extension::manifest(skills)
+  assert_eq(manifest.prompt_contributors.length(), 1)
+  let prompt = @posoco.SystemPromptContributor::system_prompt(
+    manifest.prompt_contributors[0],
+  )
+  // The only model-invocable skill is offered; the 56 user-invoked-only
+  // skills (including tdd and the poteto-mode entry point itself) stay out of
+  // the startup catalog while remaining activatable through explicit
+  // invocation.
+  assert_true(prompt.contains("setup-pstack"))
+  assert_false(prompt.contains("tdd"))
+  assert_false(prompt.contains("poteto-mode"))
+  assert_false(prompt.contains("unslop"))
 }
 
 ///|

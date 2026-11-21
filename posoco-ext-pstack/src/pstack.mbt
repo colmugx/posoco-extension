@@ -27,23 +27,34 @@ pub fn Pstack::from_skills(
 ///|
 /// Built-in descriptor for hosts that ship the workflow inside their binary:
 /// the instructions and every playbook travel as inline resources, so no
-/// assets directory or install step is required.
+/// assets directory or install step is required. poteto-mode's frontmatter is
+/// `disable-model-invocation: true` (upstream policy), so the flag comes from
+/// the same bundle metadata the array form reads and can never drift from it.
 pub fn Pstack::embedded_descriptor() -> @skills.SkillDescriptor {
   @skills.SkillDescriptor::builtin(
     name="poteto-mode",
     description="Run PStack's task-specific engineering playbooks on Posoco. Select investigation, bug fix, feature, refactoring, performance, or prototype workflows and verify the result.",
     body=embedded_skill_body(),
     resources=embedded_skill_resources(),
+    user_invoked_only=embedded_skill_user_invoked_only()
+      .get("poteto-mode")
+      .unwrap(),
   )
 }
 
 ///|
 /// Every embedded skill as a builtin descriptor, in bundle registration
-/// order: poteto-mode's workflow plus the poteto-help help-not-work router and
-/// the no-comments review adapter. Hosts pass the whole array to
+/// order: the three hand adapters (poteto-mode's workflow, the poteto-help
+/// help-not-work router, the no-comments review adapter) followed by one
+/// generated wrapper per remaining upstream skill. `user_invoked_only`
+/// mirrors each SKILL.md's `disable-model-invocation` frontmatter — upstream
+/// marks every skill except setup-pstack as user-invoked — so 56 of the 57
+/// registered skills stay out of the model-facing startup catalog and
+/// activate only through explicit invocation. Hosts pass the whole array to
 /// merge_builtin_skills and need no assets directory or install step.
 pub fn Pstack::embedded_descriptors() -> Array[@skills.SkillDescriptor] {
   let descriptors : Array[@skills.SkillDescriptor] = []
+  let flags = embedded_skill_user_invoked_only()
   for entry in embedded_skill_frontmatter() {
     let (name, description) = entry
     descriptors.push(
@@ -52,6 +63,7 @@ pub fn Pstack::embedded_descriptors() -> Array[@skills.SkillDescriptor] {
         description~,
         body=embedded_skill_bodies().get(name).unwrap(),
         resources=embedded_skill_resource_sets().get(name).unwrap(),
+        user_invoked_only=flags.get(name).unwrap(),
       ),
     )
   }

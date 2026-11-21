@@ -14,4 +14,7 @@ import {
 
 options(
   "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  // Native-only IO tests: the real-assets discovery test needs a host
+  // filesystem; every other target is covered by the fake-fs suite.
+  targets: { "assets_discovery_wbtest.mbt": [ "native" ] },
 )
