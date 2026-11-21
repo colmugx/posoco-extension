@@ -420,3 +420,27 @@ async test "notify_user_answer_leaves_other_questions_open" {
   assert_eq(tools.open_questions().length(), 0)
   assert_eq(answered, ["question-1", "question-2"])
 }
+
+///|
+/// A zero timeout disables expiry: the question stays open however far the
+/// clock advances, so a late human answer still lands.
+async test "notify_user_zero_timeout_never_expires" {
+  let tools = AskQuestionTools::with_async_timeout(async_timeout_ms=0L)
+  ignore(
+    @posoco.ToolProvider::execute(
+      tools,
+      recorded_ctx(
+        notify_call(
+          "call-1",
+          Json::object({ "question": Json::string("Take your time") }),
+        ),
+      ),
+    ),
+  )
+  let open = tools.open_questions()
+  assert_eq(open.length(), 1)
+  assert_eq(open[0].deadline_at, 0L)
+  let far_future = 4_102_444_800_000L
+  assert_true(tools.drain_answers_for_test(now=far_future).is_empty())
+  assert_eq(tools.open_questions().length(), 1)
+}

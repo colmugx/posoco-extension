@@ -12,7 +12,15 @@ import {
 }
 
 // Values
+pub fn embedded_agent_bodies() -> Map[String, String]
+
+pub fn embedded_skill_bodies() -> Map[String, String]
+
 pub fn embedded_skill_body() -> String
+
+pub fn embedded_skill_frontmatter() -> Array[(String, String)]
+
+pub fn embedded_skill_resource_sets() -> Map[String, Map[String, String]]
 
 pub fn embedded_skill_resources() -> Map[String, String]
 
@@ -30,6 +38,8 @@ pub async fn Pstack::before_model(Self, Array[@kernel.Message]) -> Array[@kernel
 pub fn Pstack::catalog(Self) -> @posoco-ext-skills.SkillCatalog
 pub async fn Pstack::discover(&@posoco-ext-workspace.WorkspaceFs, cwd~ : String, home~ : String, assets_root~ : String, discovery_options? : @posoco-ext-skills.SkillDiscoveryOptions, config? : @posoco-ext-skills.SkillsConfig, events? : @events.Events?) -> Self? noraise
 pub fn Pstack::embedded_descriptor() -> @posoco-ext-skills.SkillDescriptor
+pub fn Pstack::embedded_descriptors() -> Array[@posoco-ext-skills.SkillDescriptor]
+pub fn Pstack::embedded_kinds() -> Result[Array[@posoco-ext-kind.KindSpec], String]
 pub fn Pstack::extension_id(Self) -> String
 pub fn Pstack::from_skills(@posoco-ext-skills.Skills, events? : @events.Events?) -> Self?
 pub fn Pstack::is_announced(Self) -> Bool

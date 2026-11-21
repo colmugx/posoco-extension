@@ -9,6 +9,7 @@ import {
 
 import {
   "moonbitlang/core/async",
+  "colmugx/posoco-ext-permission" @permission,
 } for "wbtest"
 
 options(

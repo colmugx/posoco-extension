@@ -24,17 +24,23 @@ let agent = @posoco.Agent(exts=[pstack, statusbar, ..other_extensions], events~,
 
 ## Workflow execution
 
-On first `/poteto-mode`, the native Skills activation returns the file-backed `poteto-mode` instructions to the Agent. Those instructions tell the Agent to read the Posoco harness mapping, upstream root Skill, and matching original playbook before acting, using `read_skill_resource`.
+On the first `$poteto-mode` mention of a session, the native Skills activation returns the file-backed `poteto-mode` instructions to the Agent. Those instructions tell the Agent to read the Posoco harness mapping, upstream root Skill, and matching original playbook before acting, using `read_skill_resource`.
 
 Supported workflow routes: Investigation, Bug fix, Feature, Refactoring, Perf issue and Prototype. The original playbooks are under `assets/skills/poteto-mode/resources/upstream/skills/poteto-mode/playbooks/`. Linked principles and helper Markdown are loaded on demand, not rewritten as a generic prompt.
 
-The second `/poteto-mode` toggles off the session status, unregistering the `🥔 Mode On` status segment. Agent shutdown also unregisters it. The host must compose `posoco-ext-statusbar` on the same EventSystem for the display. Turning off cannot retract instructions already included in conversation history.
+A successful activation publishes the `🥔 Mode` status segment for the rest of the session. There is no toggle command: the segment mirrors the activation fact and is released when the Agent shuts down. The host must compose `posoco-ext-statusbar` on the same EventSystem (or register that system as the process default) for the display; without a channel the publication is a silent no-op.
 
 Posoco's composed `subagent`, `todo_write`, `ask_question`, planning, search, filesystem and shell tools replace corresponding Cursor primitives only where available. Unsupported Cursor Automations, cloud agents, `/loop`, Bugbot, plugin commands/hooks, provider model slugs, worktree orchestration and external services are not implemented. PR creation, babysitting, shipping and orchestration are not automatic.
 
+## Embedded bundle for zero-config hosts
+
+Hosts that ship PStack inside their binary can skip the assets directory entirely: `Pstack::embedded_descriptors()` returns all three adapter skills — `poteto-mode`, `poteto-help` (a help-not-work router that answers questions and hands back a prompt), and `no-comments` (spawns the read-only `comment-sicko` reviewer) — as builtin descriptors with inline instructions and resources. Pass the array to `merge_builtin_skills` instead of composing `Pstack::discover`.
+
+`src/embedded_bundle.generated.mbt` is generated from `assets/skills` and `assets/agents`; never edit it. After changing an asset, run `node posoco-ext-pstack/scripts/embed-skill-assets.mjs` and commit its output — `check-assets.mjs` fails when the committed bundle is stale or the generator is not idempotent.
+
 ## Optional Kind presets
 
-The bundle includes `poteto-agent` and `comment-sicko` Markdown presets. Use `Pstack::load_kinds(fs, assets_root)` and pass the entries into `KindCatalog::load(..., extra=specs)` where needed. A child must independently discover the same Skill resources if it needs the original workflow; Kind presets alone do not propagate them.
+The bundle includes `poteto-agent` and `comment-sicko` Markdown presets. Use `Pstack::load_kinds(fs, assets_root)` and pass the entries into `KindCatalog::load(..., extra=specs)` where needed. Zero-config hosts read the same presets from the embedded bundle with `Pstack::embedded_kinds()`, which parses in a deterministic order and names the offending kind on failure. A child must independently discover the same Skill resources if it needs the original workflow; Kind presets alone do not propagate them.
 
 ## Verification
 
@@ -46,7 +52,7 @@ moon test --target native posoco-ext-pstack/src
 moon test --target js posoco-ext-pstack/src
 ```
 
-Package tests cover file-backed discovery, missing-file rejection, native resource loading, and the toggle lifecycle. A real host Agent smoke test still depends on its separately composed tools.
+Package tests cover file-backed discovery, missing-file rejection, native resource loading, the activation-to-status lifecycle, and the embedded descriptor and Kind surfaces. A real host Agent smoke test still depends on its separately composed tools.
 
 ## Upstream and license
 

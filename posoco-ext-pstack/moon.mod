@@ -18,6 +18,7 @@ import {
   "colmugx/posoco@0.24.2",
   "colmugx/posoco-ext-skills@0.2.0",
   "colmugx/posoco-ext-kind@0.1.0",
+  "colmugx/posoco-ext-permission@0.2.1",
   "colmugx/posoco-ext-workspace@0.1.0",
   "posoco/kit-events@0.1.0",
   "posoco/devkit@0.4.2",

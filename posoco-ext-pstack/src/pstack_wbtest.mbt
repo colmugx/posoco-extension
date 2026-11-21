@@ -385,6 +385,65 @@ async test "kinds: missing preset fails loudly instead of silently dropping a ro
 }
 
 ///|
+test "embedded: descriptors carry every bundled skill without any files" {
+  let descriptors = Pstack::embedded_descriptors()
+  assert_eq(descriptors.map(d => d.name), [
+    "poteto-mode", "poteto-help", "no-comments",
+  ])
+  // The first entry must stay identical to the single-skill descriptor hosts
+  // already register, so adding skills cannot change poteto-mode's shape.
+  let single = Pstack::embedded_descriptor()
+  assert_eq(descriptors[0].name, single.name)
+  assert_eq(descriptors[0].description, single.description)
+  assert_eq(descriptors[0].body, single.body)
+  assert_eq(descriptors[0].resources, single.resources)
+  // Each descriptor serves exactly the bundle the standalone accessors read.
+  let frontmatter : Map[String, String] = Map::from_array(
+    embedded_skill_frontmatter(),
+  )
+  for descriptor in descriptors {
+    assert_eq(descriptor.description, frontmatter.get(descriptor.name).unwrap())
+    assert_eq(
+      descriptor.body.unwrap(),
+      embedded_skill_bodies().get(descriptor.name).unwrap(),
+    )
+    assert_eq(
+      descriptor.resources,
+      embedded_skill_resource_sets().get(descriptor.name).unwrap(),
+    )
+  }
+}
+
+///|
+test "embedded: agent presets parse into kinds without any files" {
+  let specs = Pstack::embedded_kinds().unwrap()
+  assert_eq(specs.map(s => s.name), ["poteto-agent", "comment-sicko"])
+  // poteto-agent delegates writes; comment-sicko only reviews and reports.
+  assert_true(specs[0].mode is @permission.PermissionMode::WorkspaceWrite)
+  assert_true(specs[1].mode is @permission.PermissionMode::ReadOnly)
+  let catalog = @kind.KindCatalog::with_entries(specs)
+  assert_true(catalog.get("poteto-agent") is Some(_))
+  assert_true(catalog.get("comment-sicko") is Some(_))
+}
+
+///|
+test "embedded: unknown frontmatter keys like is_background stay ignored" {
+  // Upstream copies of these presets carry keys Posoco has no equivalent for;
+  // parsing must tolerate them rather than reject the preset.
+  let source =
+    #|---
+    #|name: probe
+    #|description: Tolerates upstream-only keys
+    #|mode: readonly
+    #|is_background: true
+    #|---
+    #|Report only.
+  let spec = @kind.parse_kind_file(source)
+  assert_eq(spec.name, "probe")
+  assert_true(spec.mode is @permission.PermissionMode::ReadOnly)
+}
+
+///|
 pub extend PstackFakeFs with @workspace.WorkspaceFs::{
   write_file_atomic,
   walk,

@@ -38,6 +38,27 @@ pub fn Pstack::embedded_descriptor() -> @skills.SkillDescriptor {
 }
 
 ///|
+/// Every embedded skill as a builtin descriptor, in bundle registration
+/// order: poteto-mode's workflow plus the poteto-help help-not-work router and
+/// the no-comments review adapter. Hosts pass the whole array to
+/// merge_builtin_skills and need no assets directory or install step.
+pub fn Pstack::embedded_descriptors() -> Array[@skills.SkillDescriptor] {
+  let descriptors : Array[@skills.SkillDescriptor] = []
+  for entry in embedded_skill_frontmatter() {
+    let (name, description) = entry
+    descriptors.push(
+      @skills.SkillDescriptor::builtin(
+        name~,
+        description~,
+        body=embedded_skill_bodies().get(name).unwrap(),
+        resources=embedded_skill_resource_sets().get(name).unwrap(),
+      ),
+    )
+  }
+  descriptors
+}
+
+///|
 /// The installed PStack assets directory holds SKILL.md, original playbooks,
 /// principles, and optional Kind presets.
 fn asset_path(root : String, suffix : String) -> String {
@@ -222,7 +243,7 @@ pub async fn Pstack::load_kinds(
     return Err("PStack assets root must not be empty")
   }
   let kinds : Array[@kind.KindSpec] = []
-  for name in ["poteto-agent", "comment-sicko"] {
+  for name in kind_preset_names() {
     let path = asset_path(assets_root, "agents/" + name + ".md")
     let content = fs.read_file(path) catch {
       _ => return Err("PStack kind missing or unreadable: " + name)
@@ -232,6 +253,37 @@ pub async fn Pstack::load_kinds(
     }
     if spec.name != name {
       return Err("PStack kind name differs from asset path: " + name)
+    }
+    kinds.push(spec)
+  }
+  Ok(kinds)
+}
+
+///|
+/// Kind preset order shared by the file-backed and embedded loaders, matching
+/// the bundle generator's agentOrder.
+fn kind_preset_names() -> Array[String] {
+  ["poteto-agent", "comment-sicko"]
+}
+
+///|
+/// Kind presets parsed from the embedded bundle, in the same deterministic
+/// order as load_kinds. Hosts that compose PStack without an assets directory
+/// pass these straight to KindCatalog::load(home~, cwd~, extra~). An Err names
+/// the offending kind instead of silently dropping a role.
+pub fn Pstack::embedded_kinds() -> Result[Array[@kind.KindSpec], String] {
+  let kinds : Array[@kind.KindSpec] = []
+  for name in kind_preset_names() {
+    let content = match embedded_agent_bodies().get(name) {
+      Some(value) => value
+      None =>
+        return Err("PStack kind missing from the embedded bundle: " + name)
+    }
+    let spec = @kind.parse_kind_file(content) catch {
+      _ => return Err("Invalid embedded PStack kind: " + name)
+    }
+    if spec.name != name {
+      return Err("PStack kind name differs from the embedded asset: " + name)
     }
     kinds.push(spec)
   }

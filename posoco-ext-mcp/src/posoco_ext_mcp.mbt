@@ -821,6 +821,13 @@ fn missing_lifetime_message(name : String) -> String {
 let probe_retry_backoff_ms : Array[Int32] = [3_000, 15_000, 60_000]
 
 ///|
+/// Per-connection grace for the close-path actor drain. Remote servers set
+/// no deadline on their in-flight IO, so an unbounded graceful join can park
+/// a whole shutdown for seconds; past this bound the loop task is released
+/// to the host lifetime group's cancellation instead.
+const CLOSE_DRAIN_GRACE_MS : Int32 = 200
+
+///|
 /// Composition-time probe entry: claim every discovered server and connect
 /// each one in a parallel background probe on the attached task group,
 /// returning before any handshake settles. A success bumps the catalog
@@ -1472,10 +1479,18 @@ pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
     match conn.actor {
       Some(actor) => {
         actor.close()
-        match actor.join() {
-          Graceful => ()
-          Cancelled => ()
-          Failed(_cause) => ()
+        // Bounded drain: a graceful stop may sit behind in-flight network
+        // IO whose only deadline is the remote server. Shutdown must not
+        // hang on that; after the grace period the loop task is released
+        // to the host lifetime group's cancellation instead.
+        @core_async.with_timeout(CLOSE_DRAIN_GRACE_MS, async fn() {
+          match actor.join() {
+            Graceful => ()
+            Cancelled => ()
+            Failed(_cause) => ()
+          }
+        }) catch {
+          _ => ()
         }
       }
       None => ()
