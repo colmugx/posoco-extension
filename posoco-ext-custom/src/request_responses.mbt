@@ -3,7 +3,10 @@
 /// endpoint. Encoding of items, tools, and content blocks comes from
 /// `posoco-kit-responses`; this file owns the request shape only:
 ///
-/// - system turns lift into the top-level `instructions` field, tools into
+/// - system turns lift out of the window into the leading developer message
+///   inside the cacheable input prefix (the standing kit placement
+///   contract; the top-level `instructions` field is reserved for
+///   per-request guidance and cetas does not send it), and tools into
 ///   `tools` — each only when non-empty;
 /// - the request is stateless (`store:false`) and replays the full window as
 ///   `input` on every call;
@@ -54,6 +57,10 @@ fn build_responses_request(
       _ => history.push(item)
     }
   }
+  let joined = instructions.join("\n\n")
+  let (history, instructions_field) = @responses.place_reusable_instructions(
+    history, joined,
+  )
   let effort : String? = config.reasoning_effort
   let fields : Array[(String, Json)] = [
     ("model", Json::string(config.model)),
@@ -63,9 +70,8 @@ fn build_responses_request(
   if stream {
     fields.push(("stream", Json::boolean(true)))
   }
-  let joined = instructions.join("\n\n")
-  if joined.length() > 0 {
-    fields.push(("instructions", Json::string(joined)))
+  if instructions_field.length() > 0 {
+    fields.push(("instructions", Json::string(instructions_field)))
   }
   if tools.length() > 0 {
     fields.push(

@@ -131,9 +131,17 @@ async test "openai_compact_latest_first_manual_and_auto_carry_current_tools_effo
       fail("body")
     }
     assert_eq(fields.get("model"), Some(Json::string("declared-model")))
+    assert_eq(fields.get("instructions"), None)
+    guard fields.get("input") is Some(Json::Array(input)) else { fail("input") }
+    guard input[0] is Json::Object(prefix) else { fail("prefix") }
+    assert_eq(prefix.get("role"), Some(Json::string("developer")))
     assert_eq(
-      fields.get("instructions"),
-      Some(Json::string("current instructions")),
+      prefix.get("content"),
+      Some(
+        @json.parse(
+          "[{\"type\":\"input_text\",\"text\":\"current instructions\"}]",
+        ),
+      ),
     )
     assert_eq(
       fields.get("tools"),
@@ -237,11 +245,12 @@ test "openai_compact_latest_lite_shape_chat_and_compact_match_metadata_not_slug"
 }
 
 ///|
-/// use_responses_lite=false: chat and compact share the ordinary encoding —
-/// base instructions at the top-level `instructions` field, current tools at
-/// the top-level `tools` field — and the compact request differs only by the
-/// single trailing `compaction_trigger` request control.
-test "openai_request_preparation_false_branch_shares_instructions_tools_trigger" {
+/// Ordinary branch: chat and compact share the encoding — base instructions
+/// ride the leading developer message inside the cacheable prefix (the
+/// standing kit placement contract, independent of the model id), current
+/// tools stay at the top-level `tools` field, and the compact request
+/// differs only by the single trailing `compaction_trigger` request control.
+test "openai_ordinary_branch_places_instructions_as_leading_developer_message" {
   let config = {
     ..OpenAIConfig("k-test", "wire-model"),
     reasoning_effort: Some("high"),
@@ -268,9 +277,16 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
     chat_fields.get("input") is Some(Json::Array(chat_input)) else {
     fail("chat body")
   }
+  assert_eq(chat_fields.get("instructions"), None)
+  guard chat_input.length() == 2 && chat_input[0] is Json::Object(prefix_item) else {
+    fail("prefix item")
+  }
+  assert_eq(prefix_item.get("role"), Some(Json::string("developer")))
   assert_eq(
-    chat_fields.get("instructions"),
-    Some(Json::string("base instructions")),
+    prefix_item.get("content"),
+    Some(
+      @json.parse("[{\"type\":\"input_text\",\"text\":\"base instructions\"}]"),
+    ),
   )
   assert_eq(
     chat_fields.get("tools"),
@@ -280,7 +296,7 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
       ),
     ),
   )
-  // Lifted base instructions do not ride as an input item.
+  // Lifted base instructions do not ride as a system input item.
   for item in chat_input {
     guard item is Json::Object(fields) else { fail("wire item") }
     assert_false(fields.get("role") == Some(Json::string("system")))
@@ -296,7 +312,7 @@ test "openai_request_preparation_false_branch_shares_instructions_tools_trigger"
     compact_fields.get("input") is Some(Json::Array(compact_input)) else {
     fail("compact body")
   }
-  assert_eq(compact_fields.get("instructions"), chat_fields.get("instructions"))
+  assert_eq(compact_fields.get("instructions"), None)
   assert_eq(compact_fields.get("tools"), chat_fields.get("tools"))
   // Exactly one trigger, appended after the shared input items.
   assert_eq(compact_input.length(), chat_input.length() + 1)
@@ -352,7 +368,18 @@ test "openai_request_preparation_empty_function_tools_still_declare_hosted_searc
       @json.parse("[{\"type\":\"web_search\",\"external_web_access\":false}]"),
     ),
   )
-  assert_eq(fields.get("instructions"), Some(Json::string("base instructions")))
+  assert_eq(fields.get("instructions"), None)
+  guard fields.get("input") is Some(Json::Array(prefix_input)) &&
+    prefix_input[0] is Json::Object(prefix) else {
+    fail("prefix")
+  }
+  assert_eq(prefix.get("role"), Some(Json::string("developer")))
+  assert_eq(
+    prefix.get("content"),
+    Some(
+      @json.parse("[{\"type\":\"input_text\",\"text\":\"base instructions\"}]"),
+    ),
+  )
   let chat = openai_prepare_request(
     normal,
     "session-empty",
@@ -645,4 +672,95 @@ async test "openai_compact_latest_cached_lite_survives_effort_and_key_rebuild" {
     ),
   )
   assert_false(discovered[0].use_responses_lite)
+}
+
+///|
+/// Placement never guesses from the model id: an aliased, unversioned id
+/// takes the same cacheable shape, so a renamed deployment cannot silently
+/// fall back to full-price uncached input.
+test "openai_instructions_placement_ignores_model_id" {
+  let config = { ..OpenAIConfig("k-test", "openai/gpt-6.2-2026-11-17"), }
+  let messages : Array[@posoco.Message] = [
+    @posoco.Message::SystemMessage(content=[
+      @posoco.Content::Text("base instructions"),
+    ]),
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("question")]),
+  ]
+  let chat = openai_prepare_request(
+    config,
+    "session-alias",
+    messages,
+    latest_fixture_tools(),
+    { temperature: None, max_output_tokens: None, },
+  )
+  guard chat is Json::Object(fields) &&
+    fields.get("input") is Some(Json::Array(input)) else {
+    fail("chat body")
+  }
+  assert_eq(fields.get("instructions"), None)
+  guard input[0] is Json::Object(prefix_item) else { fail("prefix item") }
+  assert_eq(prefix_item.get("role"), Some(Json::string("developer")))
+  assert_eq(
+    prefix_item.get("content"),
+    Some(
+      @json.parse("[{\"type\":\"input_text\",\"text\":\"base instructions\"}]"),
+    ),
+  )
+}
+
+///|
+/// Two backends keep their own instructions shape: the Codex chatgpt
+/// backend fixes the top-level field, and Responses Lite shaping performs
+/// its own placement with derived ids — the shared placement must not
+/// pre-empt it with an id-less duplicate developer message.
+test "openai_instructions_placement_excludes_codex_and_lite_backends" {
+  let messages : Array[@posoco.Message] = [
+    @posoco.Message::SystemMessage(content=[
+      @posoco.Content::Text("base instructions"),
+    ]),
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("question")]),
+  ]
+  let options : @posoco.ChatOptions = {
+    temperature: None,
+    max_output_tokens: None,
+  }
+  let codex = {
+    ..OpenAIConfig("k-test", "any-model"),
+    base_url: codex_oauth_api_base(),
+    account_id: Some("acct"),
+  }
+  let chat = openai_prepare_request(
+    codex,
+    "session-codex",
+    messages,
+    latest_fixture_tools(),
+    options,
+  )
+  guard chat is Json::Object(codex_fields) else { fail("codex body") }
+  assert_eq(
+    codex_fields.get("instructions"),
+    Some(Json::string("base instructions")),
+  )
+  let lite = {
+    ..OpenAIConfig("k-test", "any-model"),
+    use_responses_lite: true,
+  }
+  let lite_body = openai_prepare_request(
+    lite,
+    "session-lite",
+    messages,
+    latest_fixture_tools(),
+    options,
+  )
+  guard lite_body is Json::Object(lite_fields) &&
+    lite_fields.get("input") is Some(Json::Array(lite_input)) else {
+    fail("lite body")
+  }
+  assert_eq(lite_fields.get("instructions"), None)
+  for item in lite_input {
+    guard item is Json::Object(fields) else { fail("lite item") }
+    if fields.get("role") == Some(Json::string("developer")) {
+      assert_true(fields.get("id") is Some(_))
+    }
+  }
 }

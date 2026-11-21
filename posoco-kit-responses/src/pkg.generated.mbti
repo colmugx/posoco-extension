@@ -11,6 +11,8 @@ import {
 // Values
 pub fn classify_stream_termination(provider~ : String, StreamTermination) -> @error.ModelError?
 
+pub fn developer_instructions_message(String) -> @json.Json
+
 pub fn extract_assistant_content(provider~ : String, @json.Json) -> Array[@kernel.Content] raise @error.ModelError
 
 pub fn extract_reasoning_items(provider~ : String, @json.Json) -> (Array[@json.Json], String) raise @error.ModelError
@@ -28,6 +30,8 @@ pub fn message_to_responses_items(@kernel.Message) -> Array[@json.Json]
 pub fn parse_function_call_item(provider~ : String, Map[String, @json.Json]) -> @kernel.ToolCall raise @error.ModelError
 
 pub fn parse_responses_response(provider~ : String, @json.Json) -> @kernel.Completion raise @error.ModelError
+
+pub fn place_reusable_instructions(Array[@json.Json], String, eligible? : Bool) -> (Array[@json.Json], String)
 
 pub fn process_responses_sse(provider~ : String, String, @types.StreamAccumulator, (@types.StreamChunk) -> Unit, state? : SseStreamState) -> Bool raise @error.ModelError
 

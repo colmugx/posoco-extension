@@ -354,9 +354,10 @@ fn validate_openai_config(
 ///|
 /// Lift the base-instruction system items out of an encoded input window.
 /// Chat and compact share this lift so the two request paths cannot drift on
-/// instructions placement: the joined text becomes the top-level
-/// `instructions` field (ordinary branch) or the developer-message Lite
-/// prefix, and the remaining history items keep their order.
+/// instructions placement: the joined text becomes the leading developer
+/// message (ordinary branch — the standing kit placement contract) or the
+/// developer-message Lite prefix, and the remaining history items keep
+/// their order.
 fn split_openai_base_instructions(
   input : Array[Json],
 ) -> (Array[Json], Array[String]) raise @posoco.ModelError {
@@ -376,10 +377,12 @@ fn split_openai_base_instructions(
 
 ///|
 /// Build the JSON request body fields for the Responses API from an already
-/// encoded input window. Ordinary-branch placement follows the fixed
-/// official contract: base instructions go to the top-level `instructions`
-/// field and tools to the top-level `tools` field, each sent only when
-/// non-empty (no `[]`/"" placeholders).
+/// encoded input window. Base instructions normally arrive empty: the
+/// shared preparation carries them in the leading developer message (see
+/// the kit placement contract) and the top-level `instructions` field is
+/// reserved for genuinely per-request guidance, which cetas does not send.
+/// Tools go to the top-level `tools` field, sent only when non-empty (no
+/// `[]`/"" placeholders).
 fn build_request_body(
   input_items : Array[Json],
   tools : Array[@posoco.ToolDef],
@@ -476,13 +479,28 @@ fn openai_prepare_request_body(
   } else {
     config.web_search
   }
-  let body = build_request_body(
+  // Standing kit placement contract: reusable system content rides the
+  // leading developer message inside the cacheable input prefix, and the
+  // top-level `instructions` field stays empty (per-request guidance only —
+  // GPT-6.2+ bills that field as uncached input on every request). Placement
+  // never guesses from the model id, so aliased deployments cannot silently
+  // fall back to full-price input. Two backends keep their own shape and
+  // pass eligible=false: the Codex chatgpt backend fixes the top-level
+  // field, and Responses Lite shaping performs its own placement with
+  // derived ids.
+  let (items, instructions_field) = @responses.place_reusable_instructions(
     input_items,
+    instructions.join("\n\n"),
+    eligible=!config.use_responses_lite &&
+      config.base_url != codex_oauth_api_base(),
+  )
+  let body = build_request_body(
+    items,
     tools,
     options,
     config.model,
     config.reasoning_effort,
-    instructions=instructions.join("\n\n"),
+    instructions=instructions_field,
     stream~,
     web_search~,
   )

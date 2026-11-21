@@ -524,7 +524,10 @@ test "chat wire body carries the turn and the stream flags" {
 }
 
 ///|
-test "responses wire body lifts system into instructions" {
+/// The standing kit placement contract: system text rides as the leading
+/// developer message inside the cacheable prefix; the top-level
+/// `instructions` field is reserved for per-request guidance.
+test "responses wire rides system as leading developer message" {
   let config = CustomConfig(
     "sk",
     base_url="https://example.com/v1",
@@ -540,11 +543,21 @@ test "responses wire body lifts system into instructions" {
     [],
     chat_options(),
   )
-  let text = body.stringify()
-  assert_true(text.contains("\"instructions\":\"be terse\""))
-  assert_true(text.contains("\"store\":false"))
-  assert_true(text.contains("\"model\":\"gpt-x\""))
-  assert_true(!text.contains("reasoning"))
+  guard body is Json::Object(fields) &&
+    fields.get("input") is Some(Json::Array(input)) else {
+    fail("body")
+  }
+  assert_eq(fields.get("instructions"), None)
+  assert_eq(input.length(), 2)
+  assert_eq(
+    input[0],
+    @json.parse(
+      "{\"role\":\"developer\",\"content\":[{\"type\":\"input_text\",\"text\":\"be terse\"}]}",
+    ),
+  )
+  assert_true(body.stringify().contains("\"store\":false"))
+  assert_true(body.stringify().contains("\"model\":\"gpt-x\""))
+  assert_true(!body.stringify().contains("reasoning"))
 }
 
 ///|
@@ -693,4 +706,36 @@ test "compact request is plain prose with images named, not sent" {
       }
     _ => fail("expected a user message second")
   }
+}
+
+///|
+/// Placement never guesses from the model id: an aliased, unversioned id
+/// takes the same cacheable shape as any other.
+test "responses wire placement ignores model id" {
+  let config = CustomConfig(
+    "sk",
+    base_url="https://example.com/v1",
+    model="openai/gpt-6.2-2026-11-17",
+    protocol=CustomProtocol::Responses,
+  )
+  let body = build_responses_request(
+    config,
+    [
+      @posoco.Message::SystemMessage(content=[@posoco.Content::Text("be terse")]),
+      user_msg("hi"),
+    ],
+    [],
+    chat_options(),
+  )
+  guard body is Json::Object(fields) &&
+    fields.get("input") is Some(Json::Array(input)) else {
+    fail("body")
+  }
+  assert_eq(fields.get("instructions"), None)
+  assert_eq(
+    input[0],
+    @json.parse(
+      "{\"role\":\"developer\",\"content\":[{\"type\":\"input_text\",\"text\":\"be terse\"}]}",
+    ),
+  )
 }
