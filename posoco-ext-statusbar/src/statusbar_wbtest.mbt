@@ -602,3 +602,21 @@ test "owner re-register overwrites the color role" {
   channel.register(source="ext", segment="plan", priority=10, value="Plan")
   assert_eq(bar.segments()[0].color, None)
 }
+
+///|
+test "republish re-projects the registry without a change" {
+  let ui = RecordingUi()
+  let channel = Channel::Channel()
+  let bar = StatusBar(events=Some(channel.system))
+  channel.register(source="ext", segment="ctx", priority=5, value="42%")
+  // Applied but silent: no composed UI yet, so a republish stays silent too.
+  bar.republish()
+  assert_eq(ui.renders.length(), 0)
+  compose_bar(bar, ui)
+  assert_eq(ui.renders.length(), 1)
+  bar.republish()
+  // A host (re)attaching to an already-composed session gets the current
+  // registry again — same body, no segment op required.
+  assert_eq(ui.renders.length(), 2)
+  assert_same_entries(bar_entries(ui.renders[1]), bar_entries(ui.renders[0]))
+}

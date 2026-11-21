@@ -29,7 +29,7 @@ async test "command: list returns catalog snapshot with scope labels" {
   assert_eq(defs[0].id, "skills")
   match skills.invoke("skills", Json::object(Map([]))) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
-      assert_eq(feedback, "4 skills (project 2, user 1, extra 1)")
+      assert_eq(feedback, "4 skills (project 2, user 1, extension 1)")
       assert_eq(
         structured,
         Some(
@@ -64,7 +64,7 @@ async test "command: list returns catalog snapshot with scope labels" {
                     Map([
                       ("name", Json::string("custom")),
                       ("description", Json::string("Extra root")),
-                      ("scope", Json::string("extra")),
+                      ("scope", Json::string("extension")),
                       ("root", Json::string("/opt/skills")),
                     ]),
                   ),

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { observeSessionSocket, serveSessionSocket, type SessionEvent } from "./bridge";
+import { BridgeError, observeSessionSocket, serveSessionSocket, sessionNotComposed, type SessionEvent } from "./bridge";
 
 function endpoint(): string {
   const id = randomUUID().replaceAll("-", "");
@@ -75,6 +75,27 @@ test("unowned Session is explicitly rejected, never composed", async () => {
   try {
     await expect(observeSessionSocket(client, "foreign", "viewer")).rejects.toThrow();
     expect(composed).toBe(1);
+  } finally {
+    client.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("typed not-composed rejection carries its code to the viewer", async () => {
+  const path = endpoint();
+  const server = createServer((socket) => {
+    void serveSessionSocket(socket, { instanceID: "owner-js", runtimeEpoch: "epoch-1" },
+      async () => {
+        throw new BridgeError("Session not owned by this Bun runtime", sessionNotComposed);
+      }).catch(() => {});
+  });
+  await new Promise<void>((resolve) => server.listen(path, resolve));
+  const client = connect(path);
+  await once(client, "connect");
+  try {
+    const failure = observeSessionSocket(client, "never-composed", "viewer");
+    await expect(failure).rejects.toBeInstanceOf(BridgeError);
+    await expect(failure).rejects.toMatchObject({ code: sessionNotComposed });
   } finally {
     client.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));

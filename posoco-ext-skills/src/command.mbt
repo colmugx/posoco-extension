@@ -12,7 +12,7 @@ pub impl @posoco.CommandPort for Skills with fn commands(_self : Skills) -> Arra
     @posoco.CommandDef::{
       id: "skills",
       label: "Skills",
-      description: "List available agent skills with their scope (project/user/extra)",
+      description: "List available agent skills with their scope (project/user/extension)",
       category: "skills",
       ctype: @posoco.CommandType::Action,
       params: [],
@@ -27,12 +27,13 @@ pub impl @posoco.CommandPort for Skills with fn commands(_self : Skills) -> Arra
 
 ///|
 /// User-facing scope label. The prompt contributor says "repository" because
-/// that is the discovery term; hosts and humans say "project".
+/// that is the discovery term; hosts and humans say "project", and an extra
+/// root is an "extension" bundle rather than a project or user installation.
 fn scope_label(scope : SkillScope) -> String {
   match scope {
     Repository => "project"
     User => "user"
-    Extra(_) => "extra"
+    Extra(_) => "extension"
   }
 }
 
@@ -68,8 +69,8 @@ fn Skills::command_list(self : Skills) -> @posoco.CommandOutcome {
     let total = self.catalog.skills.length()
     let project = count_scope(self.catalog.skills, "project")
     let user = count_scope(self.catalog.skills, "user")
-    let extra = count_scope(self.catalog.skills, "extra")
-    "\{total} skills (project \{project}, user \{user}, extra \{extra})"
+    let extension = count_scope(self.catalog.skills, "extension")
+    "\{total} skills (project \{project}, user \{user}, extension \{extension})"
   }
   @posoco.CommandOutcome::Success(
     feedback~,

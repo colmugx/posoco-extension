@@ -39,6 +39,7 @@ pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
 pub fn StatusBar::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn StatusBar::on_shutdown(Self) -> Unit
 pub async fn StatusBar::on_start(Self) -> Unit
+pub fn StatusBar::republish(Self) -> Unit
 pub fn StatusBar::segments(Self) -> Array[SegmentInfo]
 pub fn StatusBar::set_segment(Self, source~ : String, segment~ : String, value~ : String) -> Unit
 pub impl @port.CommandPort for StatusBar

@@ -20,6 +20,16 @@ const MaxFrameSize = 4 << 20
 var ErrProtocol = errors.New("invalid Posoco session bridge protocol")
 var ErrResnapshot = errors.New("Session stream requires a new owner snapshot")
 
+// ErrCodeSessionNotComposed is the reject-frame code meaning the owner
+// Runtime never composed the requested Session. No live writer exists for
+// that Session, so a viewer may safely compose it locally instead of
+// failing closed.
+const ErrCodeSessionNotComposed = "session_not_composed"
+
+// ErrSessionNotComposed is the typed client counterpart of the wire code
+// above. Callers use errors.Is to decide on a local writable fallback.
+var ErrSessionNotComposed = errors.New("Session is not composed in the owner Runtime")
+
 type Envelope struct {
     Type string
     Protocol string
@@ -131,7 +141,9 @@ func ServeConn(ctx context.Context,conn net.Conn,owner Owner,subscribe Subscribe
     }
     sub,err:=subscribe(ctx,sessionID)
     if err!=nil{
-        _=c.write(map[string]any{"type":"reject","error":err.Error(),"request_id":requestID})
+        reject:=map[string]any{"type":"reject","error":err.Error(),"request_id":requestID}
+        if errors.Is(err,ErrSessionNotComposed){reject["code"]=ErrCodeSessionNotComposed}
+        _=c.write(reject)
         return err
     }
     if sub.Close!=nil{defer sub.Close()}
@@ -197,7 +209,12 @@ func ObserveConn(ctx context.Context,conn net.Conn,sessionID,clientID string)(*O
         "command":"session.observe","args":map[string]string{"session_id":sessionID}});err!=nil{return fail(err)}
     reply,err:=c.read()
     if err!=nil{return fail(err)}
-    if stringField(reply,"type")=="reject"{return fail(fmt.Errorf("%w: %s",ErrProtocol,stringField(reply,"error")))}
+    if stringField(reply,"type")=="reject"{
+        if stringField(reply,"code")==ErrCodeSessionNotComposed{
+            return fail(fmt.Errorf("%w: %s",ErrSessionNotComposed,stringField(reply,"error")))
+        }
+        return fail(fmt.Errorf("%w: %s",ErrProtocol,stringField(reply,"error")))
+    }
     if stringField(reply,"type")!="response"||stringField(reply,"request_id")!="attach"{return fail(ErrProtocol)}
     var snap map[string]json.RawMessage
     if json.Unmarshal(reply["result"],&snap)!=nil||

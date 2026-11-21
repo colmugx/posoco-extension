@@ -363,3 +363,16 @@ fn StatusBar::render(self : StatusBar) -> Unit {
     ttl_ms: None,
   })
 }
+
+///|
+/// Re-project the current registry through the composed UI as a fresh
+/// render, with no registry change — the same body the last applied op
+/// rendered. Hosts call this when a surface starts watching an
+/// already-composed session (a session switch or a re-attach): the arriving
+/// watcher never saw the renders that predate it, and the next segment op
+/// may be arbitrarily far away. No composed UI yet: stay silent, exactly
+/// like `render`; an empty registry projects an empty Entries body, which
+/// the host reads as "clear the line".
+pub fn StatusBar::republish(self : StatusBar) -> Unit {
+  self.render()
+}

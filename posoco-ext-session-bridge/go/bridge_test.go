@@ -4,6 +4,7 @@ import (
     "context"
     "encoding/json"
     "errors"
+    "fmt"
     "net"
     "testing"
     "time"
@@ -98,4 +99,24 @@ func TestForeignSessionNeverCreatesOwner(t *testing.T){
     if _,err:=ObserveConn(ctx,client,"foreign-session","client");!errors.Is(err,ErrProtocol){
         t.Fatalf("foreign session accepted: %v",err)
     }
+}
+
+// A typed not-composed refusal must survive the wire: the owner writes the
+// machine-readable code, and the viewer's error unwraps to the sentinel so
+// hosts can fall back to a local writable Session safely.
+func TestNotComposedRejectCarriesTypedSentinel(t *testing.T){
+    server,client:=net.Pipe()
+    ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+    defer cancel()
+    go func(){
+        _=ServeConn(ctx,server,Owner{InstanceID:"owner",RuntimeEpoch:"epoch"},
+            func(context.Context,string)(Subscription,error){
+                return Subscription{},fmt.Errorf("%w: Session is not composed in this Runtime",ErrSessionNotComposed)
+            })
+    }()
+    _,err:=ObserveConn(ctx,client,"never-composed","client")
+    if !errors.Is(err,ErrSessionNotComposed){
+        t.Fatalf("typed refusal lost on the wire: %v",err)
+    }
+    _=server.Close()
 }

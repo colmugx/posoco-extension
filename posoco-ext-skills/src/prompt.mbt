@@ -3,7 +3,7 @@ fn render_scope(scope : SkillScope) -> String {
   match scope {
     Repository => "repository"
     User => "user"
-    Extra(_) => "extra"
+    Extra(_) => "extension"
   }
 }
 

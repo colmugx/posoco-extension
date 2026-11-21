@@ -8,6 +8,19 @@ export const capability = "session.observe.v1";
 const frameLimit = 4 << 20;
 const queueLimit = 256;
 
+// Reject-frame code meaning the owner Runtime never composed the requested
+// Session. No live writer exists for it, so a viewer may compose it locally.
+export const sessionNotComposed = "session_not_composed";
+
+// A typed bridge failure. `code` carries the owner's machine-readable reject
+// reason when one exists, so callers can branch without string matching.
+export class BridgeError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+    this.name = "BridgeError";
+  }
+}
+
 export type WireFrame = {
   type: string;
   protocol?: string;
@@ -22,6 +35,7 @@ export type WireFrame = {
   result?: SessionEvent;
   event?: SessionEvent;
   error?: string;
+  code?: string;
 };
 
 export type SessionEvent = {
@@ -147,7 +161,13 @@ export async function serveSessionSocket(
     try {
       sub = await subscribe(request.args.session_id);
     } catch (err) {
-      await wire.write({ type: "reject", request_id: request.request_id, error: String(err) });
+      const reject: WireFrame = {
+        type: "reject", request_id: request.request_id, error: String(err),
+      };
+      if (err instanceof BridgeError && err.code !== undefined) {
+        reject.code = err.code;
+      }
+      await wire.write(reject);
       return;
     }
     try {
@@ -194,6 +214,12 @@ export async function observeSessionSocket(
     await wire.write({ type: "request", request_id: "attach",
       command: "session.observe", args: { session_id: sessionID } });
     const response = await wire.read();
+    if (response.type === "reject") {
+      throw new BridgeError(
+        response.error ?? "Session owner refused observe",
+        response.code,
+      );
+    }
     if (response.type !== "response" || response.request_id !== "attach" ||
         !validSnapshot(response.result, sessionID, welcome.runtime_epoch)) {
       throw new Error("Session owner refused observe or returned an invalid snapshot");

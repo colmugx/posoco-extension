@@ -1784,6 +1784,20 @@ test "prompt: public render fails closed on an invalid hand-built catalog" {
 }
 
 ///|
+test "prompt: extra-root skills render the extension scope label" {
+  let skill = descriptor(
+    "extra-rooted",
+    "Extra root",
+    "/opt/skills/extra-rooted",
+    scope=SkillScope::Extra("/opt/skills"),
+  )
+  let prompt = catalog_of([skill]).render_prompt_body(max_chars=8000)
+  // Scope labels travel through quote_prompt_scalar, so the bracketed label is
+  // a quoted scalar inside the brackets.
+  assert_true(prompt.contains("[\"extension\"]"))
+}
+
+///|
 test "prompt: unicode description preview never slices a surrogate pair" {
   let description = repeat_text("a", 1022) + "😀tail"
   let skill = descriptor("unicode", description, "/skills/unicode")
