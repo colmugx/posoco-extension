@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-zai-coding-plan"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.24.2",
+  "colmugx/posoco@0.25.0",
   "colmugx/posoco-ext-zai@0.1.0",
   "colmugx/mcp@0.19.2",
   "posoco/kit-events@0.1.0",

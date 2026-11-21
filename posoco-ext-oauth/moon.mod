@@ -3,7 +3,7 @@ name = "posoco/ext-oauth"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.24.2",
+  "colmugx/posoco@0.25.0",
   "moonbitlang/x@0.5.5",
 }
 

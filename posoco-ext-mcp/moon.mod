@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-mcp"
 version = "0.6.1"
 
 import {
-  "colmugx/posoco@0.24.2",
+  "colmugx/posoco@0.25.0",
   "posoco/devkit@0.4.1",
   "colmugx/mcp@0.19.2",
   "colmugx/fuwaroid@0.4.0",
