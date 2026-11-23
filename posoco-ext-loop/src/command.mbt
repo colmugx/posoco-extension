@@ -49,10 +49,20 @@ fn loop_raw_args(args : Json) -> Result[String, String] {
       match raw {
         Some(Json::String(value)) => Ok(value)
         None => Ok("")
-        _ => Err("loop input must be a string"),
+        _ => Err("loop input must be a string")
       }
     }
-    _ => Err("loop expects a string or an object with input"),
+    _ => Err("loop expects a string or an object with input")
+  }
+}
+
+///|
+async fn loop_runtime_change_safe(
+  runtime : LoopRuntime,
+  request : LoopRequest,
+) -> Result[String, String] {
+  runtime.change(request) catch {
+    error => Err(error.to_string())
   }
 }
 
@@ -133,17 +143,17 @@ pub impl @posoco.CommandPort for LoopExtension with fn invoke(
     CreateJob(interval_ms~, prompt~) =>
       match self.session_id {
         Some(session_id) =>
-          runtime.change(Add(session_id~, interval_ms~, prompt~))
+          loop_runtime_change_safe(runtime, Add(session_id~, interval_ms~, prompt~))
         None => Err("no active session: host must call loop.set_session(id)")
       }
-    PauseJob(id~) => runtime.change(Pause(id~))
-    ResumeJob(id~) => runtime.change(Resume(id~))
-    StopJob(id~) => runtime.change(Stop(id~))
+    PauseJob(id~) => loop_runtime_change_safe(runtime, Pause(id~))
+    ResumeJob(id~) => loop_runtime_change_safe(runtime, Resume(id~))
+    StopJob(id~) => loop_runtime_change_safe(runtime, Stop(id~))
   }
   match outcome {
     Err(reason) => @posoco.CommandOutcome::Failure(reason~)
     Ok(result) => {
-      let jobs = runtime.jobs()
+      let jobs = runtime.jobs() catch { _ => [] }
       let feedback = match action {
         ListJobs => loop_job_list_text(jobs)
         CreateJob(..) => "created recurring task " + result
