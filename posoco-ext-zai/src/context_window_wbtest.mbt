@@ -14,14 +14,23 @@ test "Zai cached windows survive key and effort rebuilds without overriding sett
         "context_window_source": "provider",
         "metadata_provider_id": "zai",
       },
+      {
+        "model_id": "glm-5.3-flash",
+        "context_window": 128000,
+        "context_window_source": "provider",
+        "metadata_provider_id": "zai",
+      },
     ]),
   )
   guard ZaiProvider().build(source) is @llm.ProviderBuildResult::Ready(catalog) else {
     fail("expected catalog")
   }
   let slots = catalog.slots()
+  assert_eq(slots.length(), 2)
+  assert_eq(slots[0].model_id, "glm-5.3")
   assert_eq(slots[0].context_window, Some(65000))
   assert_eq(slots[0].context_window_source, "configured")
+  assert_eq(slots[1].model_id, "glm-5.3-flash")
   assert_eq(slots[1].context_window, Some(128000))
   assert_eq(slots[1].context_window_source, "provider_cache")
   guard slots[1].rebuild_on_effort is Some(rebuild_effort) else {

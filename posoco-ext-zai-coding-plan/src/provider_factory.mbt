@@ -93,18 +93,25 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn credential_id(
 /// The Coding Plan has no OAuth — plan keys are created in the coding-plan
 /// console and travel as `Authorization: Bearer`. An OAuth credential is a
 /// typed composition failure, not a silent downgrade.
+///|
+/// Catalog identity shared by the static build and the live refresh.
+fn zai_coding_plan_catalog_identity() -> @zai.ZaiCatalogIdentity {
+  @zai.ZaiCatalogIdentity::ZaiCatalogIdentity(
+    provider_id="zai-coding-plan",
+    label_prefix="Z.ai Coding Plan",
+    manifest_id="posoco_ext_zai_coding_plan",
+    endpoint_for_credential=None,
+  )
+}
+
+///|
 pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
   self : ZaiCodingPlanProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
   match zai_coding_plan_build_config(source) {
     Some(config) => {
-      let identity = @zai.ZaiCatalogIdentity::ZaiCatalogIdentity(
-        provider_id="zai-coding-plan",
-        label_prefix="Z.ai Coding Plan",
-        manifest_id="posoco_ext_zai_coding_plan",
-        endpoint_for_credential=None,
-      )
+      let identity = zai_coding_plan_catalog_identity()
       let api_key_impl = ZaiCodingPlanProvider(ctx=self.ctx)
       let api_key : &@llm.ApiKeyFactory = api_key_impl
       // Pull-style quota: publish the monitor probe under the provider id so
@@ -118,10 +125,30 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
         }
         None => ()
       }
+      // Offline expansion from the host's cached discovery records, exactly
+      // like the direct-API provider: a refreshed id list survives restarts.
+      // A cache with no supported ids left falls back to the preset catalog.
+      let catalog = match @zai.parse_cached_zai_models(source.cached_models) {
+        Some(ids) =>
+          @zai.zai_model_catalog_from_ids(
+            ids,
+            config,
+            self.ctx,
+            identity,
+            api_key,
+            capabilities=["chat", "streaming", "api_key", "coding_plan"],
+          )
+        None =>
+          @zai.zai_model_catalog(
+            config,
+            self.ctx,
+            identity,
+            api_key,
+            capabilities=["chat", "streaming", "api_key", "coding_plan"],
+          )
+      }
       @llm.ProviderBuildResult::Ready(
-        @zai.zai_model_catalog(config, self.ctx, identity, api_key, capabilities=[
-          "chat", "streaming", "api_key", "coding_plan",
-        ]).with_cached_context_windows(source.cached_models),
+        catalog.with_cached_context_windows(source.cached_models),
       )
     }
     None => @llm.ProviderBuildResult::Unconfigured
@@ -262,4 +289,50 @@ pub impl @llm.ApiKeyFactory for ZaiCodingPlanProvider with fn login(
     )
   }
   @oauth.ApiKeyCredential::ApiKeyCredential(secret~)
+}
+
+///|
+pub impl @llm.RefreshableProviderFactory for ZaiCodingPlanProvider with fn provider_id(
+  _self : ZaiCodingPlanProvider,
+) -> String {
+  "zai-coding-plan"
+}
+
+///|
+pub extend ZaiCodingPlanProvider with @llm.RefreshableProviderFactory::{refresh}
+
+///|
+/// Explicit live model discovery for the plan: exactly one authenticated
+/// `/models` request against the profile's platform endpoint. Like the
+/// direct-API provider, this path fails composition on transport or schema
+/// errors; it never falls back to the preset catalog.
+pub impl @llm.RefreshableProviderFactory for ZaiCodingPlanProvider with fn refresh(
+  self : ZaiCodingPlanProvider,
+  source : @llm.ProviderConfigSource,
+) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
+  match zai_coding_plan_build_config(source) {
+    Some(config) => {
+      let ids = @zai.fetch_zai_models(config.base_url, config.api_key) catch {
+        err =>
+          raise @posoco.CompositionError::ManifestSchemaError(
+            manifest_id="posoco_ext_zai_coding_plan",
+            detail="zai-coding-plan model catalog refresh failed: " +
+            err.to_string(),
+          )
+      }
+      let api_key_impl = ZaiCodingPlanProvider(ctx=self.ctx)
+      let api_key : &@llm.ApiKeyFactory = api_key_impl
+      @llm.ProviderBuildResult::Ready(
+        @zai.zai_model_catalog_from_ids(
+          ids,
+          config,
+          self.ctx,
+          zai_coding_plan_catalog_identity(),
+          api_key,
+          capabilities=["chat", "streaming", "api_key", "coding_plan"],
+        ),
+      )
+    }
+    None => @llm.ProviderBuildResult::Unconfigured
+  }
 }

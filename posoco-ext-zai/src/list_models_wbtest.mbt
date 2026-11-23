@@ -24,9 +24,48 @@ test "parse: OpenAI list envelope, extra fields ignored, duplicates dropped" {
   debug_inspect(
     ids,
     content=(
-      #|["glm-5.3", "glm-4.6v"]
+      #|["glm-5.3"]
     ),
   )
+}
+
+///|
+test "generation gate keeps GLM 5.3+ and drops legacy or foreign ids" {
+  for kept in [
+      "glm-5.3", "glm-5.3-flash", "glm-5.3-air", "glm-5.4", "glm-5.4-flash",
+      "glm-5.4-turbo", "glm-5.5", "glm-6", "glm-6.1-vision", ] {
+    assert_true(zai_supported_model_id(kept))
+  }
+  for dropped in [
+      "glm-5.2", "glm-5.2-turbo", "glm-4.6", "glm-4.5v", "glm-4v",
+      "embedding-3", "charglm-4", "glm-air", "glm5.4", "glm-", "GLM-5.4", "", ] {
+    assert_false(zai_supported_model_id(dropped))
+  }
+}
+
+///|
+test "parse: a legacy-only live response is a typed failure" {
+  try
+    parse_zai_models(
+      zai_models_json(
+        (
+          #|{
+          #|  "object": "list",
+          #|  "data": [
+          #|    { "id": "glm-5.2" },
+          #|    { "id": "glm-4.6" }
+          #|  ]
+          #|}
+        ),
+      ),
+    )
+  catch {
+    @posoco.ModelError::ResponseParse(detail) =>
+      assert_true(detail.contains("no supported models"))
+    _ => fail("expected ResponseParse")
+  } noraise {
+    _ => fail("expected failure")
+  }
 }
 
 ///|
@@ -101,6 +140,25 @@ test "cached records expand to ids; malformed shapes degrade to None" {
   debug_inspect(parse_cached_zai_models(Some(Json::array([]))), content="None")
   debug_inspect(
     parse_cached_zai_models(Some(zai_models_json("[{\"model_id\":\"\"}]"))),
+    content="None",
+  )
+}
+
+///|
+test "cached records holding only legacy ids degrade to None" {
+  debug_inspect(
+    parse_cached_zai_models(
+      Some(
+        zai_models_json(
+          (
+            #|[
+            #|  { "model_id": "glm-5.2" },
+            #|  { "model_id": "glm-4.6" }
+            #|]
+          ),
+        ),
+      ),
+    ),
     content="None",
   )
 }
@@ -229,7 +287,7 @@ test "factory build expands the catalog from cached model records" {
   debug_inspect(
     ids,
     content=(
-      #|["glm-5.3", "glm-5.2", "glm-5.3-air"]
+      #|["glm-5.3", "glm-5.3-air"]
     ),
   )
 }

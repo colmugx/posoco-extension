@@ -15,6 +15,19 @@ fn zai_models_url(base_url : String, endpoint_prefix : String) -> String {
 }
 
 ///|
+/// Keep only ids inside the supported generation set (GLM 5.3+, see
+/// `zai_supported_model_id`), preserving the response order.
+fn zai_filter_supported_models(ids : Array[String]) -> Array[String] {
+  let kept : Array[String] = []
+  for id in ids {
+    if zai_supported_model_id(id) {
+      kept.push(id)
+    }
+  }
+  kept
+}
+
+///|
 /// Both platforms follow the OpenAI list envelope (`{"object": "list",
 /// "data": [...]}`), but their model records carry platform-specific extra
 /// fields. Parsing is therefore tolerant: `data` with non-empty string `id`s
@@ -23,7 +36,8 @@ fn zai_models_url(base_url : String, endpoint_prefix : String) -> String {
 /// field read from the response.
 ///
 /// Parse a z.ai /models response without performing I/O. Duplicate ids keep
-/// their first occurrence; an empty or shapeless list is a typed parse error
+/// their first occurrence; ids below the supported generation floor are
+/// dropped, and a list with nothing left standing is a typed parse error
 /// (an empty catalog is never silently announced).
 pub fn parse_zai_models(
   payload : Json,
@@ -83,7 +97,13 @@ pub fn parse_zai_models(
       "zai models response contains no models",
     )
   }
-  ids
+  let supported = zai_filter_supported_models(ids)
+  if supported.is_empty() {
+    raise @posoco.ModelError::ResponseParse(
+      "zai models response contains no supported models (GLM 5.3+ only)",
+    )
+  }
+  supported
 }
 
 ///|
@@ -91,8 +111,10 @@ pub fn parse_zai_models(
 /// projection) for offline catalog expansion. Only `model_id` is consumed:
 /// reasoning profiles are a deterministic provider policy, so a catalog
 /// rebuilt from cached ids is identical to the live-refresh catalog for those
-/// ids. Malformed shapes degrade to `None` (the preset catalog stands) and
-/// never fail composition — the cache is derived, re-derivable data.
+/// ids. Legacy ids surviving in an older cache are dropped by the same
+/// generation gate as live discovery. Malformed shapes degrade to `None`
+/// (the preset catalog stands) and never fail composition — the cache is
+/// derived, re-derivable data.
 pub fn parse_cached_zai_models(records : Json?) -> Array[String]? {
   let items = match records {
     Some(Json::Array(items)) if items.length() > 0 => items
@@ -112,7 +134,11 @@ pub fn parse_cached_zai_models(records : Json?) -> Array[String]? {
       ids.push(id)
     }
   }
-  Some(ids)
+  let supported = zai_filter_supported_models(ids)
+  if supported.is_empty() {
+    return None
+  }
+  Some(supported)
 }
 
 ///|

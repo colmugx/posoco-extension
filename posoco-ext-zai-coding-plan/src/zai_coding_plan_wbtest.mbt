@@ -289,3 +289,61 @@ test "factory: coding-plan vision slot declares image_in (same capability as dir
     )
   }
 }
+
+///|
+test "factory: build expands the catalog from cached model records" {
+  let provider = ZaiCodingPlanProvider()
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(Json::object({ "api_key": Json::string("k") })),
+    cached_models=Some(
+      Json::array([
+        Json::object({ "model_id": Json::string("glm-5.4") }),
+        Json::object({ "model_id": Json::string("glm-5.3") }),
+        Json::object({ "model_id": Json::string("glm-4.6") }),
+      ]),
+    ),
+  )
+  let result = @llm.ProviderFactory::build(provider, source)
+  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  let ids : Array[String] = []
+  for slot in catalog.slots() {
+    ids.push(slot.model_id)
+  }
+  debug_inspect(
+    ids,
+    content=(
+      #|["glm-5.3", "glm-5.4"]
+    ),
+  )
+  assert_true(catalog.capabilities.contains("coding_plan"))
+  assert_eq(catalog.slots()[1].id, "zai-coding-plan/glm-5.4")
+  assert_false(catalog.slots()[0].capabilities.contains("image_in"))
+  assert_true(catalog.slots()[1].capabilities.contains("image_in"))
+}
+
+///|
+test "factory: a cache holding only legacy ids falls back to the preset catalog" {
+  let provider = ZaiCodingPlanProvider()
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(Json::object({ "api_key": Json::string("k") })),
+    cached_models=Some(
+      Json::array([Json::object({ "model_id": Json::string("glm-4.6") })]),
+    ),
+  )
+  guard @llm.ProviderFactory::build(provider, source)
+    is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  inspect(catalog.slots().length(), content="2")
+}
+
+///|
+async test "refresh: unconfigured without a key stays Unconfigured" {
+  let result = @llm.RefreshableProviderFactory::refresh(
+    ZaiCodingPlanProvider(),
+    zcp_settings([]),
+  )
+  inspect(result is @llm.ProviderBuildResult::Unconfigured, content="true")
+}

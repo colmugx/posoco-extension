@@ -479,6 +479,7 @@ test "encode: non-vision model downgrades images and tool attachments" {
 ///|
 test "supports_images: only documented vision models, never guessed" {
   assert_true(zai_supports_images("glm-5.3-flash"))
+  assert_true(zai_supports_images("glm-5.4"))
   assert_false(zai_supports_images("glm-5.3"))
   // Undocumented/unknown ids stay conservative even when the name looks
   // vision-capable — image input is declared, not inferred.

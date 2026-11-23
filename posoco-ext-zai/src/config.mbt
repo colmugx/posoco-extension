@@ -21,10 +21,51 @@ fn zai_preset_models() -> Array[String] {
 }
 
 ///|
+/// Generation gate for discovered model ids: the supported set is GLM 5.3
+/// and above. GLM 5.2 redesigned reasoning and settings, so older ids would
+/// need legacy wire handling this extension deliberately does not carry. An
+/// id qualifies when it parses as `glm-<major>[.<minor>]...` with
+/// major.minor >= 5.3 (a bare major takes minor 0, so a future `glm-6`
+/// passes while `glm-4`-style ids stay out); non-glm ids, unparseable ids,
+/// and uppercase spellings (the platforms serve lowercase ids) fail closed.
+fn zai_supported_model_id(id : String) -> Bool {
+  let prefix = "glm-"
+  if !id.has_prefix(prefix) || id.length() <= prefix.length() {
+    return false
+  }
+  let zero = '0'.to_int()
+  let mut i = prefix.length()
+  let mut major = 0
+  let mut saw_digit = false
+  while i < id.length() && id[i] >= '0' && id[i] <= '9' {
+    major = major * 10 + id[i].to_int() - zero
+    saw_digit = true
+    i += 1
+  }
+  if !saw_digit {
+    return false
+  }
+  let mut minor = 0
+  if i < id.length() && id[i] == '.' {
+    i += 1
+    let mut saw_minor = false
+    while i < id.length() && id[i] >= '0' && id[i] <= '9' {
+      minor = minor * 10 + id[i].to_int() - zero
+      saw_minor = true
+      i += 1
+    }
+    if !saw_minor {
+      return false
+    }
+  }
+  major > 5 || (major == 5 && minor >= 3)
+}
+
+///|
 /// Image-input capability per documented model id; the only per-model fact
 /// this extension keeps.
 fn zai_supports_images(model : String) -> Bool {
-  model == "glm-5.3-flash"
+  model == "glm-5.3-flash" || model == "glm-5.4"
 }
 
 ///|
