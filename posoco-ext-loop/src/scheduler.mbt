@@ -311,14 +311,14 @@ fn LoopRuntime::start(
       loop_fold_request(ctx, state, query, effects)
     },
   )
-  let address = actor.address()
+  let ticker_actor = actor
   // One bounded supervised ticker. Unlike a timer per edited job, repeated
   // pause/resume cannot accumulate arbitrarily many sleeping tasks.
   let ticker = supervisor.spawn(
     async fn() {
       while true {
         sleep_ms(250)
-        let _ = address.tell(Tick(now_ms=now_ms()))
+        let _ = ticker_actor.tell(Tick(now_ms=now_ms()))
       }
     },
     label="loop-ticker",
