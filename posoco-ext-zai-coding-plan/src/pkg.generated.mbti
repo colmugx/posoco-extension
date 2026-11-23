@@ -94,8 +94,10 @@ pub fn ZaiCodingPlanProvider::credential_id(Self) -> String
 pub async fn ZaiCodingPlanProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn ZaiCodingPlanProvider::provider_id(Self) -> String
 pub fn ZaiCodingPlanProvider::quota_source(Self, @posoco-kit-provider.ProviderConfigSource) -> ZaiCodingPlanQuotaSource? raise @error.CompositionError
+pub async fn ZaiCodingPlanProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-kit-provider.ApiKeyFactory for ZaiCodingPlanProvider
 pub impl @posoco-kit-provider.ProviderFactory for ZaiCodingPlanProvider
+pub impl @posoco-kit-provider.RefreshableProviderFactory for ZaiCodingPlanProvider
 
 pub(all) struct ZaiCodingPlanQuotaSource {
   base_url : String

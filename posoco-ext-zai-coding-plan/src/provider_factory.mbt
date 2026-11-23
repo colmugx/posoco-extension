@@ -93,6 +93,7 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn credential_id(
 /// The Coding Plan has no OAuth — plan keys are created in the coding-plan
 /// console and travel as `Authorization: Bearer`. An OAuth credential is a
 /// typed composition failure, not a silent downgrade.
+
 ///|
 /// Catalog identity shared by the static build and the live refresh.
 fn zai_coding_plan_catalog_identity() -> @zai.ZaiCatalogIdentity {
@@ -139,13 +140,9 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
             capabilities=["chat", "streaming", "api_key", "coding_plan"],
           )
         None =>
-          @zai.zai_model_catalog(
-            config,
-            self.ctx,
-            identity,
-            api_key,
-            capabilities=["chat", "streaming", "api_key", "coding_plan"],
-          )
+          @zai.zai_model_catalog(config, self.ctx, identity, api_key, capabilities=[
+            "chat", "streaming", "api_key", "coding_plan",
+          ])
       }
       @llm.ProviderBuildResult::Ready(
         catalog.with_cached_context_windows(source.cached_models),
@@ -317,7 +314,7 @@ pub impl @llm.RefreshableProviderFactory for ZaiCodingPlanProvider with fn refre
           raise @posoco.CompositionError::ManifestSchemaError(
             manifest_id="posoco_ext_zai_coding_plan",
             detail="zai-coding-plan model catalog refresh failed: " +
-            err.to_string(),
+              err.to_string(),
           )
       }
       let api_key_impl = ZaiCodingPlanProvider(ctx=self.ctx)

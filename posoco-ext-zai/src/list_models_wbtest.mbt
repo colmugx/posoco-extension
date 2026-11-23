@@ -31,14 +31,18 @@ test "parse: OpenAI list envelope, extra fields ignored, duplicates dropped" {
 
 ///|
 test "generation gate keeps GLM 5.3+ and drops legacy or foreign ids" {
-  for kept in [
-      "glm-5.3", "glm-5.3-flash", "glm-5.3-air", "glm-5.4", "glm-5.4-flash",
-      "glm-5.4-turbo", "glm-5.5", "glm-6", "glm-6.1-vision", ] {
+  for
+    kept in [
+      "glm-5.3", "glm-5.3-flash", "glm-5.3-air", "glm-5.4", "glm-5.4-flash", "glm-5.4-turbo",
+      "glm-5.5", "glm-6", "glm-6.1-vision",
+    ] {
     assert_true(zai_supported_model_id(kept))
   }
-  for dropped in [
-      "glm-5.2", "glm-5.2-turbo", "glm-4.6", "glm-4.5v", "glm-4v",
-      "embedding-3", "charglm-4", "glm-air", "glm5.4", "glm-", "GLM-5.4", "", ] {
+  for
+    dropped in [
+      "glm-5.2", "glm-5.2-turbo", "glm-4.6", "glm-4.5v", "glm-4v", "embedding-3",
+      "charglm-4", "glm-air", "glm5.4", "glm-", "GLM-5.4", "",
+    ] {
     assert_false(zai_supported_model_id(dropped))
   }
 }
