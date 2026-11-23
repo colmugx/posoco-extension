@@ -59,7 +59,7 @@ async test "pause resume stop invalidate schedule without lost ticks" {
       max_failures=3,
       bound_session=Some("s1"),
     )
-    let id = runtime.change(Add("s1", 1000L, "task")).unwrap()
+    let id = runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap()
     assert_true(runtime.change(Pause(id~)) is Ok(_))
     now.val = 2000L
     runtime.poll()
@@ -93,7 +93,7 @@ async test "inactive sessions are dormant and never receive other session work" 
       max_failures=3,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add("s1", 1000L, "task")).unwrap())
+    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
     runtime.bind(Some("s2"))
     now.val = 2000L
     runtime.poll()
@@ -127,7 +127,7 @@ async test "Busy is retried without consuming failure budget" {
       max_failures=3,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add("s1", 1000L, "task")).unwrap())
+    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
     now.val = 1000L
     runtime.poll()
     @async.with_timeout(2000, () => {
@@ -165,7 +165,7 @@ async test "repeated errors pause the loop at the configured threshold" {
       max_failures=2,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add("s1", 1000L, "task")).unwrap())
+    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
     now.val = 1000L
     runtime.poll()
     @async.with_timeout(2000, () => {
