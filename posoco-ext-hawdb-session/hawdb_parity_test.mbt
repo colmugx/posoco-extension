@@ -17,9 +17,7 @@ async test "hawdb: list, summary and rename preserve session data" {
     Ok(value) => value
     Err(reason) => fail("open: " + reason)
   }
-  let missing = store.list_ids() catch {
-    error => fail("list empty: \{error}")
-  }
+  let missing = store.list_ids() catch { error => fail("list empty: \{error}") }
   assert_true(missing.is_empty())
   let alpha = @posoco.Message::UserMessage(content=[
     @posoco.Content::Text("first message"),
@@ -34,11 +32,12 @@ async test "hawdb: list, summary and rename preserve session data" {
         "effort": Json::string("high"),
       }),
     },
-  }) catch { error => fail("save b: \{error}") }
-  store.save("a-session", {
-    messages: [],
-    metadata: Map([]),
-  }) catch { error => fail("save a: \{error}") }
+  }) catch {
+    error => fail("save b: \{error}")
+  }
+  store.save("a-session", { messages: [], metadata: Map([]), }) catch {
+    error => fail("save a: \{error}")
+  }
   let ids = store.list_ids() catch { error => fail("list: \{error}") }
   assert_eq(ids.length(), 2)
   assert_eq(ids[0], "a-session")
@@ -64,7 +63,9 @@ async test "hawdb: list, summary and rename preserve session data" {
   }
   assert_eq(after.messages.length(), 1)
   assert_true(after.messages[0] == alpha)
-  assert_true(after.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  assert_true(
+    after.metadata.get("cetas.cwd") == Some(Json::string("/work/project")),
+  )
   assert_true(store.current_id == Some("b-session"))
   store.close()
 }
@@ -128,9 +129,10 @@ async test "hawdb: name command edits active session metadata" {
   store.save("command", { messages: [], metadata: Map([]), }) catch {
     error => fail("save: \{error}")
   }
-  let result = store.invoke("name", Json::object({
-    "value": Json::string("Renamed"),
-  }))
+  let result = store.invoke(
+    "name",
+    Json::object({ "value": Json::string("Renamed") }),
+  )
   match result {
     @posoco.CommandOutcome::Success(..) => ()
     _ => fail("rename command did not succeed")
@@ -183,9 +185,8 @@ async test "hawdb: truncate missing session creates an empty session" {
 
 ///|
 async test "hawdb: project directory is recorded on first append and save" {
-  let store = match HawdbSessionStore::open_in_memory(
-    cwd=Some("/work/project/"),
-  ) {
+  let store = match
+    HawdbSessionStore::open_in_memory(cwd=Some("/work/project/")) {
     Ok(value) => value
     Err(error) => fail("open: " + error)
   }
@@ -196,16 +197,50 @@ async test "hawdb: project directory is recorded on first append and save" {
     error => fail("append: \{error}")
   }
   let first = store.load("new") catch { error => fail("load: \{error}") }
-  assert_true(first.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  assert_true(
+    first.metadata.get("cetas.cwd") == Some(Json::string("/work/project")),
+  )
   store.save("saved", { messages: [], metadata: Map([]), }) catch {
     error => fail("save: \{error}")
   }
   let second = store.load("saved") catch { error => fail("load: \{error}") }
-  assert_true(second.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  assert_true(
+    second.metadata.get("cetas.cwd") == Some(Json::string("/work/project")),
+  )
   store.set_session_name("named", "name") catch {
     error => fail("name: \{error}")
   }
   let third = store.load("named") catch { error => fail("load: \{error}") }
-  assert_true(third.metadata.get("cetas.cwd") == Some(Json::string("/work/project")))
+  assert_true(
+    third.metadata.get("cetas.cwd") == Some(Json::string("/work/project")),
+  )
   store.close()
+}
+
+///|
+async test "hawdb: shared handle keeps workspace and command ownership separate" {
+  let store = match HawdbSessionStore::open_in_memory() {
+    Ok(value) => value
+    Err(reason) => fail("open: " + reason)
+  }
+  defer store.close()
+  let first = store.for_session("/work/first/", "first")
+  let second = store.for_session("/work/second", "second")
+  let empty : @posoco.Session = { messages: [], metadata: Map([]) }
+  second.save("second", empty)
+  first.save("fork", empty)
+  guard first.invoke("name", Json::string("First")) is @posoco.CommandOutcome::Success(..) else {
+    fail("could not name the first session")
+  }
+  assert_eq(store.summary("first").name, Some("First"))
+  assert_eq(store.summary("first").cwd, Some("/work/first"))
+  assert_eq(store.summary("fork").name, None)
+  assert_eq(store.summary("second").cwd, Some("/work/second"))
+  try first.save("second", empty) catch {
+    @posoco.SessionError::Save(reason) => assert_true(reason.contains("another workspace"))
+    error => fail("expected Save error: \{error}")
+  } noraise {
+    _ => fail("wrong workspace overwrote an existing session")
+  }
+  assert_eq(store.summaries().length(), 3)
 }

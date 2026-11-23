@@ -41,7 +41,11 @@ fn session_title_text(input : String) -> String? {
     }
   }
   let value = output.to_string()
-  if value.is_empty() { None } else { Some(value) }
+  if value.is_empty() {
+    None
+  } else {
+    Some(value)
+  }
 }
 
 ///|
@@ -61,7 +65,8 @@ pub fn HawdbSessionStore::list_ids(
   self : HawdbSessionStore,
 ) -> Array[String] raise @posoco.SessionError {
   let result = self.db.query_sql(
-    "SELECT id FROM posoco_hawdb_sessions ORDER BY id", [],
+    "SELECT id FROM posoco_hawdb_sessions ORDER BY id",
+    [],
   )
   match result {
     Ok(rows) => {
@@ -83,27 +88,82 @@ pub fn HawdbSessionStore::list_ids(
 }
 
 ///|
-pub async fn HawdbSessionStore::summary(
-  self : HawdbSessionStore,
+fn hawdb_summary(
   id : String,
-) -> HawdbSessionSummary raise @posoco.SessionError {
-  let session = self.load(id)
-  let title = match nonempty_text(session.metadata.get(@posoco.SESSION_TITLE_METADATA_KEY)) {
+  metadata : Map[String, Json],
+) -> HawdbSessionSummary {
+  let title = match
+    nonempty_text(metadata.get(@posoco.SESSION_TITLE_METADATA_KEY)) {
     Some(text) => session_title_text(text)
     None => None
   }
-  let (model, effort) = match session.metadata.get("posoco.model_selection") {
+  let (model, effort) = match metadata.get("posoco.model_selection") {
     Some(Json::Object(fields)) =>
-      (nonempty_text(fields.get("slot_id")), nonempty_text(fields.get("effort")))
+      (
+        nonempty_text(fields.get("slot_id")),
+        nonempty_text(fields.get("effort")),
+      )
     _ => (None, None)
   }
   {
     id,
-    name: nonempty_text(session.metadata.get("name")),
+    name: nonempty_text(metadata.get("name")),
     title,
     model,
     effort,
-    cwd: nonempty_text(session.metadata.get("cetas.cwd")),
+    cwd: nonempty_text(metadata.get("cetas.cwd")),
+  }
+}
+
+///|
+pub fn HawdbSessionStore::summary(
+  self : HawdbSessionStore,
+  id : String,
+) -> HawdbSessionSummary raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Load(reason)
+  }
+  let result = self.db.with_read_transaction(fn(tx) {
+    match read_session_head(tx, id) {
+      Ok(Some((_, metadata, _))) => Ok(hawdb_summary(id, metadata))
+      Ok(None) => Ok(hawdb_summary(id, Map([])))
+      Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
+    }
+  })
+  match result {
+    Ok(summary) => summary
+    Err(error) => raise @posoco.SessionError::Load(error.describe())
+  }
+}
+
+///|
+pub fn HawdbSessionStore::summaries(
+  self : HawdbSessionStore,
+) -> Array[HawdbSessionSummary] raise @posoco.SessionError {
+  match
+    self.db.query_sql(
+      "SELECT id, metadata FROM posoco_hawdb_sessions ORDER BY id DESC",
+      [],
+    ) {
+    Ok(rows) => {
+      let summaries : Array[HawdbSessionSummary] = []
+      for i in 0..<rows.rows.length() {
+        match (rows.get(i, "id"), rows.get(i, "metadata")) {
+          (Some(@hawdb.Value::Text(id)), Some(@hawdb.Value::Text(document))) =>
+            match
+              (HawdbSessionStore::check_id(id), hawdb_decode_metadata(document)) {
+              (Ok(_), Ok(metadata)) =>
+                summaries.push(hawdb_summary(id, metadata))
+              (Err(reason), _) | (_, Err(reason)) =>
+                raise @posoco.SessionError::Load(reason)
+            }
+          _ => raise @posoco.SessionError::Load("invalid session catalog row")
+        }
+      }
+      summaries
+    }
+    Err(error) => raise @posoco.SessionError::Load(error.describe())
   }
 }
 
@@ -125,6 +185,10 @@ pub fn HawdbSessionStore::set_session_name(
     let (length, metadata, revision) = match head {
       Some(value) => value
       None => (0L, Map([]), 0L)
+    }
+    match check_session_cwd(metadata, self.cwd) {
+      Ok(_) => ()
+      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
     }
     if revision == 9223372036854775807L {
       return Err(@hawdb.HawdbError::Codec("session revision overflow"))

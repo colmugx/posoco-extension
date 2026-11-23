@@ -56,13 +56,15 @@ pub impl @posoco.CommandPort for HawdbSessionStore with fn invoke(
 ) -> @posoco.CommandOutcome {
   match id {
     "name" =>
-      match self.current_id {
-        None => @posoco.CommandOutcome::Failure(
-          reason="no active session in this store to rename",
-        )
-        Some(target) =>
+      match (self.command_session_id, self.current_id) {
+        (None, None) =>
+          @posoco.CommandOutcome::Failure(
+            reason="no active session in this store to rename",
+          )
+        (Some(target), _) | (None, Some(target)) =>
           match hawdb_name_arg(args) {
-            None => @posoco.CommandOutcome::Failure(reason="usage: /name <title>")
+            None =>
+              @posoco.CommandOutcome::Failure(reason="usage: /name <title>")
             Some(name) =>
               if name.trim(chars=" \t").length() == 0 {
                 @posoco.CommandOutcome::Failure(
@@ -75,14 +77,16 @@ pub impl @posoco.CommandPort for HawdbSessionStore with fn invoke(
                   error => Err(error)
                 }
                 match renamed {
-                  Ok(_) => @posoco.CommandOutcome::Success(
-                    feedback="Session renamed to \"\{name}\"",
-                    structured=None,
-                    ui_hint=Some(@posoco.UiHint::None),
-                  )
-                  Err(error) => @posoco.CommandOutcome::Failure(
-                    reason="rename failed: \{error}",
-                  )
+                  Ok(_) =>
+                    @posoco.CommandOutcome::Success(
+                      feedback="Session renamed to \"\{name}\"",
+                      structured=None,
+                      ui_hint=Some(@posoco.UiHint::None),
+                    )
+                  Err(error) =>
+                    @posoco.CommandOutcome::Failure(
+                      reason="rename failed: \{error}",
+                    )
                 }
               }
           }

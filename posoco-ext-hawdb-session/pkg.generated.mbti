@@ -1,0 +1,60 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-hawdb-session"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/json",
+  "nowledge-co/hawdb",
+}
+
+// Values
+pub fn hawdb_display_title(HawdbSessionSummary) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct HawdbSessionStore {
+  db : @hawdb.Database
+  mut current_id : String?
+  command_session_id : String?
+  cwd : String?
+}
+pub async fn HawdbSessionStore::append_messages(Self, String, Int32, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
+pub fn HawdbSessionStore::check_id(String) -> Result[Unit, String]
+pub async fn HawdbSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
+pub fn HawdbSessionStore::checkpoint_guarded(Self, String, Int64, String, @port.SessionCheckpoint) -> Int64 raise @error.SessionError
+pub fn HawdbSessionStore::close(Self) -> Unit
+pub fn HawdbSessionStore::commands(Self) -> Array[@port.CommandDef]
+pub fn HawdbSessionStore::extension_id(Self) -> String
+pub fn HawdbSessionStore::for_session(Self, String, String) -> Self
+pub async fn HawdbSessionStore::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn HawdbSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
+pub async fn HawdbSessionStore::load(Self, String) -> @types.Session raise @error.SessionError
+pub fn HawdbSessionStore::manifest(Self) -> @port.ExtensionManifest
+pub fn HawdbSessionStore::open(String, cwd? : String?) -> Result[Self, String]
+pub fn HawdbSessionStore::open_in_memory(cwd? : String?) -> Result[Self, String]
+pub fn HawdbSessionStore::revision(Self, String) -> Int64 raise @error.SessionError
+pub async fn HawdbSessionStore::save(Self, String, @types.Session) -> Unit raise @error.SessionError
+pub fn HawdbSessionStore::set_session_name(Self, String, String) -> Unit raise @error.SessionError
+pub fn HawdbSessionStore::summaries(Self) -> Array[HawdbSessionSummary] raise @error.SessionError
+pub fn HawdbSessionStore::summary(Self, String) -> HawdbSessionSummary raise @error.SessionError
+pub async fn HawdbSessionStore::truncate(Self, String, Int32) -> Unit raise @error.SessionError
+pub impl @port.CommandPort for HawdbSessionStore
+pub impl @port.Extension for HawdbSessionStore
+pub impl @port.SessionPort for HawdbSessionStore
+
+pub(all) struct HawdbSessionSummary {
+  id : String
+  name : String?
+  title : String?
+  model : String?
+  effort : String?
+  cwd : String?
+}
+
+// Type aliases
+
+// Traits

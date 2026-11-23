@@ -5,29 +5,35 @@ async test "hawdb: guarded checkpoint rejects stale revisions" {
     Err(error) => fail("open: " + error)
   }
   assert_true(store.revision("guard") == 0L)
-  let first = @posoco.Message::UserMessage(content=[@posoco.Content::Text("first")])
-  let second = @posoco.Message::UserMessage(content=[@posoco.Content::Text("second")])
+  let first = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("first"),
+  ])
+  let second = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("second"),
+  ])
   let committed = store.checkpoint_guarded("guard", 0L, "op-1", {
     from_index: 90,
     messages: [first],
-    metadata: Some({"name": Json::string("one")}),
-  }) catch { error => fail("initial guarded checkpoint: \{error}") }
+    metadata: Some({ "name": Json::string("one") }),
+  }) catch {
+    error => fail("initial guarded checkpoint: \{error}")
+  }
   assert_true(committed == 1L)
   assert_true(store.revision("guard") == 1L)
 
-  try store.checkpoint_guarded("guard", 0L, "op-2", {
-    from_index: 0,
-    messages: [second],
-    metadata: None,
-  }) catch {
+  try
+    store.checkpoint_guarded("guard", 0L, "op-2", {
+      from_index: 0,
+      messages: [second],
+      metadata: None,
+    })
+  catch {
     @posoco.SessionError::Save(_) => ()
     error => fail("expected stale revision error, got \{error}")
   } noraise {
     _ => fail("stale revision accepted")
   }
-  let after = store.load("guard") catch {
-    error => fail("load: \{error}")
-  }
+  let after = store.load("guard") catch { error => fail("load: \{error}") }
   assert_eq(after.messages.length(), 1)
   assert_true(after.messages[0] == first)
   assert_true(after.metadata.get("name") == Some(Json::string("one")))
@@ -40,11 +46,13 @@ async test "hawdb: guarded checkpoint retries are idempotent" {
     Ok(value) => value
     Err(error) => fail("open: " + error)
   }
-  let first = @posoco.Message::UserMessage(content=[@posoco.Content::Text("initial")])
+  let first = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("initial"),
+  ])
   let checkpoint : @posoco.SessionCheckpoint = {
     from_index: 4,
     messages: [first],
-    metadata: Some({"flag": Json::boolean(true)}),
+    metadata: Some({ "flag": Json::boolean(true) }),
   }
   let committed = store.checkpoint_guarded("retry", 0L, "request-a", checkpoint) catch {
     error => fail("checkpoint: \{error}")
@@ -61,8 +69,10 @@ async test "hawdb: guarded checkpoint retries are idempotent" {
 
   let altered : @posoco.SessionCheckpoint = {
     from_index: 4,
-    messages: [@posoco.Message::UserMessage(content=[@posoco.Content::Text("modified")])],
-    metadata: Some({"flag": Json::boolean(true)}),
+    messages: [
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("modified")]),
+    ],
+    metadata: Some({ "flag": Json::boolean(true) }),
   }
   try store.checkpoint_guarded("retry", 0L, "request-a", altered) catch {
     @posoco.SessionError::Save(_) => ()
@@ -80,8 +90,12 @@ async test "hawdb: revisions increase after save, truncate and append" {
     Ok(value) => value
     Err(error) => fail("open: " + error)
   }
-  let first = @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")])
-  let second = @posoco.Message::UserMessage(content=[@posoco.Content::Text("two")])
+  let first = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("one"),
+  ])
+  let second = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("two"),
+  ])
   store.save("revision", { messages: [first], metadata: Map([]), }) catch {
     error => fail("save: \{error}")
   }
@@ -98,7 +112,9 @@ async test "hawdb: revisions increase after save, truncate and append" {
     from_index: 1,
     messages: [second],
     metadata: None,
-  }) catch { error => fail("guarded: \{error}") }
+  }) catch {
+    error => fail("guarded: \{error}")
+  }
   assert_true(next == 4L)
   let result = store.load("revision") catch {
     error => fail("reload: \{error}")

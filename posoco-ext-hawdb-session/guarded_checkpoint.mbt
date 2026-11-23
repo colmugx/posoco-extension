@@ -2,9 +2,9 @@
 fn checkpoint_payload(checkpoint : @posoco.SessionCheckpoint) -> String {
   let data : Map[String, Json] = Map([])
   data["from_index"] = Json::number(checkpoint.from_index.to_double())
-  data["messages"] = Json::array(checkpoint.messages.map(fn(message) {
-    hawdb_message_json(message)
-  }))
+  data["messages"] = Json::array(
+    checkpoint.messages.map(fn(message) { hawdb_message_json(message) }),
+  )
   data["metadata"] = match checkpoint.metadata {
     Some(metadata) => Json::object(metadata)
     None => Json::null()
@@ -23,10 +23,11 @@ fn read_receipt(
   id : String,
   operation_id : String,
 ) -> Result[(Int64, String, Int64)?, String] {
-  let rows = match tx.query_sql(
-    "SELECT expected_revision, payload, resulting_revision FROM posoco_hawdb_operations WHERE entry_key = $1",
-    [@hawdb.Value::Text(receipt_key(id, operation_id))],
-  ) {
+  let rows = match
+    tx.query_sql(
+      "SELECT expected_revision, payload, resulting_revision FROM posoco_hawdb_operations WHERE entry_key = $1",
+      [@hawdb.Value::Text(receipt_key(id, operation_id))],
+    ) {
     Ok(value) => value
     Err(error) => return Err(error.describe())
   }
@@ -36,11 +37,12 @@ fn read_receipt(
   if rows.rows.length() != 1 {
     return Err("duplicate checkpoint receipt")
   }
-  match (
-    rows.get(0, "expected_revision"),
-    rows.get(0, "payload"),
-    rows.get(0, "resulting_revision"),
-  ) {
+  match
+    (
+      rows.get(0, "expected_revision"),
+      rows.get(0, "payload"),
+      rows.get(0, "resulting_revision"),
+    ) {
     (
       Some(@hawdb.Value::Int(expected)),
       Some(@hawdb.Value::Text(payload)),
@@ -120,12 +122,16 @@ fn apply_guarded_checkpoint(
       Err(reason) => return Err(reason)
     }
   }
-  let resulting_revision = if checkpoint.messages.is_empty() && checkpoint.metadata is None {
+  let resulting_revision = if checkpoint.messages.is_empty() &&
+    checkpoint.metadata is None {
     actual_revision
   } else {
     actual_revision + 1L
   }
-  match write_receipt(tx, id, operation_id, expected_revision, payload, resulting_revision) {
+  match
+    write_receipt(
+      tx, id, operation_id, expected_revision, payload, resulting_revision,
+    ) {
     Ok(_) => Ok(resulting_revision)
     Err(reason) => Err(reason)
   }
@@ -167,7 +173,15 @@ pub fn HawdbSessionStore::checkpoint_guarded(
     Err(reason) => raise @posoco.SessionError::Save(reason)
   }
   let result = self.db.with_transaction(fn(tx) {
-    match apply_guarded_checkpoint(tx, id, expected_revision, operation_id, checkpoint, self.cwd) {
+    match
+      apply_guarded_checkpoint(
+        tx,
+        id,
+        expected_revision,
+        operation_id,
+        checkpoint,
+        self.cwd,
+      ) {
       Ok(value) => Ok(value)
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }

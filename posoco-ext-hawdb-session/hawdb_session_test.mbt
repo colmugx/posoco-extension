@@ -19,35 +19,43 @@ async test "hawdb: independent native session lifecycle" {
     tool_calls=[],
     reasoning=Some(@posoco.Reasoning::{
       content: "thinking",
-      raw: Some(Json::object({"reasoning": Json::array([Json::string("raw")])})),
+      raw: Some(
+        Json::object({ "reasoning": Json::array([Json::string("raw")]) }),
+      ),
     }),
     finish_reason=@posoco.FinishReason::Other("stop"),
   )
   store.save("one", {
     messages: [first],
-    metadata: {"name": Json::string("initial")},
-  }) catch { error => fail("save: \{error}") }
+    metadata: { "name": Json::string("initial") },
+  }) catch {
+    error => fail("save: \{error}")
+  }
 
   store.checkpoint("one", {
     from_index: 99,
     messages: [second],
-    metadata: Some({"name": Json::string("updated")}),
-  }) catch { error => fail("checkpoint: \{error}") }
-  let actual = store.load("one") catch {
-    error => fail("load: \{error}")
+    metadata: Some({ "name": Json::string("updated") }),
+  }) catch {
+    error => fail("checkpoint: \{error}")
   }
+  let actual = store.load("one") catch { error => fail("load: \{error}") }
   assert_eq(actual.messages.length(), 2)
   assert_true(actual.messages[0] == first)
   assert_true(actual.messages[1] == second)
   assert_true(actual.metadata.get("name") == Some(Json::string("updated")))
 
-  store.truncate("one", 1) catch { error => fail("truncate: \{error}") }
+  store.truncate("one", 1) catch {
+    error => fail("truncate: \{error}")
+  }
   let shortened = store.load("one") catch {
     error => fail("load truncated: \{error}")
   }
   assert_eq(shortened.messages.length(), 1)
   assert_true(shortened.metadata.get("name") == Some(Json::string("updated")))
-  store.truncate("one", -2) catch { error => fail("truncate negative: \{error}") }
+  store.truncate("one", -2) catch {
+    error => fail("truncate negative: \{error}")
+  }
   let erased = store.load("one") catch {
     error => fail("load erased: \{error}")
   }
@@ -61,9 +69,15 @@ async test "hawdb: checkpoint inserts only new message rows" {
     Ok(value) => value
     Err(error) => fail("open: " + error)
   }
-  let first = @posoco.Message::UserMessage(content=[@posoco.Content::Text("first")])
-  let second = @posoco.Message::UserMessage(content=[@posoco.Content::Text("second")])
-  let third = @posoco.Message::UserMessage(content=[@posoco.Content::Text("third")])
+  let first = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("first"),
+  ])
+  let second = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("second"),
+  ])
+  let third = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("third"),
+  ])
   store.save("incremental", { messages: [first], metadata: Map([]), }) catch {
     error => fail("save: \{error}")
   }
@@ -71,11 +85,14 @@ async test "hawdb: checkpoint inserts only new message rows" {
     from_index: 100,
     messages: [second, third],
     metadata: None,
-  }) catch { error => fail("append: \{error}") }
-  let rows = match store.db.query_sql(
-    "SELECT seq, document FROM posoco_hawdb_messages WHERE id = $1 ORDER BY seq",
-    [@hawdb.Value::Text("incremental")],
-  ) {
+  }) catch {
+    error => fail("append: \{error}")
+  }
+  let rows = match
+    store.db.query_sql(
+      "SELECT seq, document FROM posoco_hawdb_messages WHERE id = $1 ORDER BY seq",
+      [@hawdb.Value::Text("incremental")],
+    ) {
     Ok(value) => value
     Err(error) => fail("read rows: \{error.describe()}")
   }
@@ -91,14 +108,18 @@ async test "hawdb: checkpoint inserts only new message rows" {
     _ => fail("missing first record")
   }
   assert_true(initial_record.contains("\"kind\":\"user\""))
-  let state = store.load("incremental") catch { error => fail("load: \{error}") }
+  let state = store.load("incremental") catch {
+    error => fail("load: \{error}")
+  }
   assert_eq(state.messages.length(), 3)
   assert_true(state.messages[1] == second)
   assert_true(state.messages[2] == third)
   store.save("incremental", {
     messages: [third],
-    metadata: {"replaced": Json::boolean(true)},
-  }) catch { error => fail("replace: \{error}") }
+    metadata: { "replaced": Json::boolean(true) },
+  }) catch {
+    error => fail("replace: \{error}")
+  }
   let replaced = store.load("incremental") catch {
     error => fail("load replaced: \{error}")
   }
@@ -110,14 +131,23 @@ async test "hawdb: checkpoint inserts only new message rows" {
 ///|
 async test "hawdb: typed tool outcomes round trip" {
   let variants : Array[@posoco.ToolOutcome] = [
-    @posoco.ToolOutcome::Success(content="ok", structured=Some(Json::object({"k": Json::number(1)}))),
+    @posoco.ToolOutcome::Success(
+      content="ok",
+      structured=Some(Json::object({ "k": Json::number(1) })),
+    ),
     @posoco.ToolOutcome::SuccessWithAttachments(
       content="attachment",
       structured=None,
       attachments=[@posoco.Content::Image(media_type="image/png", data="YQ==")],
     ),
-    @posoco.ToolOutcome::ToolReportedError(content="denied", structured=Some(Json::string("payload"))),
-    @posoco.ToolOutcome::RuntimeFailure(error_category="runtime", message="exception"),
+    @posoco.ToolOutcome::ToolReportedError(
+      content="denied",
+      structured=Some(Json::string("payload")),
+    ),
+    @posoco.ToolOutcome::RuntimeFailure(
+      error_category="runtime",
+      message="exception",
+    ),
     @posoco.ToolOutcome::NotExecuted(
       reason=@posoco.NotExecutedReason::SupersededByMessage,
       original_call_id=@posoco.CallId::unchecked("previous"),
@@ -136,9 +166,7 @@ async test "hawdb: typed tool outcomes round trip" {
     store.save("tool", { messages: [message], metadata: Map([]), }) catch {
       error => fail("save: \{error}")
     }
-    let restored = store.load("tool") catch {
-      error => fail("load: \{error}")
-    }
+    let restored = store.load("tool") catch { error => fail("load: \{error}") }
     assert_eq(restored.messages.length(), 1)
     assert_true(restored.messages[0] == message)
   }
@@ -151,14 +179,17 @@ async test "hawdb: native corruption fails closed" {
     Ok(value) => value
     Err(error) => fail("open: " + error)
   }
-  let message = @posoco.Message::UserMessage(content=[@posoco.Content::Text("keep")])
+  let message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("keep"),
+  ])
   store.save("bad", { messages: [message], metadata: Map([]), }) catch {
     error => fail("save: \{error}")
   }
-  match store.db.query_sql(
-    "UPDATE posoco_hawdb_messages SET document = $1 WHERE id = $2",
-    [@hawdb.Value::Text("{broken"), @hawdb.Value::Text("bad")],
-  ) {
+  match
+    store.db.query_sql(
+      "UPDATE posoco_hawdb_messages SET document = $1 WHERE id = $2",
+      [@hawdb.Value::Text("{broken"), @hawdb.Value::Text("bad")],
+    ) {
     Ok(_) => ()
     Err(error) => fail("corrupt fixture: \{error.describe()}")
   }
@@ -178,15 +209,20 @@ async test "hawdb: rollback does not publish partial session" {
     Err(error) => fail("open: " + error)
   }
   let before = @posoco.Session::{
-    messages: [@posoco.Message::UserMessage(content=[@posoco.Content::Text("before")])],
-    metadata: {"state": Json::string("committed")},
+    messages: [
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("before")]),
+    ],
+    metadata: { "state": Json::string("committed") },
   }
-  store.save("rollback", before) catch { error => fail("save: \{error}") }
-  let failed : Result[Unit, @hawdb.HawdbError] = store.db.with_transaction(fn(tx) {
-    let _ = tx.query_sql(
-      "DELETE FROM posoco_hawdb_messages WHERE id = $1",
-      [@hawdb.Value::Text("rollback")],
-    )
+  store.save("rollback", before) catch {
+    error => fail("save: \{error}")
+  }
+  let failed : Result[Unit, @hawdb.HawdbError] = store.db.with_transaction(fn(
+    tx,
+  ) {
+    let _ = tx.query_sql("DELETE FROM posoco_hawdb_messages WHERE id = $1", [
+      @hawdb.Value::Text("rollback"),
+    ])
     Err(@hawdb.HawdbError::Codec("rollback"))
   })
   match failed {
@@ -206,10 +242,14 @@ async test "hawdb: persisted session survives reopen" {
     Err(error) => fail("open: " + error)
   }
   let original = @posoco.Session::{
-    messages: [@posoco.Message::UserMessage(content=[@posoco.Content::Text("durable")])],
-    metadata: {"name": Json::string("reopen")},
+    messages: [
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("durable")]),
+    ],
+    metadata: { "name": Json::string("reopen") },
   }
-  store.save("durable", original) catch { error => fail("save: \{error}") }
+  store.save("durable", original) catch {
+    error => fail("save: \{error}")
+  }
   store.close()
   let reopened = match HawdbSessionStore::open(path) {
     Ok(value) => value

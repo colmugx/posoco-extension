@@ -9,6 +9,7 @@ fn catalog_text_is(value : @hawdb.Value?, expected : String) -> Bool {
   }
 }
 
+///|
 fn ensure_hawdb_table(
   db : @hawdb.Database,
   table : String,
@@ -16,10 +17,11 @@ fn ensure_hawdb_table(
   names : Array[String],
   types : Array[String],
 ) -> Result[Unit, String] {
-  let present = match db.query_sql(
-    "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
-    [@hawdb.Value::Text(table)],
-  ) {
+  let present = match
+    db.query_sql(
+      "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
+      [@hawdb.Value::Text(table)],
+    ) {
     Ok(rows) => rows
     Err(error) => return Err(error.describe())
   }
@@ -32,10 +34,11 @@ fn ensure_hawdb_table(
     !catalog_text_is(present.get(0, "table_type"), "BASE TABLE") {
     return Err("invalid HawDB session journal table: " + table)
   }
-  let cols = match db.query_sql(
-    "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position",
-    [@hawdb.Value::Text(table)],
-  ) {
+  let cols = match
+    db.query_sql(
+      "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position",
+      [@hawdb.Value::Text(table)],
+    ) {
     Ok(rows) => rows
     Err(error) => return Err(error.describe())
   }
@@ -48,10 +51,11 @@ fn ensure_hawdb_table(
       return Err("HawDB session journal schema drift: " + table)
     }
   }
-  let indexes = match db.query_sql(
-    "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1",
-    [@hawdb.Value::Text(table)],
-  ) {
+  let indexes = match
+    db.query_sql(
+      "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1",
+      [@hawdb.Value::Text(table)],
+    ) {
     Ok(rows) => rows
     Err(error) => return Err(error.describe())
   }
@@ -62,16 +66,16 @@ fn ensure_hawdb_table(
   Ok(())
 }
 
-
 ///|
 fn ensure_hawdb_schema(db : @hawdb.Database) -> Result[Unit, String] {
-  match ensure_hawdb_table(
-    db,
-    "posoco_hawdb_sessions",
-    "CREATE TABLE posoco_hawdb_sessions (id TEXT PRIMARY KEY, metadata TEXT, next_seq BIGINT, revision BIGINT)",
-    ["id", "metadata", "next_seq", "revision"],
-    ["text", "text", "bigint", "bigint"],
-  ) {
+  match
+    ensure_hawdb_table(
+      db,
+      "posoco_hawdb_sessions",
+      "CREATE TABLE posoco_hawdb_sessions (id TEXT PRIMARY KEY, metadata TEXT, next_seq BIGINT, revision BIGINT)",
+      ["id", "metadata", "next_seq", "revision"],
+      ["text", "text", "bigint", "bigint"],
+    ) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
@@ -99,6 +103,7 @@ fn ensure_hawdb_receipts(db : @hawdb.Database) -> Result[Unit, String] {
 pub(all) struct HawdbSessionStore {
   db : @hawdb.Database
   mut current_id : String?
+  command_session_id : String?
   cwd : String?
 }
 
@@ -112,7 +117,7 @@ fn finish_session_open(
     Err(reason) => Err(reason)
   }
   match schema {
-    Ok(_) => Ok({ db, current_id: None, cwd, })
+    Ok(_) => Ok({ db, current_id: None, command_session_id: None, cwd, })
     Err(reason) => {
       db.close()
       Err(reason)
@@ -138,6 +143,22 @@ pub fn HawdbSessionStore::open_in_memory(
   match @hawdb.open_in_memory() {
     Ok(db) => finish_session_open(db, cwd)
     Err(error) => Err(error.describe())
+  }
+}
+
+///|
+/// Bind a session's command context without reopening the database. Only the
+/// owner returned by `open` should close the shared handle.
+pub fn HawdbSessionStore::for_session(
+  self : HawdbSessionStore,
+  cwd : String,
+  session_id : String,
+) -> HawdbSessionStore {
+  {
+    db: self.db,
+    current_id: None,
+    command_session_id: Some(session_id),
+    cwd: Some(cwd),
   }
 }
 
@@ -174,15 +195,37 @@ fn hawdb_metadata_with_cwd(
     Some(value) if !value.is_empty() => value
     _ => return metadata
   }
-  let normalized = path.replace_all(old="\\", new="/")
-  let trimmed = normalized.trim_end(chars="/")
-  let recorded = if trimmed.is_empty() { "/" } else { trimmed.to_owned() }
+  let recorded = hawdb_normalize_cwd(path)
   if metadata.get("cetas.cwd") == Some(Json::string(recorded)) {
     return metadata
   }
   let updated = metadata.copy()
   updated["cetas.cwd"] = Json::string(recorded)
   updated
+}
+
+///|
+fn hawdb_normalize_cwd(cwd : String) -> String {
+  let normalized = cwd.replace_all(old="\\", new="/")
+  let trimmed = normalized.trim_end(chars="/")
+  if trimmed.is_empty() {
+    "/"
+  } else {
+    trimmed.to_owned()
+  }
+}
+
+///|
+fn check_session_cwd(
+  metadata : Map[String, Json],
+  cwd : String?,
+) -> Result[Unit, String] {
+  match (nonempty_text(metadata.get("cetas.cwd")), cwd) {
+    (Some(recorded), Some(requested)) if recorded !=
+      hawdb_normalize_cwd(requested) =>
+      Err("session belongs to another workspace: " + recorded)
+    _ => Ok(())
+  }
 }
 
 ///|
@@ -195,10 +238,11 @@ fn read_session_head(
   tx : @hawdb.Transaction,
   id : String,
 ) -> Result[(Int64, Map[String, Json], Int64)?, String] {
-  let rows = match tx.query_sql(
-    "SELECT next_seq, metadata, revision FROM posoco_hawdb_sessions WHERE id = $1",
-    [@hawdb.Value::Text(id)],
-  ) {
+  let rows = match
+    tx.query_sql(
+      "SELECT next_seq, metadata, revision FROM posoco_hawdb_sessions WHERE id = $1",
+      [@hawdb.Value::Text(id)],
+    ) {
     Ok(value) => value
     Err(error) => return Err(error.describe())
   }
@@ -208,7 +252,8 @@ fn read_session_head(
   if rows.rows.length() != 1 {
     return Err("duplicate session head")
   }
-  match (rows.get(0, "next_seq"), rows.get(0, "metadata"), rows.get(0, "revision")) {
+  match
+    (rows.get(0, "next_seq"), rows.get(0, "metadata"), rows.get(0, "revision")) {
     (
       Some(@hawdb.Value::Int(next_seq)),
       Some(@hawdb.Value::Text(data)),
@@ -226,15 +271,23 @@ fn read_session_head(
 fn read_session(
   tx : @hawdb.Transaction,
   id : String,
+  cwd : String?,
 ) -> Result[@posoco.Session, String] {
   let head = match read_session_head(tx, id) {
     Ok(value) => value
     Err(reason) => return Err(reason)
   }
-  let rows = match tx.query_sql(
-    "SELECT seq, document FROM posoco_hawdb_messages WHERE id = $1 ORDER BY seq",
-    [@hawdb.Value::Text(id)],
-  ) {
+  if head is Some((_, metadata, _)) {
+    match check_session_cwd(metadata, cwd) {
+      Ok(_) => ()
+      Err(reason) => return Err(reason)
+    }
+  }
+  let rows = match
+    tx.query_sql(
+      "SELECT seq, document FROM posoco_hawdb_messages WHERE id = $1 ORDER BY seq",
+      [@hawdb.Value::Text(id)],
+    ) {
     Ok(value) => value
     Err(error) => return Err(error.describe())
   }
@@ -253,7 +306,8 @@ fn read_session(
   let messages : Array[@posoco.Message] = []
   for i in 0..<rows.rows.length() {
     match (rows.get(i, "seq"), rows.get(i, "document")) {
-      (Some(@hawdb.Value::Int(seq)), Some(@hawdb.Value::Text(data))) if seq == i.to_int64() =>
+      (Some(@hawdb.Value::Int(seq)), Some(@hawdb.Value::Text(data))) if seq ==
+        i.to_int64() =>
         match hawdb_decode_message(data) {
           Ok(message) => messages.push(message)
           Err(reason) => return Err(reason)
@@ -265,21 +319,18 @@ fn read_session(
 }
 
 ///|
-fn clear_session(
-  tx : @hawdb.Transaction,
-  id : String,
-) -> Result[Unit, String] {
-  match tx.query_sql(
-    "DELETE FROM posoco_hawdb_messages WHERE id = $1",
-    [@hawdb.Value::Text(id)],
-  ) {
+fn clear_session(tx : @hawdb.Transaction, id : String) -> Result[Unit, String] {
+  match
+    tx.query_sql("DELETE FROM posoco_hawdb_messages WHERE id = $1", [
+      @hawdb.Value::Text(id),
+    ]) {
     Ok(_) => ()
     Err(error) => return Err(error.describe())
   }
-  match tx.query_sql(
-    "DELETE FROM posoco_hawdb_sessions WHERE id = $1",
-    [@hawdb.Value::Text(id)],
-  ) {
+  match
+    tx.query_sql("DELETE FROM posoco_hawdb_sessions WHERE id = $1", [
+      @hawdb.Value::Text(id),
+    ]) {
     Ok(_) => Ok(())
     Err(error) => Err(error.describe())
   }
@@ -331,15 +382,16 @@ fn insert_messages(
 ) -> Result[Unit, String] {
   let mut seq = from
   for message in messages {
-    match tx.query_sql(
-      "INSERT INTO posoco_hawdb_messages (entry_key, id, seq, document) VALUES ($1, $2, $3, $4)",
-      [
-        @hawdb.Value::Text(message_key(id, seq)),
-        @hawdb.Value::Text(id),
-        @hawdb.Value::Int(seq),
-        @hawdb.Value::Text(hawdb_encode_message(message)),
-      ],
-    ) {
+    match
+      tx.query_sql(
+        "INSERT INTO posoco_hawdb_messages (entry_key, id, seq, document) VALUES ($1, $2, $3, $4)",
+        [
+          @hawdb.Value::Text(message_key(id, seq)),
+          @hawdb.Value::Text(id),
+          @hawdb.Value::Int(seq),
+          @hawdb.Value::Text(hawdb_encode_message(message)),
+        ],
+      ) {
       Ok(_) => ()
       Err(error) => return Err(error.describe())
     }
@@ -353,9 +405,14 @@ fn write_session(
   tx : @hawdb.Transaction,
   id : String,
   session : @posoco.Session,
+  cwd : String?,
 ) -> Result[Unit, String] {
   let revision = match read_session_head(tx, id) {
-    Ok(Some((_, _, previous))) => {
+    Ok(Some((_, metadata, previous))) => {
+      match check_session_cwd(metadata, cwd) {
+        Ok(_) => ()
+        Err(reason) => return Err(reason)
+      }
       if previous == 9223372036854775807L {
         return Err("session revision overflow")
       }
@@ -368,7 +425,15 @@ fn write_session(
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
-  match write_head(tx, id, session.messages.length().to_int64(), session.metadata, revision, false) {
+  match
+    write_head(
+      tx,
+      id,
+      session.messages.length().to_int64(),
+      session.metadata,
+      revision,
+      false,
+    ) {
     Ok(_) => ()
     Err(reason) => return Err(reason)
   }
@@ -387,10 +452,17 @@ fn append_checkpoint(
     Ok(value) => value
     Err(reason) => return Err(reason)
   }
+  if head is Some((_, metadata, _)) {
+    match check_session_cwd(metadata, cwd) {
+      Ok(_) => ()
+      Err(reason) => return Err(reason)
+    }
+  }
   if checkpoint.messages.is_empty() && checkpoint.metadata is None {
     return match head {
       Some(_) => Ok(())
-      None => write_head(tx, id, 0L, hawdb_metadata_with_cwd(Map([]), cwd), 1L, false)
+      None =>
+        write_head(tx, id, 0L, hawdb_metadata_with_cwd(Map([]), cwd), 1L, false)
     }
   }
   let (start, previous_metadata, revision) = match head {
@@ -421,6 +493,7 @@ fn truncate_session(
   tx : @hawdb.Transaction,
   id : String,
   from_index : Int32,
+  cwd : String?,
 ) -> Result[Unit, String] {
   let head = match read_session_head(tx, id) {
     Ok(value) => value
@@ -428,7 +501,19 @@ fn truncate_session(
   }
   let (count, metadata, revision) = match head {
     Some(value) => value
-    None => return write_head(tx, id, 0L, Map([]), 1L, false)
+    None =>
+      return write_head(
+        tx,
+        id,
+        0L,
+        hawdb_metadata_with_cwd(Map([]), cwd),
+        1L,
+        false,
+      )
+  }
+  match check_session_cwd(metadata, cwd) {
+    Ok(_) => ()
+    Err(reason) => return Err(reason)
   }
   let keep = if from_index < 0 {
     0L
@@ -440,10 +525,11 @@ fn truncate_session(
   if keep == count {
     return Ok(())
   }
-  match tx.query_sql(
-    "DELETE FROM posoco_hawdb_messages WHERE id = $1 AND seq >= $2",
-    [@hawdb.Value::Text(id), @hawdb.Value::Int(keep)],
-  ) {
+  match
+    tx.query_sql(
+      "DELETE FROM posoco_hawdb_messages WHERE id = $1 AND seq >= $2",
+      [@hawdb.Value::Text(id), @hawdb.Value::Int(keep)],
+    ) {
     Ok(_) => ()
     Err(error) => return Err(error.describe())
   }
@@ -455,7 +541,11 @@ fn truncate_session(
 
 ///|
 pub extend HawdbSessionStore with @posoco.SessionPort::{
-  load, save, append_messages, checkpoint, truncate,
+  load,
+  save,
+  append_messages,
+  checkpoint,
+  truncate,
 }
 
 ///|
@@ -468,7 +558,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn load(
     Err(reason) => raise @posoco.SessionError::Load(reason)
   }
   let result = self.db.with_read_transaction(fn(tx) {
-    match read_session(tx, id) {
+    match read_session(tx, id, self.cwd) {
       Ok(session) => Ok(session)
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
@@ -494,7 +584,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn save(
     metadata: hawdb_metadata_with_cwd(session.metadata, self.cwd),
   }
   let result = self.db.with_transaction(fn(tx) {
-    match write_session(tx, id, persisted) {
+    match write_session(tx, id, persisted, self.cwd) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }
@@ -534,7 +624,11 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn append_messages(
   from_index : Int32,
   messages : ArrayView[@posoco.Message],
 ) -> Unit raise @posoco.SessionError {
-  self.checkpoint(id, { from_index, messages: messages.to_owned(), metadata: None })
+  self.checkpoint(id, {
+    from_index,
+    messages: messages.to_owned(),
+    metadata: None,
+  })
 }
 
 ///|
@@ -548,7 +642,7 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
     Err(reason) => raise @posoco.SessionError::Save(reason)
   }
   let result = self.db.with_transaction(fn(tx) {
-    match truncate_session(tx, id, from_index) {
+    match truncate_session(tx, id, from_index, self.cwd) {
       Ok(_) => Ok(())
       Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
     }

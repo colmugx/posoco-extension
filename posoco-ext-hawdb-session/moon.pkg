@@ -1,17 +1,12 @@
 import {
   "colmugx/posoco",
-  "nowledge-co/hawdb" @hawdb,
+  "nowledge-co/hawdb",
   "moonbitlang/core/async",
-  "moonbitlang/core/json" @json,
+  "moonbitlang/core/json",
 }
 
-warnings = "-unused_package"
+warnings = "-unused_package-25"
 
 options(
-  "allow-experimental-packages": ["moonbitlang/core/async"],
-  link: {
-    "native": {
-      "cc-link-flags": "_hawdb_checkout/bindings/moonbit/native/target/release/libhawdb_moonbit.a -ldl -lpthread -lm",
-    },
-  },
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
 )

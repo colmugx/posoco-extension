@@ -9,11 +9,9 @@ pub impl @posoco.Extension for HawdbSessionStore with fn extension_id(
 pub impl @posoco.Extension for HawdbSessionStore with fn manifest(
   self : HawdbSessionStore,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_hawdb_session",
-    sessions=[self],
-    commands=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_hawdb_session", sessions=[self], commands=[
+    self,
+  ])
 }
 
 ///|
