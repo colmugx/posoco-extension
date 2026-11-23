@@ -1,0 +1,16 @@
+import {
+  "colmugx/posoco",
+  "colmugx/fuwaroid",
+  "moonbitlang/core/async",
+  "moonbitlang/core/string",
+}
+
+import {
+  "colmugx/posoco",
+  "colmugx/fuwaroid",
+  "moonbitlang/core/async",
+} for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
