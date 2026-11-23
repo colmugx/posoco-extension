@@ -93,6 +93,7 @@ pub struct QuestionBroker {
   priv mut armed : Map[String, ArmedWaiter]
   priv mut queued : Array[QuestionInfo]
   priv queued_hooks : Array[(QuestionInfo) -> Unit]
+  priv closed_hooks : Array[(String, String) -> Unit]
 }
 
 ///|
@@ -107,6 +108,7 @@ pub fn QuestionBroker::QuestionBroker(
     armed: Map::from_array([]),
     queued: [],
     queued_hooks: [],
+    closed_hooks: [],
   }
 }
 
@@ -141,6 +143,26 @@ fn QuestionBroker::fire_queued(
 ) -> Unit {
   for cb in self.queued_hooks {
     cb(info)
+  }
+}
+
+///|
+fn QuestionBroker::on_closed(
+  self : QuestionBroker,
+  cb : (String, String) -> Unit,
+) -> Unit {
+  self.closed_hooks.push(cb)
+}
+
+///|
+/// Notify registry projections synchronously before the parked asker resumes.
+fn QuestionBroker::fire_closed(
+  self : QuestionBroker,
+  child_session : String,
+  id : String,
+) -> Unit {
+  for cb in self.closed_hooks {
+    cb(child_session, id)
   }
 }
 
@@ -295,6 +317,8 @@ fn QuestionBroker::expire(self : QuestionBroker, id : String) -> Unit {
     Some(entry) =>
       if entry.outcome is None {
         entry.outcome = Some(AskOutcome::TimedOut)
+        self.drop_queued(id)
+        self.fire_closed(entry.child_session, id)
         ignore(entry.cell.complete(AskOutcome::TimedOut))
       }
     None => ()
@@ -305,7 +329,15 @@ fn QuestionBroker::expire(self : QuestionBroker, id : String) -> Unit {
 /// Remove one ask entirely (the asking coroutine was cancelled): no answer
 /// can resolve it afterwards, and an un-injected queue entry disappears.
 fn QuestionBroker::withdraw(self : QuestionBroker, id : String) -> Unit {
-  self.pending.remove(id)
+  if self.pending.get(id) is Some(entry) {
+    self.pending.remove(id)
+    self.drop_queued(id)
+    self.fire_closed(entry.child_session, id)
+  }
+}
+
+///|
+fn QuestionBroker::drop_queued(self : QuestionBroker, id : String) -> Unit {
   let kept : Array[QuestionInfo] = []
   for info in self.queued {
     if info.id != id {
@@ -338,6 +370,7 @@ fn QuestionBroker::resolve(
         Some(AskOutcome::Cancelled) => Err("question '\{id}' was cancelled")
         None => {
           entry.outcome = Some(AskOutcome::Answered(response))
+          self.fire_closed(entry.child_session, id)
           ignore(entry.cell.complete(AskOutcome::Answered(response)))
           Ok(())
         }
@@ -352,9 +385,10 @@ fn QuestionBroker::reject_child(
   self : QuestionBroker,
   child_session : String,
 ) -> Unit {
-  for entry in self.pending.values() {
+  for id, entry in self.pending {
     if entry.child_session == child_session && entry.outcome is None {
       entry.outcome = Some(AskOutcome::Cancelled)
+      self.fire_closed(entry.child_session, id)
       ignore(entry.cell.complete(AskOutcome::Cancelled))
     }
   }
@@ -371,9 +405,10 @@ fn QuestionBroker::reject_child(
 /// Shutdown sweep: cancel every pending ask. Waits end as `Cancelled`, not
 /// as hangs.
 fn QuestionBroker::reject_all(self : QuestionBroker) -> Unit {
-  for entry in self.pending.values() {
+  for id, entry in self.pending {
     if entry.outcome is None {
       entry.outcome = Some(AskOutcome::Cancelled)
+      self.fire_closed(entry.child_session, id)
       ignore(entry.cell.complete(AskOutcome::Cancelled))
     }
   }

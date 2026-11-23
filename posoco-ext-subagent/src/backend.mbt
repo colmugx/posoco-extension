@@ -235,20 +235,7 @@ fn terminal_for(
 }
 
 ///|
-/// Text projection of a terminal outcome (the content the tool result
-/// carries); non-content variants project to the empty string.
-fn outcome_text(outcome : @posoco.ToolOutcome) -> String {
-  match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) => content
-    @posoco.ToolOutcome::ToolReportedError(content~, ..) => content
-    _ => ""
-  }
-}
-
-///|
-/// Terminal mapping + registry bookkeeping shared by both paths: build the
-/// tool outcome through the kit formatter and record the final state word /
-/// summary text under the child's id (the resume key set).
+/// Record the terminal state for the resume key and return the result.
 fn SubagentTools::finish(
   self : SubagentTools,
   bridge : BridgeObserver,
@@ -257,9 +244,8 @@ fn SubagentTools::finish(
   result_text : String,
 ) -> @posoco.ToolOutcome {
   let outcome = terminal_for(bridge, spec, state, result_text)
-  let text = outcome_text(outcome)
   match self.registry.get(spec.session_id) {
-    Some(record) => record.state = Done(@kit.terminal_state_word(state), text)
+    Some(record) => record.state = Done(@kit.terminal_state_word(state))
     None => ()
   }
   outcome
@@ -874,9 +860,11 @@ async fn SubagentTools::race_interactive(
       self.finish(bridge, spec, state, text)
     }
     InteractiveOutcome::Asked(info) => {
-      match self.registry.get(spec.session_id) {
-        Some(record) => record.state = WaitingReply(info.id)
-        None => ()
+      // The ask may have closed while the racing tool was waking up.
+      if self.question.lookup(info.id) is QuestionLookup::Open(_) &&
+        self.registry.get(spec.session_id) is Some(record) &&
+        record.state is Running {
+        record.state = WaitingReply(info.id)
       }
       let (type_word, options_json, options_note) = match info.req {
         @posoco.UiRequest::Input(..) => ("input", Json::null(), "")
@@ -1121,14 +1109,6 @@ fn SubagentTools::answer(
     Err(reason) =>
       @posoco.ToolOutcome::ToolReportedError(content=reason, structured=None)
     Ok(_) => {
-      match self.registry.get(info.child_session) {
-        Some(record) =>
-          match record.state {
-            WaitingReply(id) if id == args.question_id => record.state = Running
-            _ => ()
-          }
-        None => ()
-      }
       let kind = match self.registry.get(info.child_session) {
         Some(record) => record.kind
         None => ""
@@ -1302,7 +1282,7 @@ fn SubagentTools::stop(
   let state_word = record_state_word(record.state)
   match self.live.get(args.child_session) {
     None =>
-      if record.state is Done(_, _) {
+      if record.state is Done(_) {
         // Terminal already recorded: idempotent, truthful no-op.
         stop_receipt(
           child_session=args.child_session,
@@ -1348,12 +1328,6 @@ fn SubagentTools::stop(
         // reason) and un-injected queue entries are dropped, so nothing of
         // this run can surface after the stop.
         self.question.reject_child(args.child_session)
-        // A parked question is no longer being waited for; the child is
-        // dying, and the terminal below overwrites this state. Until then the
-        // projection must not claim the parent still owes an answer.
-        if record.state is WaitingReply(_) {
-          record.state = Running
-        }
         stop_receipt(
           child_session=args.child_session,
           kind~,

@@ -370,16 +370,14 @@ async test "parallel_subagent_failure_does_not_poison_sibling_or_parent" {
   assert_eq(composer.failures, 1)
   assert_eq(composer.inner.specs.length(), 1)
   assert_eq(composer.inner.specs[0].task, "survive")
-  assert_eq(tools.background_children().length(), 1)
-  match tools.registry.get(composer.inner.specs[0].session_id) {
-    Some(record) =>
-      match record.state {
-        Done("completed", summary) =>
-          assert_true(summary.contains("sibling child completed"))
-        _ => fail("successful sibling must remain completed")
-      }
-    None => fail("successful sibling must remain registered")
-  }
+  assert_true(
+    result.tool_results.any(outcome => {
+      outcome_content(outcome).contains("sibling child completed")
+    }),
+  )
+  assert_eq(tools.background_children(), [
+    (composer.inner.specs[0].session_id, "completed"),
+  ])
 }
 
 ///|
@@ -475,6 +473,12 @@ async test "kind_binding_beats_config_default" {
     config=config_with_default(model="mtplx/local", effort=Some("low")),
     catalog=catalog_with_bound_kind(),
   )
+  let description = @posoco.ToolProvider::list_tools(tools)[0].description
+  assert_true(description.contains("- coder:"))
+  assert_true(description.contains("[default]"))
+  assert_true(description.contains("- porter:"))
+  assert_true(description.contains("kimi/k2"))
+  assert_true(description.contains("high"))
   let outcome = @posoco.ToolProvider::execute(
     tools,
     test_ctx(
@@ -528,6 +532,9 @@ async test "default_model_applies_to_unbound_kinds" {
     config=config_with_default(model="mtplx/local", effort=Some("low")),
     catalog=catalog_with_bound_kind(),
   )
+  let description = @posoco.ToolProvider::list_tools(tools)[0].description
+  assert_true(description.contains("mtplx/local"))
+  assert_true(description.contains("low"))
   let outcome = @posoco.ToolProvider::execute(
     tools,
     test_ctx(
@@ -1233,15 +1240,6 @@ async test "background_completed_delivers_on_next_turn_and_records_terminal" {
   assert_eq(model.calls, 3)
   assert_eq(composer.specs.length(), 1)
   assert_eq(composer.specs[0].session_id, "subagent-1")
-  match tools.registry.get("subagent-1") {
-    Some(record) =>
-      match record.state {
-        Done("completed", summary) =>
-          assert_true(summary.contains("child finished early"))
-        _ => fail("expected completed registry state for subagent-1")
-      }
-    None => fail("expected a registry record for subagent-1")
-  }
   assert_eq(tools.background_children(), [("subagent-1", "completed")])
   // The delivery is persisted as a user message in the parent session.
   assert_true(
@@ -1261,14 +1259,10 @@ async test "background_completed_delivers_on_next_turn_and_records_terminal" {
         }
         if label == "background_terminal" {
           terminal_at = i
-          match data {
-            Json::Object(fields) =>
-              match fields.get("state") {
-                Some(Json::String("completed")) => ()
-                _ => fail("expected terminal event state completed")
-              }
-            _ => fail("expected terminal event data object")
-          }
+          assert_eq(json_string_field(data, "state"), "completed")
+          assert_true(
+            json_string_field(data, "summary").contains("child finished early"),
+          )
         }
       }
       _ => ()
@@ -1302,18 +1296,8 @@ async test "background_timeout_maps_to_timed_out_via_delivery" {
     let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
   // Core timed the task out at 100ms and delivered the terminal on turn 2.
-  match tools.registry.get("subagent-1") {
-    Some(record) =>
-      match record.state {
-        Done("timed_out", summary) => assert_true(summary.contains("timed out"))
-        _ => fail("expected timed_out registry state for subagent-1")
-      }
-    None => fail("expected a registry record for subagent-1")
-  }
   assert_eq(tools.background_children(), [("subagent-1", "timed_out")])
-  assert_true(
-    store_contains_user_text(store, "parent_bg", "[posoco-task-outcome id="),
-  )
+  assert_true(store_contains_user_text(store, "parent_bg", "timed out"))
 }
 
 ///|
@@ -1545,15 +1529,12 @@ async test "background_exit_declares_failed_on_child_error" {
     assert_true(failed_exit)
     let _ = agent.run_turn(@tk.tk_user_msg("again"), "parent_bg")
   })
-  match tools.registry.get("subagent-1") {
-    Some(record) =>
-      match record.state {
-        Done("failed", summary) =>
-          assert_true(summary.contains("child model exploded"))
-        _ => fail("expected failed registry state for subagent-1")
-      }
-    None => fail("expected a registry record for subagent-1")
-  }
+  assert_eq(tools.background_children(), [("subagent-1", "failed")])
+  let terminals = custom_payloads(events, want="background_terminal")
+  assert_eq(terminals.length(), 1)
+  assert_true(
+    json_string_field(terminals[0], "summary").contains("child model exploded"),
+  )
 }
 
 ///|
@@ -2205,8 +2186,10 @@ async test "interactive_child_answer_deadline_times_out" {
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@tk.tk_user_msg("go"), "parent_timeout")
-    // The deadline fires while the scope (and the child task) is alive.
+    // The deadline fires before the owner's next turn observes a terminal.
+    assert_eq(tools.background_children(), [("subagent-1", "waiting_reply")])
     @async.sleep(120)
+    assert_eq(tools.background_children(), [("subagent-1", "running")])
     // A late answer is explicitly refused.
     let late = @posoco.ToolProvider::execute(
       tools,
@@ -3365,7 +3348,7 @@ async test "submit_failure_leaves_no_ghost_registry_record" {
   // A refused resume keeps the previous run's recorded terminal.
   seed_undelivered(tools, task_id="task_1", child_session="subagent-2")
   match tools.registry.get("subagent-2") {
-    Some(record) => record.state = Done("completed", "previous run")
+    Some(record) => record.state = Done("completed")
     None => fail("expected the seeded record")
   }
   let refused_resume = @posoco.ToolProvider::execute(
@@ -3537,5 +3520,41 @@ async test "stop_refuses_a_child_spawned_by_another_parent_session" {
     )
     assert_true(outcome_content(own).contains("status: cancellation_requested"))
     @async.sleep(100)
+  })
+}
+
+///|
+async test "cancelling a queued ask releases the child without delivering the question" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=0L)
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    question=Some(broker),
+  )
+  seed_registered_child(tools, child_session="child", session="parent")
+  let registered : @async.Queue[QuestionInfo] = @async.Queue(kind=Unbounded)
+  broker.on_queued(info => ignore(registered.try_put(info) catch { _ => false }))
+  @async.with_task_group(group => {
+    let asker = group.spawn(() => {
+      broker
+      .channel()
+      .ask(
+        child_session="child",
+        origin_call="ask",
+        req=@posoco.UiRequest::Input(prompt="wait?", default=None),
+      )
+    })
+    let info = @async.with_timeout(2000, () => registered.get())
+    assert_eq(tools.background_children(), [("child", "waiting_reply")])
+    asker.cancel()
+    try asker.wait() catch {
+      @async.WaitedTaskAlreadyCancelled => ()
+      error => raise error
+    } noraise {
+      _ => fail("the ask must remain cancelled")
+    }
+    assert_eq(tools.background_children(), [("child", "running")])
+    assert_true(broker.lookup(info.id) is QuestionLookup::Unknown)
+    assert_true(tools.inject_queued_questions([]).is_empty())
   })
 }

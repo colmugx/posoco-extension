@@ -76,30 +76,6 @@ async test "ask_question_input_returns_text" {
 }
 
 ///|
-async test "ask_question_select_returns_selected_value" {
-  let ui = ScriptedUi(@posoco.UiResponse::Selected(1))
-  let tools = AskQuestionTools()
-  tools.ui = Some(ui as &@posoco.UiPort)
-  let outcome = @posoco.ToolProvider::execute(
-    tools,
-    test_ctx(
-      ask_call(
-        Json::object({
-          "question": Json::string("Choose"),
-          "type": Json::string("select"),
-          "options": Json::array([Json::string("A"), Json::string("B")]),
-          "default_index": Json::number(1.0),
-        }),
-      ),
-    ),
-  )
-  match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "B")
-    _ => fail("expected select success")
-  }
-}
-
-///|
 async test "ask_question_cancel_is_tool_reported_error" {
   let ui = ScriptedUi(@posoco.UiResponse::Cancelled)
   let tools = AskQuestionTools()
@@ -354,8 +330,8 @@ fn select_args(options : Array[String]) -> Json {
 }
 
 ///|
-async test "ask_question_select_offers_other_answer_escape" {
-  let ui = QueuedUi([@posoco.UiResponse::Selected(0)])
+async test "ask_question_select_returns_the_selected_value_and_offers_an_escape" {
+  let ui = QueuedUi([@posoco.UiResponse::Selected(1)])
   let tools = AskQuestionTools()
   tools.ui = Some(ui as &@posoco.UiPort)
   let outcome = @posoco.ToolProvider::execute(
@@ -363,7 +339,7 @@ async test "ask_question_select_offers_other_answer_escape" {
     test_ctx(ask_call(select_args(["A", "B"]))),
   )
   match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "A")
+    @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "B")
     _ => fail("expected select success")
   }
   assert_eq(ui.requests.length(), 1)

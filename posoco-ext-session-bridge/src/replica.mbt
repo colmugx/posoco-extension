@@ -50,6 +50,16 @@ pub fn SessionReplica::session_id(self : SessionReplica) -> String {
 }
 
 ///|
+fn SessionReplica::detach(
+  self : SessionReplica,
+  reason : String,
+) -> ApplyDecision {
+  self.attached = false
+  self.working = false
+  NeedsSnapshot(reason)
+}
+
+///|
 fn string_field(fields : Map[String, Json], key : String) -> String {
   match fields.get(key) {
     Some(Json::String(value)) => value
@@ -88,7 +98,7 @@ pub fn SessionReplica::apply(
 ) -> ApplyDecision {
   let fields = match frame {
     Json::Object(fields) => fields
-    _ => return NeedsSnapshot("non-object EventHub frame")
+    _ => return self.detach("non-object EventHub frame")
   }
   let session_id = string_field(fields, "session_id")
   if session_id != self.session_id {
@@ -97,39 +107,44 @@ pub fn SessionReplica::apply(
   let kind = string_field(fields, "type")
   let epoch = string_field(fields, "runtime_epoch")
   if epoch == "" {
-    self.attached = false
-    return NeedsSnapshot("missing runtime epoch")
+    return self.detach("missing runtime epoch")
   }
   let cursor = number_field(fields, "cursor")
   let advances = bool_field(fields, "cursor_advance")
   if kind == "session.snapshot" {
     let high_water = number_field(fields, "high_water_cursor")
     let baseline = if high_water > cursor { high_water } else { cursor }
-    if self.attached && epoch == self.epoch && baseline < self.cursor {
+    let busy = bool_field(fields, "busy")
+    if self.attached &&
+      epoch == self.epoch &&
+      (
+        baseline < self.cursor ||
+        (baseline == self.cursor && busy == self.working)
+      ) {
       return Duplicate
     }
     self.epoch = epoch
     self.cursor = baseline
-    self.working = bool_field(fields, "busy")
+    self.working = busy
     self.attached = true
     return Applied
   }
   if !self.attached {
-    return NeedsSnapshot("event before session snapshot")
+    return self.detach("event before session snapshot")
   }
   if epoch != self.epoch {
-    self.attached = false
-    return NeedsSnapshot("runtime epoch changed")
+    return self.detach("runtime epoch changed")
   }
   if advances {
     if cursor <= self.cursor {
       return Duplicate
     }
     if cursor != self.cursor + 1 {
-      self.attached = false
-      return NeedsSnapshot("session cursor gap")
+      return self.detach("session cursor gap")
     }
     self.cursor = cursor
+  } else if cursor > 0 && cursor < self.cursor {
+    return Duplicate
   }
   match kind {
     "turn.accepted" | "turn.started" => self.working = true

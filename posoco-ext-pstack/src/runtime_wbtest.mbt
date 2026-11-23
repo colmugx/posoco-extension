@@ -251,3 +251,81 @@ async test "workflow: embedded descriptor serves playbooks without any files" {
     _ => fail("embedded playbook read should succeed")
   }
 }
+
+///|
+async test "statusbar: a shared PStack hides and restores the current session's mode" {
+  let catalog = @skills.merge_builtin_skills(@skills.SkillCatalog::empty(), [
+    Pstack::embedded_descriptor(),
+  ])
+  let skills = @skills.Skills::from_catalog(PstackFakeFs::new(), catalog~).unwrap()
+  let system = @posoco.EventSystem()
+  let envelopes : Array[@posoco.EventEnvelope] = []
+  let _subscription = system
+    .subscribe(envelope => envelopes.push(envelope))
+    .unwrap()
+  let publisher = system.publisher(owner="posoco_ext_pstack").unwrap()
+  let pstack = Pstack::from_skills(skills, events=Some(publisher)).unwrap()
+  let observer = pstack.manifest().observers[0]
+  let start = fn(session) {
+    observer.on_event(
+      Some({
+        session_id: @posoco.SessionId::unchecked(session),
+        run_id: @posoco.RunId::unchecked("run"),
+        turn_id: @posoco.TurnId::unchecked("turn"),
+      }),
+      @posoco.TurnEvent::TurnStarted,
+    )
+  }
+  let activation = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(
+      "<activated-skill name=\"poteto-mode\">instructions</activated-skill>",
+    ),
+  ])
+  start("a")
+  ignore(pstack.before_model([activation]))
+  start("a")
+  ignore(pstack.before_model([activation]))
+  assert_true(pstack.is_announced())
+  assert_eq(envelopes.length(), 1)
+  assert_eq(envelopes[0].scope.unwrap().session_id.to_string(), "a")
+
+  start("b")
+  ignore(pstack.before_model([]))
+  assert_false(pstack.is_announced())
+  assert_eq(envelopes.length(), 2)
+  assert_true(
+    @kit_events.status_changed_of(envelopes[1])
+    is Some(@kit_events.Unregister(segment="🥔")),
+  )
+  assert_eq(envelopes[1].scope.unwrap().session_id.to_string(), "b")
+
+  start("a")
+  ignore(pstack.before_model([]))
+  assert_true(pstack.is_announced())
+  assert_eq(envelopes.length(), 3)
+  assert_true(
+    @kit_events.status_changed_of(envelopes[2])
+    is Some(@kit_events.Register(segment="🥔", ..)),
+  )
+  assert_eq(envelopes[2].scope.unwrap().session_id.to_string(), "a")
+
+  start("b")
+  ignore(pstack.before_model([activation]))
+  ignore(pstack.before_model([activation]))
+  assert_true(pstack.is_announced())
+  assert_eq(envelopes.length(), 5)
+  assert_true(
+    @kit_events.status_changed_of(envelopes[4])
+    is Some(@kit_events.Register(segment="🥔", ..)),
+  )
+  assert_eq(envelopes[4].scope.unwrap().session_id.to_string(), "b")
+  pstack.on_shutdown()
+  assert_eq(envelopes.length(), 6)
+  assert_true(
+    @kit_events.status_changed_of(envelopes[5])
+    is Some(@kit_events.Unregister(segment="🥔")),
+  )
+  start("a")
+  assert_false(pstack.is_announced())
+  assert_eq(envelopes.length(), 6)
+}

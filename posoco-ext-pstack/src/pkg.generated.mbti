@@ -9,6 +9,7 @@ import {
   "colmugx/posoco/events",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "colmugx/posoco/types",
 }
 
 // Values
@@ -34,7 +35,7 @@ pub fn pstack_discovery_options(String, base? : @posoco-ext-skills.SkillDiscover
 pub struct Pstack {
   skills : @posoco-ext-skills.Skills
   events : @events.Events?
-  mut announced : Bool
+  // private fields
 }
 pub async fn Pstack::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub fn Pstack::catalog(Self) -> @posoco-ext-skills.SkillCatalog
@@ -52,6 +53,7 @@ pub async fn Pstack::on_shutdown(Self) -> Unit
 pub async fn Pstack::on_start(Self) -> Unit
 pub impl @port.Extension for Pstack
 pub impl @port.Lifecycle for Pstack
+pub impl @port.Observer for Pstack
 pub impl @port.PipelineHook for Pstack
 
 // Type aliases

@@ -119,6 +119,9 @@ pub fn SubagentTools::SubagentTools(
   // registry and — under the auto-wakeup policy — schedule one ordinary
   // turn for the spawning parent session.
   tools.question.on_queued(fn(info) { tools.handle_question_queued(info) })
+  tools.question.on_closed(fn(child_session, id) {
+    tools.handle_question_closed(child_session, id)
+  })
   tools
 }
 

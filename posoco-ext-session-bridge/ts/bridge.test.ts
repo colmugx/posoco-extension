@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { BridgeError, observeSessionSocket, serveSessionSocket, sessionNotComposed, type SessionEvent } from "./bridge";
+import { BridgeError, dialReplaySocket, observeSessionSocket, serveSessionBridge, serveSessionSocket, sessionNotComposed, type SessionEvent } from "./bridge";
 
 function endpoint(): string {
   const id = randomUUID().replaceAll("-", "");
@@ -96,6 +96,57 @@ test("typed not-composed rejection carries its code to the viewer", async () => 
     const failure = observeSessionSocket(client, "never-composed", "viewer");
     await expect(failure).rejects.toBeInstanceOf(BridgeError);
     await expect(failure).rejects.toMatchObject({ code: sessionNotComposed });
+  } finally {
+    client.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("replay connection pages history and refuses writes", async () => {
+  const path = endpoint();
+  const seen: Array<{ session: string; command: string; args: unknown }> = [];
+  const server = createServer((socket) => {
+    void serveSessionBridge(socket, { instanceID: "owner-js", runtimeEpoch: "epoch-1" },
+      async () => { throw new Error("observe unexpected on replay connection"); },
+      async (session, command, args) => {
+        seen.push({ session, command, args });
+        return { blocks: 2 };
+      }).catch(() => {});
+  });
+  await new Promise<void>((resolve) => server.listen(path, resolve));
+  const client = connect(path);
+  await once(client, "connect");
+  try {
+    const replay = await dialReplaySocket(client, "session-1", "client-go");
+    const page = await replay.call("transcript_page", { session_id: "session-1", first: 0, limit: 100 });
+    expect(page).toEqual({ blocks: 2 });
+    await expect(
+      replay.call("turn_start" as "transcript_page", { session_id: "session-1" }),
+    ).rejects.toThrow();
+    await expect(
+      replay.call("transcript_page", { session_id: "session-2" }),
+    ).rejects.toThrow();
+    replay.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    expect(seen).toEqual([
+      { session: "session-1", command: "transcript_page", args: { session_id: "session-1", first: 0, limit: 100 } },
+    ]);
+  } finally {
+    client.destroy();
+  }
+});
+
+test("replay is refused when the owner does not serve it", async () => {
+  const path = endpoint();
+  const server = createServer((socket) => {
+    void serveSessionSocket(socket, { instanceID: "owner-js", runtimeEpoch: "epoch-1" },
+      async () => { throw new Error("unused"); }).catch(() => {});
+  });
+  await new Promise<void>((resolve) => server.listen(path, resolve));
+  const client = connect(path);
+  await once(client, "connect");
+  try {
+    await expect(dialReplaySocket(client, "session-1", "viewer")).rejects.toThrow();
   } finally {
     client.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));

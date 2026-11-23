@@ -1,29 +1,10 @@
 ///|
-/// Background bookkeeping for the core task capability: the child registry
-/// backing `resume` and the domain projection of delivered background
-/// outcomes. The extension owns no delivery machinery — core routes every
-/// background terminal into the parent session's inbox, and the result
-/// surfaces as a user message in the session's next ordinary turn. The
-/// extension's jobs are the declaration-only `background_exited` event at
-/// true task exit (hosts/observers learn a death immediately; the runner
-/// does no bookkeeping there), observation at the delivery point
-/// (`before_model`) plus the `background_delivered` ack (task id, exactly
-/// once when the envelope enters model input) and the authoritative
-/// `background_terminal` event hosts listen for.
-
-///|
-/// Registry entry state for one spawned child: `Running` from spawn until
-/// the delivery-point observation records the state word and the final
-/// summary text (foreground and background alike — both advertise the id in
-/// their footer). `WaitingReply` marks an interactive child parked on a
-/// parent answer: not terminal, and the wait must not surface as a
-/// completion. The summary is read back by hosts/tests through the
-/// registry itself.
-#warnings("-unused_field")
+/// Registry state shared by foreground and background children. A parked
+/// question is not terminal; only that question may release its wait.
 priv enum BackgroundRecordState {
   Running
   WaitingReply(String)
-  Done(String, String)
+  Done(String)
 }
 
 ///|
@@ -165,7 +146,7 @@ fn record_state_word(state : BackgroundRecordState) -> String {
   match state {
     Running => "running"
     WaitingReply(_) => "waiting_reply"
-    Done(word, _) => word
+    Done(word) => word
   }
 }
 
@@ -301,19 +282,6 @@ fn json_string_field(data : Json, key : String) -> String {
 }
 
 ///|
-/// Automatic wakeup policy (docs/wakeup-port.md §10), default off. Core's
-/// `background_outcome_ready` fires only after the outcome was boxed into
-/// the session inbox and before any wakeup-driven input could read it; when
-/// the policy is enabled and the receipt belongs to one of this extension's
-/// still-undelivered background tasks, request one ordinary turn for the
-/// receipt's own session through the Agent-owned wakeup capability. The
-/// request is synchronous admission (never awaits, safe from observers) and
-/// stays scheduling-only: no session-store or Puppet access. With the policy
-/// off nothing here runs and lazy delivery is preserved; a rejected request
-/// (in practice only `ScopeInactive` after shutdown) also falls back to lazy
-/// delivery.
-
-///|
 /// Coalescing key for question-side wakeup requests: one stable tag per
 /// parent session, mirroring the background-outcome tag above.
 const QUESTION_WAKEUP_TAG = "subagent-question"
@@ -362,6 +330,21 @@ fn SubagentTools::handle_question_queued(
 }
 
 ///|
+fn SubagentTools::handle_question_closed(
+  self : SubagentTools,
+  child_session : String,
+  question_id : String,
+) -> Unit {
+  if self.registry.get(child_session) is Some(record) &&
+    record.state is WaitingReply(id) &&
+    id == question_id {
+    record.state = Running
+  }
+}
+
+///|
+/// Request a wakeup for the owning session once core queues an undelivered
+/// outcome. A rejected request falls back to lazy delivery.
 fn SubagentTools::observe_ready(
   self : SubagentTools,
   event : @posoco.TurnEvent,
@@ -618,7 +601,7 @@ fn SubagentTools::record_terminal(
     Running | WaitingReply(_) => ()
   }
   self.question.drop_child(child_session)
-  record.state = Done(state_word, summary)
+  record.state = Done(state_word)
   self.emit_terminal(
     child_session,
     record.kind,

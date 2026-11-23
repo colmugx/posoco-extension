@@ -5,6 +5,7 @@ import type { Socket } from "node:net";
 
 export const protocol = "posoco.session/1";
 export const capability = "session.observe.v1";
+export const replayCapability = "session.replay.v1";
 const frameLimit = 4 << 20;
 const queueLimit = 256;
 
@@ -31,8 +32,8 @@ export type WireFrame = {
   capabilities?: string[];
   request_id?: string;
   command?: string;
-  args?: { session_id: string };
-  result?: SessionEvent;
+  args?: ReplayArgs;
+  result?: unknown;
   event?: SessionEvent;
   error?: string;
   code?: string;
@@ -126,10 +127,25 @@ class Frames {
   close(): void { this.socket.destroy(); }
 }
 
-function validSnapshot(value: SessionEvent | undefined, sessionID: string, epoch: string): value is SessionEvent {
-  return value !== undefined && value.type === "session.snapshot" &&
-    value.session_id === sessionID && value.runtime_epoch === epoch &&
-    Number.isSafeInteger(value.cursor) && value.cursor >= 0;
+export function isReplayCommand(command: string): boolean {
+  return command === "transcript_index" || command === "transcript_page" ||
+    command === "transcript_source";
+}
+
+export type ReplayArgs = { session_id: string; [key: string]: unknown };
+
+// Serves one validated replay-family request against the owner's journal.
+export type ReplayServe = (
+  sessionID: string,
+  command: string,
+  args: ReplayArgs,
+) => Promise<unknown>;
+
+function validSnapshot(value: unknown, sessionID: string, epoch: string): value is SessionEvent {
+  const event = value as SessionEvent | undefined;
+  return event !== undefined && event.type === "session.snapshot" &&
+    event.session_id === sessionID && event.runtime_epoch === epoch &&
+    Number.isSafeInteger(event.cursor) && event.cursor >= 0;
 }
 
 // Serve a single read-only Session observer. No command forwarding, journal
@@ -138,6 +154,19 @@ export async function serveSessionSocket(
   socket: Socket,
   owner: OwnerIdentity,
   subscribe: (sessionID: string) => Promise<Subscription>,
+): Promise<void> {
+  await serveSessionBridge(socket, owner, subscribe);
+}
+
+// One connection, one purpose: the first request routes it. `session.observe`
+// starts the snapshot+event stream (which never reads again); a replay-family
+// request starts a request/response loop (which never streams). When `replay`
+// is omitted the replay family is refused.
+export async function serveSessionBridge(
+  socket: Socket,
+  owner: OwnerIdentity,
+  subscribe: (sessionID: string) => Promise<Subscription>,
+  replay?: ReplayServe,
 ): Promise<void> {
   const wire = new Frames(socket);
   try {
@@ -148,12 +177,39 @@ export async function serveSessionSocket(
       await wire.write({ type: "reject", error: "incompatible Session observer protocol" });
       return;
     }
+    const capabilities = replay ? [capability, replayCapability] : [capability];
     await wire.write({ type: "welcome", protocol,
       owner_instance_id: owner.instanceID, runtime_epoch: owner.runtimeEpoch,
-      capabilities: [capability] });
+      capabilities });
     const request = await wire.read();
-    if (request.type !== "request" || request.command !== "session.observe" ||
-        !request.args?.session_id || !request.request_id) {
+    if (request.type !== "request" || !request.args?.session_id || !request.request_id) {
+      await wire.write({ type: "reject", error: "read-only session.observe required" });
+      return;
+    }
+    if (isReplayCommand(request.command ?? "")) {
+      if (replay === undefined) {
+        await wire.write({ type: "reject", request_id: request.request_id,
+          error: "read-only session.observe required" });
+        return;
+      }
+      for (;;) {
+        try {
+          const served = await replay(request.args.session_id, request.command!, request.args);
+          await wire.write({ type: "response", request_id: request.request_id, result: served });
+        } catch (err) {
+          await wire.write({ type: "reject", request_id: request.request_id, error: String(err) });
+        }
+        const next = await wire.read();
+        if (next.type !== "request" || !next.args?.session_id || !next.request_id ||
+            !isReplayCommand(next.command ?? "")) {
+          return;
+        }
+        request.command = next.command;
+        request.args = next.args;
+        request.request_id = next.request_id;
+      }
+    }
+    if (request.command !== "session.observe") {
       await wire.write({ type: "reject", error: "read-only session.observe required" });
       return;
     }
@@ -237,6 +293,59 @@ export async function observeSessionSocket(
           }
           yield msg.event;
         }
+      },
+      close: () => wire.close(),
+    };
+  } catch (err) {
+    wire.close();
+    throw err;
+  }
+}
+
+
+export interface ReplayViewer {
+  // Sends one replay-family request and resolves its reply. Foreign sessions
+  // and write commands are refused client-side before they reach the wire.
+  call(command: string, args: ReplayArgs): Promise<unknown>;
+  close(): void;
+}
+
+// Opens the observer's paged-history channel: a single-purpose connection
+// that never attaches the event stream. Callers keep their observe
+// connection separate.
+export async function dialReplaySocket(
+  socket: Socket,
+  sessionID: string,
+  clientID: string,
+): Promise<ReplayViewer> {
+  const wire = new Frames(socket);
+  try {
+    if (!sessionID || !clientID) throw new Error("missing Session/client identity");
+    await wire.write({ type: "hello", protocol, host: "posoco-ext",
+      client_instance_id: clientID, capabilities: [capability, replayCapability] });
+    const welcome = await wire.read();
+    if (welcome.type !== "welcome" || welcome.protocol !== protocol ||
+        !welcome.runtime_epoch ||
+        !welcome.capabilities?.includes(replayCapability)) {
+      throw new Error("Session owner does not serve transcript replay");
+    }
+    let nextID = 0;
+    return {
+      call: async (command: string, args: ReplayArgs) => {
+        if (!isReplayCommand(command) || args.session_id !== sessionID) {
+          throw new Error("replay call outside its bound Session");
+        }
+        nextID += 1;
+        const requestID = `replay-${nextID}`;
+        await wire.write({ type: "request", request_id: requestID, command, args });
+        const reply = await wire.read();
+        if (reply.type === "reject") {
+          throw new BridgeError(reply.error ?? "Session replay refused", reply.code);
+        }
+        if (reply.type !== "response" || reply.request_id !== requestID) {
+          throw new Error("Session replay reply lost correlation");
+        }
+        return reply.result;
       },
       close: () => wire.close(),
     };

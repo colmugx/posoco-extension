@@ -16,6 +16,7 @@ pub(open) trait PlanReviewSource {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct PlanReviewRequest {
   /// Model-chosen plan name (validated non-empty; also the saved file name
   /// stem). Host UIs should surface it — it identifies the plan better than
@@ -27,14 +28,13 @@ pub(all) struct PlanReviewRequest {
 }
 
 ///|
-pub impl Show for PlanReviewRequest with fn to_string(self : PlanReviewRequest) -> String {
-  "PlanReviewRequest(name=\{self.name}, \{self.plan.length()} chars)"
-}
+pub extend PlanReviewRequest with Eq::{not_equal, equal}
 
 ///|
-pub extend PlanReviewRequest with Show::{to_string, output}
+pub extend PlanReviewRequest with @debug.Debug::{to_repr}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum PlanReviewDecision {
   Accept
   /// Back to planning; the feedback reaches the model. Rejection always
@@ -45,6 +45,12 @@ pub(all) enum PlanReviewDecision {
   /// the tool result instructs the model to make no further tool calls.
   Dismiss
 }
+
+///|
+pub extend PlanReviewDecision with Eq::{not_equal, equal}
+
+///|
+pub extend PlanReviewDecision with @debug.Debug::{to_repr}
 
 ///|
 pub impl Show for PlanReviewDecision with fn to_string(

@@ -194,6 +194,110 @@ fn build_messages_request(
 }
 
 ///|
+/// Connection-level failures before any response byte arrives are safe to
+/// re-dial: the provider either never saw the request or dropped it without
+/// a verdict, so a bounded retry cannot duplicate a streamed answer.
+const ZAI_TRANSPORT_MAX_ATTEMPTS : Int32 = 3
+
+///|
+fn zai_transport_retry_delay_ms(attempt : Int32) -> Int32 {
+  // Backoff before attempts 2 and 3: long enough for a flapping upstream to
+  // recover, short enough that a dead endpoint still fails fast in the UI.
+  if attempt == 2 {
+    500
+  } else {
+    1000
+  }
+}
+
+///|
+priv enum ZaiDialOutcome {
+  Opened(client~ : @http.ClientConnection, response~ : @http.ResponseHeader)
+  Dropped(stage~ : String, detail~ : String)
+}
+
+///|
+/// One dial attempt: post_stream + body write + head exchange. Any failure
+/// here happens strictly before a response byte exists, so it is always
+/// retryable. A dead client is closed before returning Dropped.
+async fn zai_dial_stream_once(
+  url : String,
+  payload : BytesView,
+  headers : @http.Headers,
+) -> ZaiDialOutcome {
+  let client = @http.post_stream(url, headers~)
+  client.write(payload) catch {
+    err => {
+      client.close()
+      return ZaiDialOutcome::Dropped(
+        stage="write_body",
+        detail=@debug.Repr(err).to_string(),
+      )
+    }
+  }
+  let response = client.end_request() catch {
+    err => {
+      client.close()
+      return ZaiDialOutcome::Dropped(
+        stage="end_request",
+        detail=@debug.Repr(err).to_string(),
+      )
+    }
+  }
+  ZaiDialOutcome::Opened(client~, response~)
+}
+
+///|
+async fn zai_open_stream_with_retry(
+  url : String,
+  payload : BytesView,
+  headers : @http.Headers,
+) -> (@http.ClientConnection, @http.ResponseHeader) raise @posoco.ModelError {
+  let mut attempts = 0
+  let mut opened : (@http.ClientConnection, @http.ResponseHeader)? = None
+  while opened is None {
+    attempts += 1
+    if attempts > 1 {
+      @async.sleep(zai_transport_retry_delay_ms(attempts))
+    }
+    let dial = zai_dial_stream_once(url, payload, headers) catch {
+      err =>
+        ZaiDialOutcome::Dropped(
+          stage="dial",
+          detail=@debug.Repr(err).to_string(),
+        )
+    }
+    match dial {
+      Opened(client~, response~) => opened = Some((client, response))
+      Dropped(stage~, detail~) =>
+        if attempts >= ZAI_TRANSPORT_MAX_ATTEMPTS {
+          raise @posoco.ModelError::Transport(
+            "zai transport failure (stage=\{stage}, attempts=\{attempts}): \{detail}",
+          )
+        }
+    }
+  }
+  match opened {
+    Some(pair) => pair
+    None => abort("zai transport retry loop exited without a verdict")
+  }
+}
+
+///|
+/// One non-streaming dial attempt. `None` means the connection died before
+/// any verdict existed, which is always safe to re-dial.
+async fn zai_post_binary_once(
+  url : String,
+  payload : BytesView,
+  headers : @http.Headers,
+) -> (@http.ResponseHeader, @http.MessageBody)? {
+  let reply = @http.post_binary(url, payload, headers~) catch {
+    _ => return None
+  }
+  Some(reply)
+}
+
+///|
 pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   self : ZaiModelPort,
   _scope : @posoco.InvocationScope,
@@ -213,15 +317,36 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   )
   match stream {
     NoStream => {
-      let (response, body_bytes) = @http.post_binary(
-        messages_url(self.config),
-        @utf8.encode(body.stringify())[:],
-        headers=build_headers(self.config),
-      ) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "zai transport failure (stage=post): " + err.to_string(),
-          )
+      // Same pre-verdict retry rule as the streaming path: a failure here
+      // happens before any response exists, so a re-dial cannot duplicate
+      // an answer the caller received.
+      let mut attempts = 0
+      let mut delivered : (@http.ResponseHeader, @http.MessageBody)? = None
+      while delivered is None {
+        attempts += 1
+        if attempts > 1 {
+          @async.sleep(zai_transport_retry_delay_ms(attempts))
+        }
+        let attempt = zai_post_binary_once(
+          messages_url(self.config),
+          @utf8.encode(body.stringify())[:],
+          build_headers(self.config),
+        ) catch {
+          _ => None
+        }
+        match attempt {
+          Some(reply) => delivered = Some(reply)
+          None =>
+            if attempts >= ZAI_TRANSPORT_MAX_ATTEMPTS {
+              raise @posoco.ModelError::Transport(
+                "zai transport failure (stage=post, attempts=\{attempts}): connection dropped before a verdict",
+              )
+            }
+        }
+      }
+      let (response, body_bytes) = match delivered {
+        Some(pair) => pair
+        None => abort("zai transport retry loop exited without a verdict")
       }
       let body_text = @utf8.decode(body_bytes.binary()) catch {
         _ =>
@@ -254,28 +379,11 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
       }
     }
     Stream(on_chunk) => {
-      let client = @http.post_stream(
+      let (client, response) = zai_open_stream_with_retry(
         messages_url(self.config),
-        headers=build_headers(self.config),
-      ) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "zai transport failure (stage=post_stream): " + err.to_string(),
-          )
-      }
-      client.write(@utf8.encode(body.stringify())[:]) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "zai transport failure (stage=write_body): " +
-            @debug.Repr(err).to_string(),
-          )
-      }
-      let response = client.end_request() catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "zai transport failure (stage=end_request): " + err.to_string(),
-          )
-      }
+        @utf8.encode(body.stringify())[:],
+        build_headers(self.config),
+      )
       if !is_zai_http_success(response.code) {
         let err_body = read_error_body_text(client) catch { _ => None }
         match

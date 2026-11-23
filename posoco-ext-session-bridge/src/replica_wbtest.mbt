@@ -83,6 +83,7 @@ test "per-Surface cursors isolate observers and reject gaps" {
     NeedsSnapshot("session cursor gap"),
   )
   assert_false(a.attached())
+  assert_false(a.working())
   assert_eq(
     a.apply(session_frame("s-a", "turn.completed", "epoch", 14, true, false)),
     NeedsSnapshot("event before session snapshot"),
@@ -100,6 +101,7 @@ test "epoch replacement always requires a new snapshot" {
     NeedsSnapshot("runtime epoch changed"),
   )
   assert_false(b.attached())
+  assert_false(b.working())
   assert_eq(
     b.apply(
       session_frame("s-1", "session.snapshot", "epoch-b", 1, false, false),
@@ -125,4 +127,65 @@ test "unicast state does not invent broadcast cursor advancement" {
     b.apply(session_frame("s-1", "turn.accepted", "epoch", 4, true, false)),
     Applied,
   )
+}
+
+///|
+test "invalid frames detach a busy replica until a fresh snapshot" {
+  let b = SessionReplica::new("s-1")
+  let busy = session_frame("s-1", "session.snapshot", "epoch", 7, false, true)
+  assert_eq(b.apply(busy), Applied)
+  assert_eq(b.apply(Json::null()), NeedsSnapshot("non-object EventHub frame"))
+  assert_false(b.attached())
+  assert_false(b.working())
+  assert_eq(b.apply(busy), Applied)
+  assert_true(b.working())
+  assert_eq(
+    b.apply(session_frame("s-1", "turn.started", "", 8, true, false)),
+    NeedsSnapshot("missing runtime epoch"),
+  )
+  assert_false(b.attached())
+  assert_false(b.working())
+}
+
+///|
+test "stale unicast cannot change working but current and cursorless unicast can" {
+  let b = SessionReplica::new("s-1")
+  assert_eq(
+    b.apply(session_frame("s-1", "session.snapshot", "epoch", 7, false, true)),
+    Applied,
+  )
+  assert_eq(
+    b.apply(session_frame("s-1", "turn.completed", "epoch", 6, false, false)),
+    Duplicate,
+  )
+  assert_true(b.working())
+  assert_eq(
+    b.apply(session_frame("s-1", "turn.completed", "epoch", 7, false, false)),
+    Applied,
+  )
+  assert_false(b.working())
+  assert_eq(
+    b.apply(session_frame("s-1", "turn.started", "epoch", 0, false, false)),
+    Applied,
+  )
+  assert_true(b.working())
+  assert_eq(b.cursor(), 7)
+}
+
+///|
+test "equal snapshot baseline is duplicate only when busy also matches" {
+  let b = SessionReplica::new("s-1")
+  let busy = session_frame("s-1", "session.snapshot", "epoch", 7, false, true)
+  let idle = session_frame("s-1", "session.snapshot", "epoch", 7, false, false)
+  assert_eq(b.apply(busy), Applied)
+  assert_eq(b.apply(busy), Duplicate)
+  assert_eq(
+    b.apply(session_frame("s-1", "session.snapshot", "epoch", 6, false, false)),
+    Duplicate,
+  )
+  assert_true(b.working())
+  assert_eq(b.apply(idle), Applied)
+  assert_eq(b.cursor(), 7)
+  assert_false(b.working())
+  assert_eq(b.apply(idle), Duplicate)
 }

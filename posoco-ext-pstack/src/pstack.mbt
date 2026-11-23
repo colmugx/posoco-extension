@@ -5,9 +5,8 @@
 pub struct Pstack {
   skills : @skills.Skills
   events : @posoco.Events?
-  /// Set once `before_model` observes this session's poteto-mode activation;
-  /// the status segment is session-scoped and published exactly once.
-  mut announced : Bool
+  priv announced_sessions : Map[String, Bool]
+  priv mut scope : @posoco.EventScope?
 }
 
 ///|
@@ -19,7 +18,7 @@ pub fn Pstack::from_skills(
   events~ : @posoco.Events? = None,
 ) -> Pstack? {
   match skills.catalog().find("poteto-mode") {
-    Some(_) => Some({ skills, events, announced: false, })
+    Some(_) => Some({ skills, events, announced_sessions: {}, scope: None, })
     None => None
   }
 }
@@ -148,9 +147,18 @@ pub fn Pstack::catalog(self : Pstack) -> @skills.SkillCatalog {
 }
 
 ///|
-/// Whether this Agent session has already reported poteto-mode activation.
+/// The empty key preserves the standalone hook behavior without turn scope.
+fn Pstack::session_key(self : Pstack) -> String {
+  match self.scope {
+    Some(scope) => scope.session_id.to_string()
+    None => ""
+  }
+}
+
+///|
+/// Whether the current session has reported poteto-mode activation.
 pub fn Pstack::is_announced(self : Pstack) -> Bool {
-  self.announced
+  self.announced_sessions.contains(self.session_key())
 }
 
 ///|
@@ -161,12 +169,12 @@ pub fn Pstack::is_announced(self : Pstack) -> Bool {
 fn Pstack::publish_status(self : Pstack, op : @kit_events.StatusOp) -> Unit {
   let event : @posoco.Event = @kit_events.StatusChanged(op)
   match self.events {
-    Some(events) => ignore(events.publish(event))
+    Some(events) => ignore(events.publish(event, scope=self.scope))
     None =>
       match @devkit.events_system_default() {
         Some(system) =>
           match system.publisher(owner="posoco_ext_pstack") {
-            Ok(publisher) => ignore(publisher.publish(event))
+            Ok(publisher) => ignore(publisher.publish(event, scope=self.scope))
             Err(_) => ()
           }
         None => ()
@@ -318,6 +326,7 @@ pub impl @posoco.Extension for Pstack with fn manifest(self : Pstack) -> @posoco
     hooks~,
     commands=inner.commands,
     lifecycle~,
+    observers=[self],
     prompt_contributors=inner.prompt_contributors,
   )
 }
@@ -325,6 +334,35 @@ pub impl @posoco.Extension for Pstack with fn manifest(self : Pstack) -> @posoco
 ///|
 pub impl @posoco.Extension for Pstack with fn extension_id(_self : Pstack) -> String {
   "posoco_ext_pstack"
+}
+
+///|
+fn Pstack::show_status(self : Pstack) -> Unit {
+  self.publish_status(
+    @kit_events.Register(
+      segment="🥔",
+      label=None,
+      priority=5,
+      value=Some("Mode"),
+      color=Some("success"),
+    ),
+  )
+}
+
+///|
+/// The shared bar displays the session whose turn is running. On a switch,
+/// hide a departed session's segment or restore one already activated here.
+pub impl @posoco.Observer for Pstack with fn on_event(self, scope, event) {
+  if event is @posoco.TurnEvent::TurnStarted && scope is Some(_) {
+    let was_announced = self.is_announced()
+    self.scope = scope
+    match (was_announced, self.is_announced()) {
+      (true, false) =>
+        self.publish_status(@kit_events.Unregister(segment="🥔"))
+      (false, true) => self.show_status()
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -336,7 +374,7 @@ pub impl @posoco.PipelineHook for Pstack with fn before_model(
   self : Pstack,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
-  if self.announced {
+  if self.is_announced() {
     return messages
   }
   let activate_tool_name = self.skills.config().activate_tool_name
@@ -349,16 +387,8 @@ pub impl @posoco.PipelineHook for Pstack with fn before_model(
   while index > floor {
     index = index - 1
     if message_announces_poteto(messages[index], activate_tool_name) {
-      self.announced = true
-      self.publish_status(
-        @kit_events.Register(
-          segment="🥔",
-          label=None,
-          priority=5,
-          value=Some("Mode"),
-          color=Some("success"),
-        ),
-      )
+      self.announced_sessions[self.session_key()] = true
+      self.show_status()
       break
     }
   }
@@ -368,10 +398,11 @@ pub impl @posoco.PipelineHook for Pstack with fn before_model(
 ///|
 /// The status segment is session-scoped: release it when the Agent shuts down.
 pub impl @posoco.Lifecycle for Pstack with fn on_shutdown(self : Pstack) -> Unit {
-  if self.announced {
-    self.announced = false
+  if self.is_announced() {
     self.publish_status(@kit_events.Unregister(segment="🥔"))
   }
+  self.announced_sessions.clear()
+  self.scope = None
 }
 
 ///|

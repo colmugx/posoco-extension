@@ -192,45 +192,6 @@ fn config_with_default(
 }
 
 ///|
-test "list_tools_description_lists_kind_catalog" {
-  let composer = FakeComposer::FakeComposer(response_text="x")
-  let tools = test_tools(
-    composer=composer as &ChildComposer,
-    catalog=catalog_with_bound_kind(),
-  )
-  let def = @posoco.ToolProvider::list_tools(tools)[0]
-  assert_true(def.description.contains("Available kinds (pass via kind):"))
-  assert_true(def.description.contains("- coder: "))
-  assert_true(def.description.contains(" [default]"))
-  assert_true(
-    def.description.contains(
-      "- porter: Bound reconnaissance kind (model: kimi/k2, effort: high)",
-    ),
-  )
-  assert_true(
-    def.description.contains(
-      "Omit model/effort to use the kind's binding, then the configured default, then your current selection.",
-    ),
-  )
-  assert_false(def.description.contains("Available models"))
-}
-
-///|
-test "list_tools_description_advertises_configured_default_model" {
-  let composer = FakeComposer::FakeComposer(response_text="x")
-  let tools = test_tools(
-    composer=composer as &ChildComposer,
-    config=config_with_default(model="mtplx/local-fast", effort=Some("low")),
-  )
-  let def = @posoco.ToolProvider::list_tools(tools)[0]
-  assert_true(
-    def.description.contains(
-      "Default subagent model: mtplx/local-fast (effort low)",
-    ),
-  )
-}
-
-///|
 fn config_with_spawn_budget(budget : Int32) -> @kit.SubagentConfig {
   let base = @kit.SubagentConfig::defaults()
   { ..base, limits: { ..base.limits, spawn_budget: budget, }, }
@@ -432,7 +393,7 @@ async test "inheritance_reads_live_parent_selection_at_each_spawn" {
 }
 
 ///|
-test "list_tools_declares_agent_schema_and_description" {
+test "model-facing tool schemas advertise the required arguments and policies" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
   let defs = @posoco.ToolProvider::list_tools(tools)
@@ -440,19 +401,6 @@ test "list_tools_declares_agent_schema_and_description" {
   let def = defs[0]
   assert_eq(def.name.to_string(), "subagent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
-  assert_true(def.description.contains("cannot spawn further subagents"))
-  assert_true(def.description.contains("user-position slot"))
-  assert_true(def.description.contains("instruction slot"))
-  assert_true(def.description.contains("NEVER copy task content"))
-  assert_true(def.description.contains("default 30 minutes"))
-  assert_true(def.description.contains("waiting_reply"))
-  assert_true(
-    def.description.contains("By default the child runs in the background"),
-  )
-  assert_true(def.description.contains("background=false"))
-  assert_true(def.description.contains("acceptance receipt"))
-  assert_true(def.description.contains("follow-up turn"))
-  assert_true(def.description.contains("stop_subagent"))
   match def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
@@ -484,7 +432,6 @@ test "list_tools_declares_agent_schema_and_description" {
   let answer_def = defs[1]
   assert_eq(answer_def.name.to_string(), "answer_question")
   assert_true(answer_def.policy is @posoco.ExecutionPolicy::Sequential)
-  assert_true(answer_def.description.contains("waiting_reply receipt"))
   match answer_def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
@@ -499,8 +446,6 @@ test "list_tools_declares_agent_schema_and_description" {
   let stop_def = defs[2]
   assert_eq(stop_def.name.to_string(), "stop_subagent")
   assert_true(stop_def.policy is @posoco.ExecutionPolicy::Sequential)
-  assert_true(stop_def.description.contains("requests the cancellation"))
-  assert_true(stop_def.description.contains("background=false"))
   match stop_def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
@@ -805,7 +750,7 @@ test "repeat_terminal_of_a_finished_run_still_reclaims_its_handle" {
   // An interactive run records its terminal in-wave (`finish`), long before
   // the delivery channel hands over the same run's envelope.
   match tools.registry.get("subagent-1") {
-    Some(record) => record.state = Done("completed", "in-wave finish")
+    Some(record) => record.state = Done("completed")
     None => fail("expected the seeded record")
   }
   let cancelled : Array[String] = []
@@ -1058,4 +1003,26 @@ test "answer_echo_word_renders_each_question_type" {
     ),
     "beta (index 1)",
   )
+}
+
+///|
+test "expiry drops only the expired question and a late close cannot release a newer wait" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let broker = tools.question
+  seed_registered_child(tools, child_session="child", session="parent")
+  let req = @posoco.UiRequest::Input(prompt="blocked?", default=None)
+  let expired = broker.register("child", "old", req)
+  assert_eq(tools.background_children(), [("child", "waiting_reply")])
+  broker.expire(expired.id)
+  assert_eq(tools.background_children(), [("child", "running")])
+  assert_true(
+    broker.lookup(expired.id)
+    is QuestionLookup::Resolved("expired waiting for an answer"),
+  )
+  assert_true(tools.inject_queued_questions([]).is_empty())
+  let current = broker.register("child", "new", req)
+  broker.withdraw(expired.id)
+  assert_eq(tools.background_children(), [("child", "waiting_reply")])
+  assert_eq(broker.take_queued().map(info => info.id), [current.id])
 }

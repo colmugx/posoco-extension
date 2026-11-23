@@ -679,8 +679,7 @@ impl PlanReviewSource for ScriptedReview with fn review(
 /// RecordingReview — captures the request so tests can assert what the exit
 /// tool actually hands to the review surface.
 struct RecordingReview {
-  mut seen_name : String
-  mut seen_plan : String
+  mut seen : PlanReviewRequest?
   mut asked : Int32
 }
 
@@ -689,8 +688,7 @@ impl PlanReviewSource for RecordingReview with fn review(
   self,
   request : PlanReviewRequest,
 ) -> PlanReviewDecision {
-  self.seen_name = request.name
-  self.seen_plan = request.plan
+  self.seen = Some(request)
   self.asked = self.asked + 1
   Accept
 }
@@ -751,7 +749,7 @@ async test "review source accepts the plan in one action" {
 
 ///|
 async test "review request carries the plan name and full text" {
-  let review = RecordingReview::{ seen_name: "", seen_plan: "", asked: 0, }
+  let review = RecordingReview::{ seen: None, asked: 0, }
   let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   let call = exit_call("1. do it\n2. verify it")
@@ -760,8 +758,18 @@ async test "review request carries the plan name and full text" {
     other => fail("expected Success, got \{other}")
   }
   assert_eq(review.asked, 1)
-  assert_eq(review.seen_name, "test plan")
-  assert_eq(review.seen_plan, "1. do it\n2. verify it")
+  assert_eq(
+    review.seen,
+    Some({ name: "test plan", plan: "1. do it\n2. verify it", }),
+  )
+}
+
+///|
+test "plan review decisions compare revision feedback" {
+  let revise = PlanReviewDecision::Revise(feedback="split the migration")
+  assert_eq(revise, Revise(feedback="split the migration"))
+  assert_not_eq(revise, Revise(feedback="keep it together"))
+  assert_not_eq(revise, Dismiss)
 }
 
 ///|

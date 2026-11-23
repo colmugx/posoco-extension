@@ -16,15 +16,24 @@ import {
 import {
   "colmugx/posoco",
   "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
 } for "wbtest"
+
+// `@socket` is only reached from white-box test files, whose imports never
+// clear the main-package unused check.
+
+warnings = "-unused_package"
 
 options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
   ],
   targets: {
     "zai_wbtest.mbt": [ "native" ],
+    "zai_retry_wbtest.mbt": [ "native" ],
     "posoco_ext_zai_wbtest.mbt": [ "native" ],
     "list_models_wbtest.mbt": [ "native" ],
   },

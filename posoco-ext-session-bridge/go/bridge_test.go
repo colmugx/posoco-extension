@@ -120,3 +120,85 @@ func TestNotComposedRejectCarriesTypedSentinel(t *testing.T){
     }
     _=server.Close()
 }
+
+func TestReplayConnectionPagesHistory(t *testing.T){
+    ownerPeer,viewerPeer:=net.Pipe()
+    ctx,cancel:=context.WithTimeout(context.Background(),3*time.Second)
+    defer cancel()
+    type call struct{session,command string;args json.RawMessage}
+    calls:=make(chan call,4)
+    done:=make(chan error,1)
+    go func(){
+        done<-ServeConnWithReplay(ctx,ownerPeer,Owner{InstanceID:"owner",RuntimeEpoch:"epoch"},
+            func(_ context.Context,id string)(Subscription,error){
+                return Subscription{},errors.New("observe unexpected on replay connection")
+            },
+            func(_ context.Context,session,command string,args json.RawMessage)(json.RawMessage,error){
+                calls<-call{session,command,args}
+                return json.RawMessage(`{"blocks":2}`),nil
+            })
+    }()
+    client,err:=DialReplay(ctx,viewerPeer,"session-a","viewer")
+    if err!=nil{t.Fatal(err)}
+    defer client.Close()
+    result,err:=client.Call(ctx,"transcript_page",json.RawMessage(`{"session_id":"session-a","first":0,"limit":100}`))
+    if err!=nil{t.Fatal(err)}
+    if string(result)!=`{"blocks":2}`{t.Fatalf("unexpected page payload %s",result)}
+    if _,err:=client.Call(ctx,"transcript_index",json.RawMessage(`{"session_id":"session-a"}`));err!=nil{
+        t.Fatal(err)
+    }
+    select{
+    case got:=<-calls:
+        if got.session!="session-a"||got.command!="transcript_page"||
+           string(got.args)!=`{"session_id":"session-a","first":0,"limit":100}`{
+            t.Fatalf("owner saw %+v",got)
+        }
+    default:
+        t.Fatal("owner replay callback never ran")
+    }
+    _=client.Close()
+    select{
+    case <-done:
+    case <-time.After(2*time.Second):t.Fatal("replay connection did not terminate")
+    }
+}
+
+func TestReplayClientRefusesForeignSessionAndWrites(t *testing.T){
+    ownerPeer,viewerPeer:=net.Pipe()
+    ctx,cancel:=context.WithTimeout(context.Background(),3*time.Second)
+    defer cancel()
+    go func(){
+        _=ServeConnWithReplay(ctx,ownerPeer,Owner{InstanceID:"owner",RuntimeEpoch:"epoch"},
+            func(_ context.Context,_ string)(Subscription,error){
+                return Subscription{},errors.New("observe unexpected on replay connection")
+            },
+            func(_ context.Context,_,_ string,_ json.RawMessage)(json.RawMessage,error){
+                return json.RawMessage(`{}`),nil
+            })
+        _=ownerPeer.Close()
+    }()
+    client,err:=DialReplay(ctx,viewerPeer,"session-a","viewer")
+    if err!=nil{t.Fatal(err)}
+    defer client.Close()
+    if _,err:=client.Call(ctx,"transcript_page",json.RawMessage(`{"session_id":"session-b"}`));!errors.Is(err,ErrProtocol){
+        t.Fatalf("foreign session accepted: %v",err)
+    }
+    if _,err:=client.Call(ctx,"turn_start",json.RawMessage(`{"session_id":"session-a"}`));!errors.Is(err,ErrProtocol){
+        t.Fatalf("write command accepted: %v",err)
+    }
+}
+
+func TestReplayNeedsOwnerSupport(t *testing.T){
+    ownerPeer,viewerPeer:=net.Pipe()
+    ctx,cancel:=context.WithTimeout(context.Background(),3*time.Second)
+    defer cancel()
+    go func(){
+        _=ServeConn(ctx,ownerPeer,Owner{InstanceID:"owner",RuntimeEpoch:"epoch"},
+            func(_ context.Context,_ string)(Subscription,error){
+                return Subscription{},errors.New("unused")
+            })
+    }()
+    if _,err:=DialReplay(ctx,viewerPeer,"session-a","viewer");!errors.Is(err,ErrProtocol){
+        t.Fatalf("replay dial without owner support: %v",err)
+    }
+}
