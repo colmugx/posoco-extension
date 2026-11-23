@@ -60,7 +60,7 @@ fn loop_raw_args(args : Json) -> Result[String, String] {
 async fn loop_runtime_change_safe(
   runtime : LoopRuntime,
   request : LoopRequest,
-) -> Result[String, String] {
+) -> Result[String, String] noraise {
   runtime.change(request) catch {
     error => Err(error.to_string())
   }
