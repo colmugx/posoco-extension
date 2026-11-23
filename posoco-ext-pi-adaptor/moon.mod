@@ -7,7 +7,7 @@ preferred_target = "js"
 supported_targets = "js"
 
 import {
-  "colmugx/posoco@0.25.0",
+  "colmugx/posoco@0.25.1",
 }
 
 readme = "README.mbt.md"

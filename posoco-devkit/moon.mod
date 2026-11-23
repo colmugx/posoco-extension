@@ -13,7 +13,7 @@ description = "Small helper layer for Posoco extension authors, including a test
 source = "src"
 
 import {
-  "colmugx/posoco@0.25.0",
+  "colmugx/posoco@0.25.1",
   "moonbitlang/x@0.5.5",
   "posoco/kit-events@0.1.0",
   "moonbit-community/unicode-data@0.7.1",

@@ -15,7 +15,7 @@ keywords = [ "posoco", "agent-skills", "skills", "system-prompt" ]
 description = "Agent Skills lifecycle extension for Posoco: discovery, progressive disclosure, activation, and scoped resource access"
 
 import {
-  "colmugx/posoco@0.25.0",
+  "colmugx/posoco@0.25.1",
   "colmugx/posoco-ext-workspace@0.1.0",
   "posoco/devkit@0.4.2",
   "moonbit-community/yaml@0.0.9",

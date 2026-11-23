@@ -18,7 +18,7 @@ preferred_target = "native"
 description = "Posoco JSONL File Session Store"
 
 import {
-  "colmugx/posoco@0.25.0",
+  "colmugx/posoco@0.25.1",
   "colmugx/posoco-kit-model-management@0.1.0",
   "posoco/devkit@0.4.1",
   "posoco/kit-events@0.1.0",
