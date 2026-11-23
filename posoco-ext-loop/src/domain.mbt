@@ -59,7 +59,7 @@ fn loop_split_first(raw : String) -> (String, String) {
     if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
       break
     }
-    at += 1
+    at = at + 1
   }
   let head = text[:at].to_owned()
   let tail = if at < text.length() {
