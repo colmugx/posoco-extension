@@ -20,7 +20,7 @@ test "loop command preserves task text and rejects malformed controls" {
       assert_eq(interval_ms, 300000L)
       assert_eq(prompt, "check CI and run tests")
     }
-    _ => fail("expected create"),
+    _ => fail("expected create")
   }
   assert_true(parse_loop_action("") is Ok(ListJobs))
   assert_true(parse_loop_action("list") is Ok(ListJobs))
@@ -34,14 +34,14 @@ test "loop command preserves task text and rejects malformed controls" {
 
 ///|
 test "extension contributes the command and a lifecycle, never a tool" {
-  let loop = LoopExtension()
-  let manifest = loop.manifest()
+  let loop_ext = LoopExtension()
+  let manifest = loop_ext.manifest()
   assert_eq(manifest.id, "posoco_ext_loop")
   assert_eq(manifest.commands.length(), 1)
   assert_eq(manifest.lifecycle.length(), 1)
   assert_eq(manifest.tools.length(), 0)
   assert_eq(manifest.requires.length(), 0)
-  let command : &@posoco.CommandPort = loop
+  let command : &@posoco.CommandPort = loop_ext
   assert_eq(command.commands()[0].id, "loop")
 }
 
