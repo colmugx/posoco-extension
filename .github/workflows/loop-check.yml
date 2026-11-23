@@ -24,6 +24,11 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Update package index
         run: moon update
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install Board Web dependencies
+        working-directory: posoco-ext-board-web
+        run: bun install --frozen-lockfile
       - name: Check native
         run: moon -C posoco-ext-loop check --target native --output-json
       - name: Test native
