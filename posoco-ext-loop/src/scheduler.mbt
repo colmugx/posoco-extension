@@ -366,6 +366,6 @@ async fn LoopRuntime::poll(self : LoopRuntime) -> Unit {
 async fn LoopRuntime::shutdown(self : LoopRuntime) -> Unit {
   let _ = self.actor.tell(Halt)
   self.actor.close()
-  let _ = self.effects.supervisor.shutdown(5000)
+  let _ = self.effects.supervisor.shutdown(timeout_ms=5000)
   let _ = self.actor.join()
 }
