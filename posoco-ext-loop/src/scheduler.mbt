@@ -100,7 +100,7 @@ fn loop_dispatch(
     Ok(_) => ()
     Err(_) => {
       job.status = "paused"
-      job.failure_count += 1
+      job.failure_count = job.failure_count + 1
       (effects.trace)("loop supervisor rejected worker for " + id)
     }
   }
@@ -145,7 +145,7 @@ fn loop_finished(
   let now_ms = (effects.now_ms)()
   match result {
     Done => {
-      job.run_count += 1
+      job.run_count = job.run_count + 1
       job.failure_count = 0
       job.status = "scheduled"
       job.next_due_at_ms = loop_next_due(now_ms, job.interval_ms)
@@ -157,8 +157,8 @@ fn loop_finished(
       job.next_due_at_ms = now_ms + 500L
     }
     Error(reason) => {
-      job.run_count += 1
-      job.failure_count += 1
+      job.run_count = job.run_count + 1
+      job.failure_count = job.failure_count + 1
       (effects.trace)("loop " + id + " failed: " + reason)
       if job.failure_count >= effects.max_failures {
         job.status = "paused"
@@ -216,7 +216,7 @@ fn loop_fold_request(
           } else {
             // Retire stopped entries as needed to keep actor state bounded.
             state.jobs = live
-            state.sequence += 1
+            state.sequence = state.sequence + 1
             let id = "loop_" + state.sequence.to_string()
             let entry : LoopEntry = {
               id,
@@ -238,7 +238,7 @@ fn loop_fold_request(
       Pause(id~) =>
         match loop_find(state.jobs, id) {
           Some(job) if job.status == "scheduled" || job.status == "running" => {
-            job.generation += 1
+            job.generation = job.generation + 1
             job.status = "paused"
             Action(Ok("paused " + id))
           }
@@ -249,7 +249,7 @@ fn loop_fold_request(
       Resume(id~) =>
         match loop_find(state.jobs, id) {
           Some(job) if job.status == "paused" => {
-            job.generation += 1
+            job.generation = job.generation + 1
             job.failure_count = 0
             job.status = "scheduled"
             job.next_due_at_ms = loop_next_due(
@@ -263,7 +263,7 @@ fn loop_fold_request(
       Stop(id~) =>
         match loop_find(state.jobs, id) {
           Some(job) if job.status != "stopped" => {
-            job.generation += 1
+            job.generation = job.generation + 1
             job.status = "stopped"
             Action(Ok("stopped " + id))
           }
