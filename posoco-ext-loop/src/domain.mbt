@@ -22,7 +22,6 @@ priv struct LoopEntry {
   mut generation : Int32
   mut run_count : Int32
   mut failure_count : Int32
-  mut busy_count : Int32
 }
 
 ///|
