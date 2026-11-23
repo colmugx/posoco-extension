@@ -43,7 +43,6 @@ priv struct LoopState {
 priv struct LoopEffects {
   supervisor : @fuwaroid.Supervisor[Unit]
   now_ms : () -> Int64
-  sleep_ms : async (Int32) -> Unit
   execute : async (String, String) -> DispatchResult
   trace : (String) -> Unit
   max_failures : Int32
@@ -228,7 +227,6 @@ fn loop_fold_request(
               generation: 1,
               run_count: 0,
               failure_count: 0,
-              busy_count: 0,
             }
             state.jobs.push(entry)
             Action(Ok(id))
@@ -290,7 +288,6 @@ fn LoopRuntime::start(
   let effects : LoopEffects = {
     supervisor,
     now_ms,
-    sleep_ms,
     execute,
     trace,
     max_failures,
