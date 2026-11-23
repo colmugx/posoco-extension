@@ -1,0 +1,23 @@
+import {
+  "colmugx/posoco",
+  "colmugx/fuwaroid",
+  "moonbitlang/core/async",
+  "moonbitlang/core/string",
+}
+
+import {
+  "colmugx/posoco",
+  "colmugx/fuwaroid",
+  "moonbitlang/core/async",
+} for "wbtest"
+
+// The scripted-model integration suite runs only on native.
+#cfg(target = "native")
+import {
+  "posoco/devkit/testkit" @tk,
+} for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+  targets: { "integration_wbtest.mbt": [ "native" ] },
+)

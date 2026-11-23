@@ -1,0 +1,39 @@
+name: posoco-ext-loop checks
+
+on:
+  pull_request:
+    paths:
+      - 'posoco-ext-loop/**'
+      - 'moon.work'
+      - '.github/workflows/loop-check.yml'
+  push:
+    paths:
+      - 'posoco-ext-loop/**'
+      - 'moon.work'
+      - '.github/workflows/loop-check.yml'
+
+jobs:
+  loop-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Update package index
+        run: moon update
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install Board Web dependencies
+        working-directory: posoco-ext-board-web
+        run: bun install --frozen-lockfile
+      - name: Check native
+        run: moon -C posoco-ext-loop check --target native --output-json
+      - name: Test native
+        run: moon -C posoco-ext-loop test --target native --output-json
+      - name: Check JS
+        run: moon -C posoco-ext-loop check --target js --output-json
+      - name: Test JS
+        run: moon -C posoco-ext-loop test --target js --output-json
