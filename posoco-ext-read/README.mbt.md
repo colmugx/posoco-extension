@@ -78,6 +78,8 @@ let exts : Array[&@posoco.Extension] = [
 
 ## Behavior notes
 
+- **Tail reads** — native negative offsets retain only the requested tail window in a bounded ring during one streaming pass; discarded prefix lines are counted but not decoded or retained.
+
 - **Freshness** — every successful read records a `(mtime, size)` stamp in the
   injected `FreshnessGuard`, keyed by the resolved path; write/edit use the
   same guard to refuse stale modifications.

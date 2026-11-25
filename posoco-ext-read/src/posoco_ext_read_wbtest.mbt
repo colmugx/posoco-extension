@@ -705,3 +705,56 @@ async test "read_attaches_image_files_whole_for_vision" {
     }
   }
 }
+
+
+///|
+#cfg(target="native")
+async test "read_negative_offset_skips_invalid_utf8_before_tail" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-tail-invalid-prefix")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    let path = dir + "/tail.bin"
+    @fs.write_binary(
+      path,
+      b"\xff\nvalid-1\nvalid-2\n",
+      create_mode=CreateNew,
+    )
+    match
+      run_read(
+        ReadTools::ReadTools(),
+        read_call_args(path, offset=-2),
+      ) {
+      @posoco.ToolOutcome::Success(content~, ..) =>
+        inspect(content, content="2|valid-1\n3|valid-2")
+      _ => fail("tail reads must not decode discarded prefix lines")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_negative_offset_rejects_invalid_utf8_in_tail" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-tail-invalid-window")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    let path = dir + "/tail.bin"
+    @fs.write_binary(path, b"valid\n\xff\n", create_mode=CreateNew)
+    let result = Ok(
+      run_read(
+        ReadTools::ReadTools(),
+        read_call_args(path, offset=-1),
+      ),
+    ) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+        assert_true(message.contains("invalid UTF-8"))
+      _ => fail("invalid UTF-8 in the requested tail must remain an error")
+    }
+  }
+}

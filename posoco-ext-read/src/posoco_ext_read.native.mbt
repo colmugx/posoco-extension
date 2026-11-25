@@ -126,20 +126,65 @@ impl FsIo for NativeFsIo with fn read_lines(
 }
 
 ///|
-/// Tail window via two streaming passes: count the file once, then re-read
-/// skipping `total - take` lines. No ring buffer, obviously correct.
+/// Retain the last `take` raw lines in a bounded ring while scanning once.
+/// Decode only the retained tail, matching the old two-pass behavior for
+/// invalid UTF-8 outside the requested window without re-reading the file.
+async fn native_read_tail_lines(
+  path : String,
+  take : Int32,
+) -> LinePage raise @posoco.RuntimeError {
+  let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
+    error => raise read_failure("read", path, error.to_string())
+  }
+  let total_bytes = file.size() catch {
+    error => {
+      file.close()
+      raise read_failure("read", path, error.to_string())
+    }
+  }
+  let ring : Array[Bytes] = []
+  let mut total = 0
+  while true {
+    let chunk = file.read_until(@utf8.encode("\n")[:]) catch {
+      error => {
+        file.close()
+        raise read_failure("read", path, @debug.Repr(error).to_string())
+      }
+    }
+    match chunk {
+      None => break
+      Some(raw) => {
+        total += 1
+        if ring.length() < take {
+          ring.push(raw)
+        } else {
+          ring[(total - 1) % take] = raw
+        }
+      }
+    }
+  }
+  file.close()
+  let lines : Array[String] = []
+  if ring.length() > 0 {
+    let start = if total > take { total % take } else { 0 }
+    for i in 0..<ring.length() {
+      let index = (start + i) % ring.length()
+      let text = @utf8.decode(ring[index]) catch {
+        _ => raise read_failure("decode", path, "invalid UTF-8")
+      }
+      lines.push(strip_trailing_cr(text))
+    }
+  }
+  { lines, total_lines: total, total_bytes, }
+}
+
+///|
 impl FsIo for NativeFsIo with fn read_last_lines(
   _self,
   path : String,
   take : Int32,
 ) -> LinePage {
-  let counted = native_read_lines(path, 0, 0)
-  let take_eff = if take < counted.total_lines {
-    take
-  } else {
-    counted.total_lines
-  }
-  native_read_lines(path, counted.total_lines - take_eff, take_eff)
+  native_read_tail_lines(path, take)
 }
 
 ///|
