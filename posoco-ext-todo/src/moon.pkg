@@ -5,20 +5,14 @@ import {
 
 import {
   "moonbitlang/core/async",
-} for "test"
-
-import {
-  "moonbitlang/core/async",
-  "colmugx/posoco/kernel",
   "posoco/devkit/testkit" @tk,
 } for "wbtest"
 
-// The testkit import above is only exercised by native-only white-box
-// files, so `--target js` checks would report it as unused.
+// `async test` needs the root `moonbitlang/core/async` import without ever
+// naming it, so js/wasm checks report it as unused.
 
 warnings = "-unused_package"
 
 options(
   "allow-experimental-packages": [ "moonbitlang/core/async" ],
-  targets: { "posoco_ext_todo_wbtest.mbt": [ "native" ] },
 )

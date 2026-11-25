@@ -21,3 +21,6 @@ pub extend TodoList with @posoco.Lifecycle::{on_compose}
 
 ///|
 pub extend TodoStatus with Show::{to_string}
+
+///|
+pub extend TodoPriority with Show::{to_string}
