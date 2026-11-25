@@ -54,7 +54,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef(
       name=@posoco.ToolName::unchecked("edit"),
-      description="Exact text replacement in a fresh-read file. `old_text` must be unique unless `replace_all` is true; copied read line prefixes are accepted.",
+      description="Exact text replacement in a fresh-read file. `old_text` must be unique unless `replace_all` is true; copied read line prefixes are accepted. For multiple changes to the same file, pass hunks (1-20 ordered replacements) instead of old_text/new_text/replace_all; all must match before one write.",
       input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
@@ -74,12 +74,26 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
             "type": Json::string("boolean"),
             "description": Json::string("Replace all matches; default false"),
           }),
+          "hunks": Json::object({
+            "type": Json::string("array"),
+            "description": Json::string("Ordered same-file replacements; mutually exclusive with top-level old_text/new_text/replace_all"),
+            "minItems": Json::number(1.0),
+            "maxItems": Json::number(20.0),
+            "items": Json::object({
+              "type": Json::string("object"),
+              "properties": Json::object({
+                "old_text": Json::object({ "type": Json::string("string") }),
+                "new_text": Json::object({ "type": Json::string("string") }),
+                "replace_all": Json::object({ "type": Json::string("boolean") }),
+              }),
+              "required": Json::array([
+                Json::string("old_text"),
+                Json::string("new_text"),
+              ]),
+            }),
+          }),
         }),
-        "required": Json::array([
-          Json::string("path"),
-          Json::string("old_text"),
-          Json::string("new_text"),
-        ]),
+        "required": Json::array([Json::string("path")]),
       }),
       owner=@posoco.OwnerId::unchecked("posoco_ext_edit"),
       policy=@posoco.ExecutionPolicy::Exclusive,
@@ -89,20 +103,12 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 }
 
 ///|
-/// Extract `(path, old_text, new_text, replace_all)` from ToolCall arguments.
-fn extract_edit_args(
+/// Extract a single replacement, shared by legacy and batched arguments.
+fn extract_edit_hunk(
   args : Json,
-) -> (String, String, String, Bool) raise @posoco.RuntimeError {
+) -> (String, String, Bool) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
-      let p = match obj.get("path") {
-        Some(String(s)) => s
-        Some(_) =>
-          raise @posoco.RuntimeError::UnknownTool(
-            "edit: 'path' must be a string",
-          )
-        None => raise @posoco.RuntimeError::UnknownTool("edit: missing 'path'")
-      }
       let o = match obj.get("old_text") {
         Some(String(s)) => s
         Some(_) =>
@@ -129,7 +135,54 @@ fn extract_edit_args(
             "edit: 'replace_all' must be boolean",
           )
       }
-      (p, o, n, ra)
+      (o, n, ra)
+    }
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "edit: arguments must be an object",
+      )
+  }
+}
+
+///|
+/// Parse every hunk before doing any IO. Keep the original argument form.
+fn extract_edit_args(
+  args : Json,
+) -> (String, Array[(String, String, Bool)], Bool) raise @posoco.RuntimeError {
+  match args {
+    Object(obj) => {
+      let p = match obj.get("path") {
+        Some(String(s)) => s
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: 'path' must be a string",
+          )
+        None => raise @posoco.RuntimeError::UnknownTool("edit: missing 'path'")
+      }
+      match obj.get("hunks") {
+        None => (p, [extract_edit_hunk(args)], false)
+        Some(Array(hunks)) => {
+          if obj.get("old_text") is Some(_) ||
+            obj.get("new_text") is Some(_) ||
+            obj.get("replace_all") is Some(_) {
+            raise @posoco.RuntimeError::UnknownTool(
+              "edit: hunks cannot be combined with old_text/new_text/replace_all",
+            )
+          }
+          if hunks.length() == 0 || hunks.length() > 20 {
+            raise @posoco.RuntimeError::UnknownTool(
+              "edit: hunks must contain 1-20 replacements",
+            )
+          }
+          let parsed : Array[(String, String, Bool)] = []
+          for hunk in hunks {
+            parsed.push(extract_edit_hunk(hunk))
+          }
+          (p, parsed, true)
+        }
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool("edit: hunks must be an array")
+      }
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
@@ -294,6 +347,51 @@ fn describe_match_lines(lines : Array[Int32]) -> String {
 }
 
 ///|
+/// Plan one exact replacement without touching disk. Batch hunks see the
+/// in-memory result of earlier hunks; their line numbers refer to that state.
+fn plan_edit_hunk(
+  content : String,
+  raw_path : String,
+  old_text : String,
+  new_text : String,
+  all : Bool,
+) -> Result[(String, Array[Int32], Bool), String] {
+  let mut needle = old_text
+  let mut matches = find_occurrences(content, needle)
+  let mut stripped = false
+  if matches.length() == 0 {
+    // Fall back to our own read format: a block whose every non-empty line
+    // carries an `L<n>: ` prefix is a verbatim copy of read output.
+    match strip_line_numbers_block(old_text) {
+      Some(candidate) => {
+        let candidate_matches = find_occurrences(content, candidate)
+        if candidate_matches.length() > 0 {
+          needle = candidate
+          matches = candidate_matches
+          stripped = true
+        }
+      }
+      None => ()
+    }
+  }
+  if matches.length() == 0 {
+    return Err("old_text not found; reread \{@devkit.sanitize_path(raw_path)}")
+  }
+  let match_lines = [ for m in matches => m.1 ]
+  if matches.length() > 1 && !all {
+    return Err(
+      "\{matches.length()} matches lines=\{describe_match_lines(match_lines)}; add context or replace_all=true",
+    )
+  }
+  let new_content = if all {
+    content.replace_all(old=needle, new=new_text)
+  } else {
+    replace_first(content, needle, new_text)
+  }
+  Ok((new_content, match_lines, stripped))
+}
+
+///|
 /// Shared `edit` execute logic. Target-agnostic; only the IO adaptor
 /// differs. Uniqueness, prefix stripping, and the freshness gate are
 /// business rules that live here.
@@ -303,7 +401,7 @@ async fn execute_edit_impl(
   anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (raw_path, old_text, new_text, all) = extract_edit_args(call.arguments)
+  let (raw_path, hunks, batched) = extract_edit_args(call.arguments)
   // The resolved path drives IO and the freshness ledger; messages echo the
   // argument as written so the anchor root never leaks into results.
   let path = match anchor {
@@ -330,44 +428,29 @@ async fn execute_edit_impl(
     }
     None => ()
   }
-  let content = io.read_text(path)
-  let mut needle = old_text
-  let mut matches = find_occurrences(content, needle)
+  let mut content = io.read_text(path)
+  let match_lines : Array[Int32] = []
   let mut stripped = false
-  if matches.length() == 0 {
-    // Fall back to our own read format: a block whose every non-empty line
-    // carries an `L<n>: ` prefix is a verbatim copy of read output.
-    match strip_line_numbers_block(old_text) {
-      Some(candidate) => {
-        let candidate_matches = find_occurrences(content, candidate)
-        if candidate_matches.length() > 0 {
-          needle = candidate
-          matches = candidate_matches
-          stripped = true
+  for i, hunk in hunks {
+    let (old_text, new_text, all) = hunk
+    match plan_edit_hunk(content, raw_path, old_text, new_text, all) {
+      Ok((next, lines, did_strip)) => {
+        content = next
+        for line in lines {
+          match_lines.push(line)
         }
+        stripped = stripped || did_strip
       }
-      None => ()
+      Err(reason) => {
+        let prefix = if batched { "edit: hunk \{i + 1}: " } else { "edit: " }
+        return @posoco.ToolOutcome::ToolReportedError(
+          content=prefix + reason,
+          structured=None,
+        )
+      }
     }
   }
-  if matches.length() == 0 {
-    return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: old_text not found; reread \{@devkit.sanitize_path(raw_path)}",
-      structured=None,
-    )
-  }
-  let match_lines = [ for m in matches => m.1 ]
-  if matches.length() > 1 && !all {
-    return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: \{matches.length()} matches lines=\{describe_match_lines(match_lines)}; add context or replace_all=true",
-      structured=None,
-    )
-  }
-  let new_content = if all {
-    content.replace_all(old=needle, new=new_text)
-  } else {
-    replace_first(content, needle, new_text)
-  }
-  io.write_atomic(path, new_content)
+  io.write_atomic(path, content)
   // The edit changed the stamp: re-record so a follow-up edit of the same
   // file is not rejected as externally modified.
   match freshness {
@@ -378,10 +461,14 @@ async fn execute_edit_impl(
     None => ()
   }
   @posoco.ToolOutcome::Success(
-    content="ok: \{matches.length()} lines=\{describe_match_lines(match_lines)}",
+    content=if batched {
+      "ok: \{match_lines.length()} matches across \{hunks.length()} hunks"
+    } else {
+      "ok: \{match_lines.length()} lines=\{describe_match_lines(match_lines)}"
+    },
     structured=Some(
       Json::object({
-        "count": Json::number(matches.length().to_double()),
+        "count": Json::number(match_lines.length().to_double()),
         "lines": Json::array(
           match_lines.map(fn(line) { Json::number(line.to_double()) }),
         ),

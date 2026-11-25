@@ -430,3 +430,102 @@ test "edit_tool_definition_explains uniqueness_and_freshness_contract" {
   assert_true(def.description.contains("replace_all"))
   assert_true(def.description.contains("read line prefixes"))
 }
+
+
+///|
+fn batch_edit_call(path : String, hunks : Array[Json]) -> @posoco.ToolCall {
+  {
+    call_id: @posoco.CallId::unchecked("edit-batch-test"),
+    name: @posoco.ToolName::unchecked("edit"),
+    arguments: Json::object({
+      "path": Json::string(path),
+      "hunks": Json::array(hunks),
+    }),
+  }
+}
+
+///|
+fn batch_hunk(old_text : String, new_text : String) -> Json {
+  Json::object({
+    "old_text": Json::string(old_text),
+    "new_text": Json::string(new_text),
+  })
+}
+
+///|
+test "edit_batch_rejects_empty_and_malformed_hunks" {
+  for hunks in [[], [Json::string("bad")]] {
+    let result = Ok(extract_edit_args(batch_edit_call("unused", hunks).arguments)) catch {
+      error => Err(error)
+    }
+    assert_true(result is Err(_))
+  }
+}
+
+///|
+test "edit_batch_rejects_mixed_argument_forms" {
+  let result = Ok(extract_edit_args(Json::object({
+    "path": Json::string("unused"),
+    "old_text": Json::string("old"),
+    "hunks": Json::array([batch_hunk("a", "b")]),
+  }))) catch {
+    error => Err(error)
+  }
+  assert_true(result is Err(_))
+}
+
+///|
+#cfg(target="native")
+async test "edit_batch_applies_ordered_hunks_and_refreshes_guard" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-edit-batch")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    let path = dir + "/batch.txt"
+    write_file_native(path, "alpha\nbeta\n")
+    let ledger = @devkit.FreshnessGuard::FreshnessGuard()
+    ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
+    let tools = EditTools::EditTools(freshness=ledger)
+    let call = batch_edit_call(path, [
+      batch_hunk("alpha", "ALPHA"),
+      batch_hunk("ALPHA\nbeta", "ALPHA\nBETA"),
+    ])
+    match run_edit(tools, call) {
+      @posoco.ToolOutcome::Success(content~, ..) =>
+        assert_eq(content, "ok: 2 matches across 2 hunks")
+      _ => fail("expected batch edit success")
+    }
+    assert_eq(@fs.read_text(path), "ALPHA\nBETA\n")
+    debug_inspect(
+      ledger.check(path, Some(FsIo::stat(NativeFsIo::{ }, path))),
+      content="Fresh",
+    )
+  }
+}
+
+///|
+#cfg(target="native")
+async test "edit_batch_failed_later_hunk_leaves_file_unchanged" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-edit-batch-failure")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    let path = dir + "/batch.txt"
+    let original = "alpha\nbeta\nbeta\n"
+    write_file_native(path, original)
+    let tools = EditTools::EditTools()
+    for target in ["missing", "beta"] {
+      match run_edit(tools, batch_edit_call(path, [
+        batch_hunk("alpha", "ALPHA"),
+        batch_hunk(target, "changed"),
+      ])) {
+        @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+          assert_true(content.contains("hunk 2:"))
+        _ => fail("expected batch edit failure")
+      }
+      assert_eq(@fs.read_text(path), original)
+    }
+  }
+}

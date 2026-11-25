@@ -29,6 +29,24 @@ not fuzzy matching.
 | `new_text` | string, required | Replacement text |
 | `replace_all` | boolean | Replace every occurrence (default false; a non-unique match without this flag is an error) |
 
+## Multiple replacements in one file
+
+For 2–20 related changes to the same file, pass `path` and an ordered
+`hunks` array instead of top-level `old_text`, `new_text`, and
+`replace_all`. Each hunk uses the same exact-match contract:
+
+```json
+{"path":"src/main.mbt","hunks":[{"old_text":"old_a","new_text":"new_a"},{"old_text":"old_b","new_text":"new_b"}]}
+```
+
+The file is read once after the existing freshness check. Hunks run in
+memory in order (later hunks see earlier replacements). If any hunk is
+missing or ambiguous, no write occurs and the error identifies the hunk.
+Only a fully planned batch is written atomically. The existing single-hunk
+form and its result format remain unchanged. Batch metadata reports total
+matches, line numbers relative to each hunk's input state, and whether any
+read prefix was stripped. A batch still edits exactly one file.
+
 ## Behavior
 
 - **Freshness gate** — shares the host-injected `FreshnessGuard` ledger with
