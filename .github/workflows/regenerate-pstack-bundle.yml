@@ -1,0 +1,43 @@
+name: Regenerate PStack bundle (one-off)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/regenerate-pstack-bundle.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Regenerate embedded bundle
+        run: node posoco-ext-pstack/scripts/embed-skill-assets.mjs
+
+      - name: Commit generated bundle to PR branch
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- posoco-ext-pstack/src/embedded_bundle.generated.mbt; then
+            echo "Embedded bundle already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posoco-ext-pstack/src/embedded_bundle.generated.mbt
+          git commit -m "chore(pstack): regenerate embedded skill bundle"
+          git push origin "HEAD:${BRANCH}"
