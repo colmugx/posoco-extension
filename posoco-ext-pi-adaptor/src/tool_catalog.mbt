@@ -8,6 +8,7 @@
 /// tool (base wins), and from the `<pi-tools>` prompt block so the model
 /// never sees a snippet for a tool it cannot call. Hiding is visibility-only:
 /// the pi-side registry keeps the tool and PiRuntime can still execute it.
+#export_name("pi_adaptor_set_hidden_tools_json")
 pub fn pi_adaptor_set_hidden_tools_json(
   adaptor : PiAdaptor,
   names_json : String,
@@ -82,16 +83,19 @@ fn filter_hidden_tool_items(
 }
 
 ///|
+#export_name("pi_adaptor_tool_count")
 pub fn pi_adaptor_tool_count(adaptor : PiAdaptor) -> Int32 {
   js_tool_count(adaptor.host)
 }
 
 ///|
+#export_name("pi_adaptor_tool_name")
 pub fn pi_adaptor_tool_name(adaptor : PiAdaptor, index : Int32) -> String {
   js_tool_name(adaptor.host, index)
 }
 
 ///|
+#export_name("pi_adaptor_tool_description")
 pub fn pi_adaptor_tool_description(
   adaptor : PiAdaptor,
   index : Int32,
@@ -100,6 +104,7 @@ pub fn pi_adaptor_tool_description(
 }
 
 ///|
+#export_name("pi_adaptor_tool_schema_json")
 pub fn pi_adaptor_tool_schema_json(
   adaptor : PiAdaptor,
   index : Int32,
@@ -108,6 +113,7 @@ pub fn pi_adaptor_tool_schema_json(
 }
 
 ///|
+#export_name("pi_adaptor_catalog_json")
 pub fn pi_adaptor_catalog_json(adaptor : PiAdaptor) -> String {
   filter_hidden_tools(
     adaptor,
@@ -117,6 +123,7 @@ pub fn pi_adaptor_catalog_json(adaptor : PiAdaptor) -> String {
 
 ///|
 /// Versioned snapshot of the Pi guest catalog (not a Posoco CatalogSource).
+#export_name("pi_adaptor_catalog_snapshot_json")
 pub fn pi_adaptor_catalog_snapshot_json(adaptor : PiAdaptor) -> String {
   filter_hidden_tools(
     adaptor,

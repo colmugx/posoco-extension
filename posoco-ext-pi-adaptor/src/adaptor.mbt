@@ -28,6 +28,7 @@ pub(all) struct PiAdaptor {
 }
 
 ///|
+#export_name("PiAdaptor")
 pub fn PiAdaptor::PiAdaptor() -> PiAdaptor {
   let host = js_host_new()
   let adaptor = {
@@ -46,6 +47,7 @@ pub fn PiAdaptor::PiAdaptor() -> PiAdaptor {
 }
 
 ///|
+#export_name("pi_adaptor_new")
 pub fn pi_adaptor_new() -> PiAdaptor {
   PiAdaptor::PiAdaptor()
 }
@@ -55,12 +57,14 @@ pub fn pi_adaptor_new() -> PiAdaptor {
 /// the returned JavaScript Promise before inspecting the catalog. Lifecycle
 /// events are emitted separately so packages with multiple extension entries
 /// receive session_start exactly once.
+#export_name("pi_adaptor_load")
 pub fn pi_adaptor_load(adaptor : PiAdaptor, specifier : String) -> JsPromise {
   js_host_load(adaptor.host, specifier)
 }
 
 ///|
 /// Set the working directory exposed as ExtensionContext.cwd.
+#export_name("pi_adaptor_set_cwd")
 pub fn pi_adaptor_set_cwd(adaptor : PiAdaptor, cwd : String) -> Unit {
   js_host_set_cwd(adaptor.host, cwd)
 }
@@ -68,6 +72,7 @@ pub fn pi_adaptor_set_cwd(adaptor : PiAdaptor, cwd : String) -> Unit {
 ///|
 /// Control the value exposed by ExtensionContext.isProjectTrusted(). The safe
 /// default is false; hosts must opt in after applying their own trust policy.
+#export_name("pi_adaptor_set_project_trusted")
 pub fn pi_adaptor_set_project_trusted(
   adaptor : PiAdaptor,
   trusted : Bool,
@@ -82,6 +87,7 @@ pub fn pi_adaptor_set_project_trusted(
 /// Both wire shapes mirror cetas-js JsUiPort so hosts reuse their existing TS
 /// callback pair. Absent callbacks keep the headless no-op ui (hasUI=false);
 /// once installed, mode stays "json" while hasUI reports true.
+#export_name("pi_adaptor_set_ui_callbacks")
 pub fn pi_adaptor_set_ui_callbacks(
   adaptor : PiAdaptor,
   on_request : JsUiRequestFn,
@@ -152,6 +158,7 @@ pub extend PiAdaptor with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
 pub extend PiAdaptor with @posoco.ToolProvider::{list_tools, execute}
 
 ///|
+#export_name("pi_extension")
 pub fn pi_extension() -> PiAdaptor {
   PiAdaptor::PiAdaptor()
 }

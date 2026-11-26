@@ -47,6 +47,7 @@ fn followup_route_protocol(route : FollowupRoute) -> String {
 }
 
 ///|
+#export_name("PiRuntime")
 pub fn PiRuntime::PiRuntime(
   adaptor~ : PiAdaptor,
   fallback~ : &@runtime.Runtime,
@@ -358,6 +359,7 @@ pub impl @runtime.Runtime for PiRuntime with fn compact(
 /// Execute through the same MoonBit Promise bridge used by PiRuntime.
 /// Node/Bun tests use this export to prove the coroutine resumes after a real
 /// Pi Promise resolves.
+#export_name("pi_adaptor_execute_effect_via_runtime")
 pub fn pi_adaptor_execute_effect_via_runtime(
   adaptor : PiAdaptor,
   effect_id : Int32,

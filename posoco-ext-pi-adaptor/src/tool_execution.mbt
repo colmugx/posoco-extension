@@ -2,6 +2,7 @@
 // Tool executor bridge and cancellation diagnostics; runtime effects are handled in runtime_adaptor.
 
 ///|
+#export_name("pi_adaptor_execute_json_async")
 pub fn pi_adaptor_execute_json_async(
   adaptor : PiAdaptor,
   name : String,
@@ -13,6 +14,7 @@ pub fn pi_adaptor_execute_json_async(
 
 ///|
 /// Execute a Pi tool correlated to a canonical Posoco EffectId.
+#export_name("pi_adaptor_execute_effect_json_async")
 pub fn pi_adaptor_execute_effect_json_async(
   adaptor : PiAdaptor,
   effect_id : Int32,
@@ -31,12 +33,14 @@ pub fn pi_adaptor_execute_effect_json_async(
 
 ///|
 /// Best-effort cancellation for an in-flight Pi tool call.
+#export_name("pi_adaptor_cancel_call")
 pub fn pi_adaptor_cancel_call(adaptor : PiAdaptor, call_id : String) -> Bool {
   js_cancel_call(adaptor.host, call_id)
 }
 
 ///|
 /// Cancel runtime effects and return one canonical disposition per EffectId.
+#export_name("pi_adaptor_cancel_effects_json")
 pub fn pi_adaptor_cancel_effects_json(
   adaptor : PiAdaptor,
   effect_ids_json : String,
@@ -46,6 +50,7 @@ pub fn pi_adaptor_cancel_effects_json(
 }
 
 ///|
+#export_name("pi_adaptor_inflight_count")
 pub fn pi_adaptor_inflight_count(adaptor : PiAdaptor) -> Int32 {
   js_inflight_count(adaptor.host)
 }

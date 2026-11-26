@@ -2,12 +2,14 @@
 // Host-facing events, UI, commands, session entries and follow-up export functions.
 
 ///|
+#export_name("pi_adaptor_updates_json")
 pub fn pi_adaptor_updates_json(adaptor : PiAdaptor) -> String {
   js_updates_json(adaptor.host)
 }
 
 ///|
 /// Drain partial Pi tool updates for projection as TurnEvent::Custom/UI renders.
+#export_name("pi_adaptor_take_updates_json")
 pub fn pi_adaptor_take_updates_json(adaptor : PiAdaptor) -> String {
   js_take_updates_json(adaptor.host)
 }
@@ -15,6 +17,7 @@ pub fn pi_adaptor_take_updates_json(adaptor : PiAdaptor) -> String {
 ///|
 /// Drain Pi sendMessage(..., { triggerTurn: true }) envelopes. PiRuntime
 /// forwards these through the public AgentControl handle.
+#export_name("pi_adaptor_take_followups_json")
 pub fn pi_adaptor_take_followups_json(adaptor : PiAdaptor) -> String {
   js_take_followups_json(adaptor.host)
 }
@@ -22,6 +25,7 @@ pub fn pi_adaptor_take_followups_json(adaptor : PiAdaptor) -> String {
 ///|
 /// Install the callback fired on every pi appendEntry: (customType, dataJson).
 /// Hosts project these as observer Custom events at emission time.
+#export_name("pi_adaptor_set_custom_entry_callback")
 pub fn pi_adaptor_set_custom_entry_callback(
   adaptor : PiAdaptor,
   callback : (String, String) -> Unit,
@@ -33,12 +37,14 @@ pub fn pi_adaptor_set_custom_entry_callback(
 /// Drain custom session entries appended since the last drain (fresh
 /// appendEntry calls only; seeded restore entries never re-drain). JSON array
 /// of pi entry objects: {type:"custom", customType, data}.
+#export_name("pi_adaptor_take_custom_entries_json")
 pub fn pi_adaptor_take_custom_entries_json(adaptor : PiAdaptor) -> String {
   js_take_custom_entries_json(adaptor.host)
 }
 
 ///|
 /// Emit a Pi lifecycle/session event into the extension's registered handlers.
+#export_name("pi_adaptor_emit_event")
 pub fn pi_adaptor_emit_event(
   adaptor : PiAdaptor,
   event : String,
@@ -49,6 +55,7 @@ pub fn pi_adaptor_emit_event(
 
 ///|
 /// Seed a Pi custom session entry before session_start restoration.
+#export_name("pi_adaptor_seed_entry")
 pub fn pi_adaptor_seed_entry(
   adaptor : PiAdaptor,
   custom_type : String,
@@ -58,17 +65,20 @@ pub fn pi_adaptor_seed_entry(
 }
 
 ///|
+#export_name("pi_adaptor_event_names_json")
 pub fn pi_adaptor_event_names_json(adaptor : PiAdaptor) -> String {
   js_event_names_json(adaptor.host)
 }
 
 ///|
+#export_name("pi_adaptor_shortcuts_json")
 pub fn pi_adaptor_shortcuts_json(adaptor : PiAdaptor) -> String {
   js_shortcuts_json(adaptor.host)
 }
 
 ///|
 /// Registered Pi command descriptors as a JSON array of {name, description}.
+#export_name("pi_adaptor_commands_json")
 pub fn pi_adaptor_commands_json(adaptor : PiAdaptor) -> String {
   js_commands_json(adaptor.host)
 }
@@ -77,6 +87,7 @@ pub fn pi_adaptor_commands_json(adaptor : PiAdaptor) -> String {
 /// The <pi-tools> prompt block the PiHook currently injects (empty string
 /// when no registered tool self-describes). Diagnostic surface for hosts and
 /// probes; the hook itself reads the same live state per model call.
+#export_name("pi_adaptor_prompt_block_json")
 pub fn pi_adaptor_prompt_block_json(adaptor : PiAdaptor) -> String {
   pi_prompt_block(adaptor.hook.entries())
 }
@@ -85,6 +96,7 @@ pub fn pi_adaptor_prompt_block_json(adaptor : PiAdaptor) -> String {
 /// Invoke through the CommandPort bridge and resolve to the projected
 /// CommandOutcome JSON. Ids are the port-declared forms: `pi:<name>` and
 /// `pi:#<key>`.
+#export_name("pi_adaptor_invoke_command_json_async")
 pub fn pi_adaptor_invoke_command_json_async(
   adaptor : PiAdaptor,
   id : String,
@@ -102,6 +114,7 @@ pub fn pi_adaptor_invoke_command_json_async(
 ///|
 /// Run host.api.exec (argv spawn, pi ExecResult semantics) and resolve to its
 /// JSON: {stdout, stderr, code, killed}.
+#export_name("pi_adaptor_exec_json_async")
 pub fn pi_adaptor_exec_json_async(
   adaptor : PiAdaptor,
   command : String,
@@ -112,11 +125,13 @@ pub fn pi_adaptor_exec_json_async(
 }
 
 ///|
+#export_name("pi_adaptor_entries_json")
 pub fn pi_adaptor_entries_json(adaptor : PiAdaptor) -> String {
   js_entries_json(adaptor.host)
 }
 
 ///|
+#export_name("pi_adaptor_messages_json")
 pub fn pi_adaptor_messages_json(adaptor : PiAdaptor) -> String {
   js_messages_json(adaptor.host)
 }
