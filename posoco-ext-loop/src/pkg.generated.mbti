@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-loop"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/core/async",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn loop_extension() -> LoopExtension
+
+pub fn parse_loop_interval(String) -> Result[Int64, String]
+
+// Errors
+
+// Types and methods
+pub struct LoopExtension {
+  // private fields
+}
+pub fn LoopExtension::LoopExtension(now_ms? : () -> Int64, sleep_ms? : async (Int32) -> Unit, trace? : (String) -> Unit, max_failures? : Int32) -> Self
+pub fn LoopExtension::commands(Self) -> Array[@port.CommandDef]
+pub fn LoopExtension::extension_id(Self) -> String
+pub async fn LoopExtension::invoke(Self, String, @json.Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn LoopExtension::manifest(Self) -> @port.ExtensionManifest
+pub fn LoopExtension::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn LoopExtension::on_shutdown(Self) -> Unit
+pub async fn LoopExtension::on_start(Self) -> Unit
+pub async fn LoopExtension::poll(Self) -> Unit
+pub fn LoopExtension::set_session(Self, String) -> Unit
+pub async fn LoopExtension::shutdown(Self) -> Unit
+pub async fn LoopExtension::snapshot(Self) -> Array[LoopJob]
+pub fn LoopExtension::start(Self, group~ : @async.TaskGroup, agent~ : @posoco.Agent) -> Unit
+pub impl @port.CommandPort for LoopExtension
+pub impl @port.Extension for LoopExtension
+pub impl @port.Lifecycle for LoopExtension
+
+pub(all) struct LoopJob {
+  id : String
+  session_id : String
+  prompt : String
+  interval_ms : Int64
+  next_due_at_ms : Int64
+  status : String
+  run_count : Int32
+  failure_count : Int32
+}
+
+// Type aliases
+
+// Traits

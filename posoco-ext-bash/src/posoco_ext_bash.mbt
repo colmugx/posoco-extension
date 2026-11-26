@@ -194,12 +194,14 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
 }
 
 ///|
-/// Terminate a registered shell child: signal, wait out the grace period,
-/// then hard-kill. Stale exited entries left by unwind-only cleanup are
-/// pruned first. Reports `Stopped` once the child's exit was observed
-/// (the runtime's unconfirmed-execution gate needs a confirmed terminal
-/// disposition to release the admission slot); `Propagated` stays reserved
-/// for children whose termination could not be confirmed in time.
+/// Terminate a registered shell child: signal it, then wait for its exit to
+/// be confirmed. How a child that outlives the grace window is stopped is
+/// target-specific (`shell_child_settle`). Stale exited entries left by
+/// unwind-only cleanup are pruned first. Reports `Stopped` once the child's
+/// exit was observed (the runtime's unconfirmed-execution gate needs a
+/// confirmed terminal disposition to release the admission slot);
+/// `Propagated` stays reserved for children whose termination could not be
+/// confirmed in time.
 pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
   self,
   run_id~ : @kernel.RunId,
@@ -220,15 +222,13 @@ pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
   match self.in_flight.get(key) {
     Some(handle) => {
       shell_child_interrupt(handle)
-      let exited = shell_child_await_exit(handle, shell_cancel_grace_ms + 500)
-      if !exited {
-        shell_child_hard_kill(handle)
-        // SIGKILL is kernel-immediate; the bounded wait only confirms the
-        // death so the disposition can be a verified `Stopped`.
-        ignore(shell_child_await_exit(handle, shell_kill_confirm_ms))
-      }
+      let exited = shell_child_settle(
+        handle,
+        shell_cancel_grace_ms + 500,
+        shell_kill_confirm_ms,
+      )
       self.in_flight.remove(key)
-      if handle.exited {
+      if exited {
         @kernel.CancelDisposition::Stopped
       } else {
         @kernel.CancelDisposition::Propagated

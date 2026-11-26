@@ -33,17 +33,20 @@ async fn ps1_child_await_exit(
 }
 
 ///|
-async fn ps1_child_hard_kill(handle : Ps1ChildHandle) -> Unit noraise {
-  // `kill_process` is not exported directly; invoking the exported
-  // `hard_cancel` handler's function is the public hard-kill seam. The
-  // handler's signature is raising; the underlying kill is synchronous, so
-  // the catch is purely for the type.
-  let pid = handle.proc.pid
-  let kill = @process.hard_cancel().0
-  let outcome : Result[Unit, Error] = Ok(kill(pid)) catch {
-    error => Err(error)
+/// Wait for the interrupted child to die. The spawn's `graceful_cancel`
+/// handler escalates to a forceful stop at the grace deadline on its own,
+/// so this only waits: `wait_ms` covers the grace window and `confirm_ms`
+/// is a second window for the exit to be observed.
+async fn ps1_child_settle(
+  handle : Ps1ChildHandle,
+  wait_ms : Int32,
+  confirm_ms : Int32,
+) -> Bool {
+  if ps1_child_await_exit(handle, wait_ms) {
+    true
+  } else {
+    ps1_child_await_exit(handle, confirm_ms)
   }
-  ignore(outcome)
 }
 
 ///|

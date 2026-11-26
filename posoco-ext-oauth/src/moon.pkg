@@ -22,6 +22,7 @@ options(
   "native-stub": [ "entropy_stub.c" ],
   targets: {
     "callback_server.native.mbt": [ "native" ],
+    "callback_server_native_test.mbt": [ "native" ],
     "callback_server.js.mbt": [ "js" ],
     "device_flow_wbtest.mbt": [ "native" ],
     "entropy.native.mbt": [ "native" ],

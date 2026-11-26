@@ -635,7 +635,7 @@ async test "openai path-bearing base_url connects to the origin" {
   ) catch {
     _ => fail("could not bind a loopback probe listener")
   }
-  let port = loopback_port(probe_server.addr)
+  let port = probe_server.local_addr().port
   probe_server.close()
   let config = OpenAIConfig::with_base_url(
     "k",

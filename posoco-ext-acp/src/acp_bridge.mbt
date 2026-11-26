@@ -515,6 +515,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | ToolCallApproved(..)
     | ToolCallStarted(..)
     | SessionRedirect(..)
+    | SessionRewound(..)
     | ConfigWarning(..)
     | ConfigChanged(..)
     | StreamChunksDropped(..)

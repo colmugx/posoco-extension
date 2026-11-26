@@ -61,12 +61,14 @@ let ps1_kill_confirm_ms : Int32 = 1000
 let ps1_drain_grace_ms : Int32 = 1000
 
 ///|
-/// Terminate a registered PowerShell child: signal, wait out the grace
-/// period, then hard-kill. Stale exited entries left by unwind-only cleanup
-/// are pruned first. Reports `Stopped` once the child's exit was observed
-/// (the runtime's unconfirmed-execution gate needs a confirmed terminal
-/// disposition to release the admission slot); `Propagated` stays reserved
-/// for children whose termination could not be confirmed in time.
+/// Terminate a registered PowerShell child: signal it, then wait for its
+/// exit to be confirmed. How a child that outlives the grace window is
+/// stopped is target-specific (`ps1_child_settle`). Stale exited entries
+/// left by unwind-only cleanup are pruned first. Reports `Stopped` once the
+/// child's exit was observed (the runtime's unconfirmed-execution gate
+/// needs a confirmed terminal disposition to release the admission slot);
+/// `Propagated` stays reserved for children whose termination could not be
+/// confirmed in time.
 pub impl @posoco.ToolCancellable for PowerShellTools with fn cancel(
   self,
   run_id~ : @kernel.RunId,
@@ -87,15 +89,13 @@ pub impl @posoco.ToolCancellable for PowerShellTools with fn cancel(
   match self.in_flight.get(key) {
     Some(handle) => {
       ps1_child_interrupt(handle)
-      let exited = ps1_child_await_exit(handle, ps1_cancel_grace_ms + 500)
-      if !exited {
-        ps1_child_hard_kill(handle)
-        // SIGKILL is kernel-immediate; the bounded wait only confirms the
-        // death so the disposition can be a verified `Stopped`.
-        ignore(ps1_child_await_exit(handle, ps1_kill_confirm_ms))
-      }
+      let exited = ps1_child_settle(
+        handle,
+        ps1_cancel_grace_ms + 500,
+        ps1_kill_confirm_ms,
+      )
       self.in_flight.remove(key)
-      if handle.exited {
+      if exited {
         @kernel.CancelDisposition::Stopped
       } else {
         @kernel.CancelDisposition::Propagated

@@ -112,7 +112,7 @@ async fn wsr_chat_stream(
         OpenAIConfig::with_base_url(
           "wsr-test-key",
           "gpt-5",
-          "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+          "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
         ),
       )
       for turn in turns {
@@ -157,7 +157,7 @@ async fn wsr_chat_nonstream(
         OpenAIConfig::with_base_url(
           "wsr-test-key",
           "gpt-5",
-          "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+          "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
         ),
       )
       outcome = Ok(

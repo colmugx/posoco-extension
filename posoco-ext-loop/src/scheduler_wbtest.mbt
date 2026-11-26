@@ -7,7 +7,7 @@ async test "due loop runs once and uses fixed delay after completion" {
       group~,
       now_ms=fn() { now.val },
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-      execute=async fn(session_id : String, prompt : String) -> DispatchResult {
+      execute=(session_id : String, prompt : String) => {
         assert_eq(session_id, "s1")
         assert_eq(prompt, "check CI")
         calls.val = calls.val + 1
@@ -51,7 +51,7 @@ async test "pause resume stop invalidate schedule without lost ticks" {
       group~,
       now_ms=fn() { now.val },
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-      execute=async fn(_ : String, _ : String) -> DispatchResult {
+      execute=fn(_ : String, _ : String) -> DispatchResult {
         calls.val = calls.val + 1
         Done
       },
@@ -87,7 +87,7 @@ async test "inactive sessions are dormant and never receive other session work" 
       group~,
       now_ms=fn() { now.val },
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-      execute=async fn(_ : String, _ : String) -> DispatchResult {
+      execute=fn(_ : String, _ : String) -> DispatchResult {
         calls.val = calls.val + 1
         Done
       },
@@ -125,7 +125,7 @@ async test "Busy is retried without consuming failure budget" {
       group~,
       now_ms=fn() { now.val },
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-      execute=async fn(_ : String, _ : String) -> DispatchResult {
+      execute=fn(_ : String, _ : String) -> DispatchResult {
         calls.val = calls.val + 1
         if calls.val == 1 {
           Busy
@@ -172,7 +172,7 @@ async test "repeated errors pause the loop at the configured threshold" {
       group~,
       now_ms=fn() { now.val },
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-      execute=async fn(_ : String, _ : String) -> DispatchResult {
+      execute=fn(_ : String, _ : String) -> DispatchResult {
         Error("provider failed")
       },
       trace=fn(_ : String) { () },

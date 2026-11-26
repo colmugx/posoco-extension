@@ -10,7 +10,7 @@ async test "a connection dropped before the response head is re-dialed" {
   let hits = [0]
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    let port = UInt16::to_int(server.addr.port)
+    let port = server.local_addr().port.to_int()
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever() <| ((_request, conn) => {
         hits[0] += 1

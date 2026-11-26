@@ -190,12 +190,9 @@ struct WsMock {
 
 ///|
 async fn WsMock::bind(scripts : Array[Array[String]]) -> WsMock {
-  let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
-    _ => abort("ws loopback probe bind failed")
-  }
-  let port = loopback_port(probe.addr)
-  probe.close()
-  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port~)) catch {
+  // Bind on port 0 so the kernel picks a free port; callers read it back
+  // through `local_addr()`.
+  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => abort("ws loopback server bind failed")
   }
   { server, frames: [], scripts, stopping: false, }
@@ -207,7 +204,7 @@ async fn WsMock::serve(self : WsMock) -> Unit {
     let accepted = attempt_async(() => {
       @async.with_timeout(200, () => self.server.accept())
     })
-    let (conn, _) = match accepted {
+    let conn = match accepted {
       Ok(accepted) => accepted
       Err(_) => {
         if self.stopping {
@@ -279,7 +276,7 @@ async test "codex ws loopback reuses the connection and sends the delta" {
   @async.with_timeout(20000, () => {
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => mock.serve(), allow_failure=true)
-      let config = ws_mock_config(loopback_port(mock.server.addr).to_int())
+      let config = ws_mock_config(mock.server.local_addr().port.to_int())
       let port_impl = OpenAIModelPort(config)
       let messages : Array[@posoco.Message] = []
       // Two turns over one cached connection; the mocked events advance the
@@ -325,7 +322,7 @@ async test "codex ws unreachable endpoint falls back and marks the session" {
   let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => abort("dead port probe failed")
   }
-  let port = loopback_port(probe.addr)
+  let port = probe.local_addr().port
   probe.close()
   let config = ws_mock_config(port.to_int())
   let port_impl = OpenAIModelPort(config)
@@ -374,7 +371,7 @@ async test "codex ws hosted search renders citations and preserves exact continu
         mock.server.close()
       }
       let port_impl = OpenAIModelPort(
-        ws_mock_config(loopback_port(mock.server.addr).to_int()),
+        ws_mock_config(mock.server.local_addr().port.to_int()),
       )
       let options : @posoco.ChatOptions = {
         temperature: None,
@@ -454,7 +451,7 @@ async test "codex ws does not fall back after hosted search starts before text" 
         mock.server.close()
       }
       let _ = group.spawn(() => {
-        let (conn, _) = mock.server.accept()
+        let conn = mock.server.accept()
         defer conn.close()
         let request = conn.read_request()
         let ws = @websocket.from_http_server(request, conn)
@@ -466,7 +463,7 @@ async test "codex ws does not fall back after hosted search starts before text" 
         )
       })
       let port_impl = OpenAIModelPort(
-        ws_mock_config(loopback_port(mock.server.addr).to_int()),
+        ws_mock_config(mock.server.local_addr().port.to_int()),
       )
       let outcome = attempt_async(() => {
         port_impl.codex_ws_chat(

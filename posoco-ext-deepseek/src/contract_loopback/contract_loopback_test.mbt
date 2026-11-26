@@ -43,13 +43,9 @@ async fn[T] attempt_async(f : async () -> T) -> Result[T, Error] {
 async fn DeepSeekLoopback::bind(
   replies : Array[LoopbackReply],
 ) -> DeepSeekLoopback {
-  // Ephemeral port: bind on 0, read the port, close, rebind.
-  let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
-    _ => fail("loopback probe bind failed")
-  }
-  let port = loopback_port(probe.addr)
-  probe.close()
-  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port~)) catch {
+  // Bind on port 0 so the kernel picks a free port; callers read it back
+  // through `local_addr()`.
+  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => fail("loopback server bind failed")
   }
   {
@@ -69,7 +65,7 @@ async fn DeepSeekLoopback::serve(self : DeepSeekLoopback) -> Unit {
     let accepted = attempt_async(() => {
       @async.with_timeout(200, () => self.server.accept())
     })
-    let (conn, _) = match accepted {
+    let conn = match accepted {
       Ok(accepted) => accepted
       Err(error) => {
         if self.stopping {
@@ -103,7 +99,7 @@ async fn DeepSeekLoopback::serve(self : DeepSeekLoopback) -> Unit {
     self.next_reply += 1
     let reply = self.replies[index]
     conn.send_response(reply.status, "OK")
-    conn.write_string(reply.body)
+    conn.text.write_string(reply.body)
     conn.end_response()
     conn.close()
   }
@@ -132,7 +128,7 @@ async fn[T] contract_with_loopback(
     let _ = group.spawn(() => loopback.serve())
     let outcome = attempt_async(() => {
       @async.with_timeout(20000, () => {
-        f("http://127.0.0.1:\{loopback_port(loopback.server.addr)}", loopback)
+        f("http://127.0.0.1:\{loopback.server.local_addr().port}", loopback)
       })
     })
     loopback.stop()
@@ -891,19 +887,4 @@ async test "contract stream repeated reasoning suffix aborts with a transport er
   })
   let message = contract_expect_transport(result)
   assert_true(message.contains("category=reasoning_repetition"))
-}
-
-///|
-/// Loopback tests only need the bound port; `Addr` no longer exposes it, and
-/// its canonical string ends in `:<port>` (`[v6]:port` for IPv6).
-fn loopback_port(addr : @socket.Addr) -> UInt16 {
-  let mut port = 0
-  for c in addr.to_string() {
-    if c >= '0' && c <= '9' {
-      port = port * 10 + c.to_int() - 48
-    } else {
-      port = 0
-    }
-  }
-  port.to_uint16()
 }

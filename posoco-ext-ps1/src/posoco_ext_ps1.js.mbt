@@ -155,8 +155,20 @@ async fn ps1_child_await_exit(
 }
 
 ///|
-fn ps1_child_hard_kill(handle : Ps1ChildHandle) -> Unit noraise {
-  handle.proc.kill_hard()
+/// Wait for the interrupted child to die. The interrupt is only a signal, so
+/// a child still alive after `wait_ms` is force-killed; `confirm_ms` is a
+/// second window for the exit to be observed.
+async fn ps1_child_settle(
+  handle : Ps1ChildHandle,
+  wait_ms : Int32,
+  confirm_ms : Int32,
+) -> Bool {
+  if ps1_child_await_exit(handle, wait_ms) {
+    true
+  } else {
+    handle.proc.kill_hard()
+    ps1_child_await_exit(handle, confirm_ms)
+  }
 }
 
 ///|

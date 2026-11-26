@@ -175,8 +175,20 @@ async fn shell_child_await_exit(
 }
 
 ///|
-fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
-  handle.proc.kill("SIGKILL")
+/// Wait for the interrupted child to die. `requestStop` is only a signal, so
+/// a child still alive after `wait_ms` is force-killed; `confirm_ms` is a
+/// second window for the exit to be observed.
+async fn shell_child_settle(
+  handle : ShellChildHandle,
+  wait_ms : Int32,
+  confirm_ms : Int32,
+) -> Bool {
+  if shell_child_await_exit(handle, wait_ms) {
+    true
+  } else {
+    handle.proc.kill("SIGKILL")
+    shell_child_await_exit(handle, confirm_ms)
+  }
 }
 
 ///|

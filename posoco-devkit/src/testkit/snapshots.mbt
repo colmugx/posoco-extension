@@ -180,6 +180,7 @@ pub fn snapshot_turn_event(event : @types.TurnEvent) -> @types.TurnEvent {
       ModelResponseReceived(message=snapshot_message(message), usage~)
     SessionRedirect(from~, to~, messages_before~, messages_after~) =>
       SessionRedirect(from~, to~, messages_before~, messages_after~)
+    SessionRewound(..) => event
     TurnCompleted => TurnCompleted
     TurnFailed(reason) => TurnFailed(reason)
     StreamChunkReceived(chunk~) => StreamChunkReceived(chunk~)

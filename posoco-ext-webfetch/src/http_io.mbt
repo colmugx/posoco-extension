@@ -39,12 +39,14 @@ impl HttpIo for DefaultHttpIo with fn fetch(
   url : String,
   max_bytes : Int32,
 ) -> HttpReply raise @posoco.RuntimeError {
+  // No explicit Accept-Encoding: core/async advertises gzip itself and
+  // decodes the body transparently, while an explicit header switches that
+  // decoding off.
   let headers : @http.Headers = Map::from_array([
     (
       @http.CaseInsensitiveString("accept"),
       "text/markdown;q=1.0, text/plain;q=0.9, application/json;q=0.9, text/html;q=0.8, */*;q=0.1",
     ),
-    (@http.CaseInsensitiveString("accept-encoding"), "gzip"),
     (
       @http.CaseInsensitiveString("user-agent"),
       "posoco-webfetch/0.1 (+https://github.com/colmugx/posoco)",

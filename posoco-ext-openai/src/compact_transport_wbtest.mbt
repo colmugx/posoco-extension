@@ -62,14 +62,9 @@ fn compact_body_text(data : Bytes) -> String {
 async fn CompactLoopback::bind(
   replies : Array[CompactReply],
 ) -> CompactLoopback {
-  // Ephemeral port via the transient-listener probe (same pattern as the
-  // path-bearing base_url test): bind on 0, read the port, close, rebind.
-  let probe = @socket.TcpServer(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
-    _ => fail("loopback probe bind failed")
-  }
-  let port = loopback_port(probe.addr)
-  probe.close()
-  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port~)) catch {
+  // Bind on port 0 so the kernel picks a free port; callers read it back
+  // through `local_addr()`.
+  let server = @http.Server(@socket.Addr::resolve("127.0.0.1", port=0)) catch {
     _ => fail("loopback server bind failed")
   }
   {
@@ -94,7 +89,7 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
     let accepted = attempt_async(() => {
       @async.with_timeout(200, () => self.server.accept())
     })
-    let (conn, _) = match accepted {
+    let conn = match accepted {
       Ok(accepted) => accepted
       Err(_) => {
         if self.stopping {
@@ -143,7 +138,7 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
           conn.send_response(if legacy { 404 } else { 200 }, "OK")
         })
         let _ = attempt_async(() => {
-          conn.write_string(
+          conn.text.write_string(
             if legacy {
               "{\"error\":{\"type\":\"invalid_request_error\"}}"
             } else {
@@ -174,7 +169,7 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
         let _ = attempt_async(() => {
           conn.send_response(status, "OK", extra_headers=extra)
         })
-        let _ = attempt_async(() => conn.write_string(body))
+        let _ = attempt_async(() => conn.text.write_string(body))
         let _ = attempt_async(() => conn.end_response())
         conn.close()
       }
@@ -182,19 +177,19 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
         // Status + head go out; the body never does. The client parks in its
         // body read.
         let _ = attempt_async(() => conn.send_response(200, "OK"))
-        let _ = attempt_async(() => conn.write_string("data: "))
+        let _ = attempt_async(() => conn.text.write_string("data: "))
         self.park_until_client_disconnect(conn)
       }
       Hang => self.park_until_client_disconnect(conn)
       RespondTruncated(status~, partial~) => {
         let _ = attempt_async(() => conn.send_response(status, "OK"))
-        let _ = attempt_async(() => conn.write_string(partial))
+        let _ = attempt_async(() => conn.text.write_string(partial))
         conn.close()
       }
       CleanEofStream => {
         let _ = attempt_async(() => conn.send_response(200, "OK"))
         let _ = attempt_async(() => {
-          conn.write_string(
+          conn.text.write_string(
             "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\",\"id\":\"cmp_trunc\",\"encrypted_content\":\"opaque-truncated\"}}\n\n",
           )
         })
@@ -277,7 +272,7 @@ async fn compact_loopback_call_many(
   @async.with_task_group() <| group => {
     let _ = group.spawn(() => loopback.serve(), allow_failure=true)
     let port = compact_loopback_port(
-      "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+      "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
     )
     for _reply in replies {
       let outcome = Ok(
@@ -462,7 +457,7 @@ async test "openai_compact_loopback_premature_disconnect_fails_loud" {
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => loopback.serve(), allow_failure=true)
       let port = compact_loopback_port(
-        "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+        "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
       )
       for _reply in loopback.replies {
         let outcome = Ok(
@@ -504,7 +499,7 @@ async test "openai_compact_loopback_cancel_during_status_wait_cleans_and_retries
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => loopback.serve(), allow_failure=true)
       let port = compact_loopback_port(
-        "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+        "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
       )
       let task = group.spawn(
         () => {
@@ -566,7 +561,7 @@ async test "openai_compact_loopback_cancel_during_body_read_cleans_and_retries" 
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => loopback.serve(), allow_failure=true)
       let port = compact_loopback_port(
-        "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+        "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
       )
       let task = group.spawn(
         () => {
@@ -678,7 +673,7 @@ async test "openai_compact_loopback_truncation_retries_via_ext_llm_transient_ret
     @async.with_task_group() <| group => {
       let _ = group.spawn(() => loopback.serve(), allow_failure=true)
       let inner : &@posoco.ModelPort = compact_loopback_port(
-        "http://127.0.0.1:\{loopback_port(loopback.server.addr)}/v1",
+        "http://127.0.0.1:\{loopback.server.local_addr().port}/v1",
       )
       let port = @llm.transient_retry_port(inner~, policy={
         max_retries: 1,
@@ -723,19 +718,4 @@ async test "openai_compact_loopback_truncation_retries_via_ext_llm_transient_ret
   assert_true(window.contains("opaque-fixture"))
   assert_false(window.contains("opaque-truncated"))
   assert_false(window.contains("compaction_trigger"))
-}
-
-///|
-/// Loopback tests only need the bound port; `Addr` no longer exposes it, and
-/// its canonical string ends in `:<port>` (`[v6]:port` for IPv6).
-fn loopback_port(addr : @socket.Addr) -> UInt16 {
-  let mut port = 0
-  for c in addr.to_string() {
-    if c >= '0' && c <= '9' {
-      port = port * 10 + c.to_int() - 48
-    } else {
-      port = 0
-    }
-  }
-  port.to_uint16()
 }

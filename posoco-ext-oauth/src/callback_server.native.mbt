@@ -5,11 +5,14 @@
 pub(all) struct NativeCallbackServer {
   mut code : String
   mut server : @http.Server?
+  wait_timeout_ms : Int32
 }
 
 ///|
-pub fn NativeCallbackServer::NativeCallbackServer() -> NativeCallbackServer {
-  { code: "", server: None, }
+pub fn NativeCallbackServer::NativeCallbackServer(
+  wait_timeout_ms~ : Int32 = 300_000,
+) -> NativeCallbackServer {
+  { code: "", server: None, wait_timeout_ms, }
 }
 
 ///|
@@ -25,7 +28,10 @@ pub impl CallbackServer for NativeCallbackServer with fn start(
   let addr = @socket.Addr::resolve("127.0.0.1", port=port.to_uint16()) catch {
     err => raise OAuthError::HttpError("resolve: " + err.to_string())
   }
-  let srv = @http.Server(addr) catch {
+  // The callback port is usually fixed by the provider's redirect URI, so a
+  // login that follows a finished one must not lose the bind to connections
+  // of the previous callback still lingering in TIME_WAIT.
+  let srv = @http.Server(addr, reuse_addr=true) catch {
     err => raise OAuthError::HttpError("server bind: " + err.to_string())
   }
   self.server = Some(srv)
@@ -44,15 +50,18 @@ pub extend NativeCallbackServer with CallbackServer::{
 pub impl CallbackServer for NativeCallbackServer with fn wait_callback(
   self : NativeCallbackServer,
 ) -> (String, String) raise OAuthError {
-  let deadline = (@async.now() / 1000L).to_int() + 300 // 5 min
   match self.server {
     Some(srv) => {
+      let deadline_ms = @async.now() + self.wait_timeout_ms.to_int64()
       while true {
-        let now = (@async.now() / 1000L).to_int()
-        if now >= deadline {
+        let remaining_ms = (deadline_ms - @async.now()).to_int()
+        if remaining_ms <= 0 {
           raise OAuthError::ExpiredToken
         }
-        let (conn, _) = srv.accept() catch {
+        // Bound each accept so an abandoned login surfaces as ExpiredToken
+        // instead of parking forever on the listener.
+        let conn = @async.with_timeout(remaining_ms, () => srv.accept()) catch {
+          @async.TimeoutError => raise OAuthError::ExpiredToken
           _ => {
             @async.sleep(1)
             continue
