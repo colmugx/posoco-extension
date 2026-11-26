@@ -352,6 +352,87 @@ async test "grep_count_mode_reports_matches_per_file" {
 }
 
 ///|
+async test "grep_count_mode_caps_files_and_preserves_exact_totals" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-count-cap")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    @fs.write_text("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/c.txt", "needle\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("output_mode", Json::string("count")),
+          ("max_matches", Json::number(1.0)),
+        ]),
+      ),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.has_suffix("… +2 files"))
+        assert_true(
+          (content.contains("a.txt:") && content.contains("a.txt:2")) ||
+          (content.contains("b.txt:") && content.contains("b.txt:1")) ||
+          (content.contains("c.txt:") && content.contains("c.txt:1")),
+        )
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("3 files")))
+            assert_true(meta.get("count") is Some(Number(3.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::True))
+          }
+          _ => fail("expected exact structured count for capped count mode")
+        }
+      }
+      other => fail("expected Success for capped count mode, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_files_mode_caps_paths_and_preserves_exact_totals" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-files-cap")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
+    }
+    @fs.write_text("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_text("\{dir}/c.txt", "needle\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("output_mode", Json::string("files_with_matches")),
+          ("max_matches", Json::number(1.0)),
+        ]),
+      ),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.has_suffix("… +2 files"))
+        assert_true(content.contains(".txt"))
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("3 files")))
+            assert_true(meta.get("count") is Some(Number(3.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::True))
+          }
+          _ => fail("expected exact structured count for capped files mode")
+        }
+      }
+      other => fail("expected Success for capped files mode, got " + other.to_string())
+    }
+  }
+}
+
+///|
+///|
 async test "grep_case_insensitive_flag_broadens_matching" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-case")
@@ -571,7 +652,7 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
 ///|
 test "grep_render_match_line_matches_compact_read_style" {
   assert_eq(
-    render_match_line({ path: "a.txt", line: 42, content: "needle", }),
+    render_match_line({ path: "a.txt", line: 42, content: "needle", content_truncated: false, }),
     "42|needle",
   )
 }
@@ -582,6 +663,7 @@ test "grep_render_match_line_uses_short_cut_marker" {
     path: "a.txt",
     line: 1,
     content: "x".repeat(GREP_LINE_CHAR_CAP + 100),
+    content_truncated: false,
   })
   assert_true(rendered.has_prefix("1|"))
   assert_true(rendered.has_suffix("…[cut]"))
@@ -590,10 +672,17 @@ test "grep_render_match_line_uses_short_cut_marker" {
 
 ///|
 test "grep_result_text_does_not_echo_pattern_on_miss" {
+  let empty : GrepSearchResult = {
+    matches: [],
+    paths: [],
+    counts: [],
+    total_matches: 0,
+    total_files: 0,
+    content_byte_cut: false,
+  }
   let (text, count, truncated) = grep_result_text(
     Content,
-    [],
-    "secret-pattern",
+    empty,
     100,
   )
   assert_eq(text, "(no matches)")
@@ -793,3 +882,63 @@ async test "grep_literal_case_insensitive_folds_unicode_like_regex" {
     }
   }
 }
+
+///|
+test "grep_collector_strips_dot_prefix_without_anchor" {
+  let mapper = GrepPathMapper::{ resolved: None, raw_base: "." }
+  let content_state = new_grep_search_state(Content, 10, mapper)
+  grep_record_match(content_state, "./src/a.mbt", 3, "needle")
+  let content_res = finish_grep_search(content_state)
+  assert_eq(content_res.matches.length(), 1)
+  assert_eq(content_res.matches[0].path, "src/a.mbt")
+  let files_state = new_grep_search_state(FilesWithMatches, 10, mapper)
+  grep_record_match(files_state, "./src/a.mbt", 3, "needle")
+  grep_record_match(files_state, "./src/a.mbt", 4, "needle")
+  let files_res = finish_grep_search(files_state)
+  assert_eq(files_res.paths, ["src/a.mbt"])
+  assert_eq(files_res.total_files, 1)
+  let count_state = new_grep_search_state(Count, 10, mapper)
+  grep_record_match(count_state, "./src/a.mbt", 3, "needle")
+  grep_record_match(count_state, "./src/a.mbt", 4, "needle")
+  let count_res = finish_grep_search(count_state)
+  assert_eq(count_res.paths, ["src/a.mbt"])
+  assert_eq(count_res.counts, [2])
+}
+
+///|
+test "grep_collector_budgets_bytes_against_rebased_display_path" {
+  let long_root = "/" + "workspace-segment/".repeat(20) + "repo"
+  let mapper = GrepPathMapper::{ resolved: Some(long_root), raw_base: "." }
+  let state = new_grep_search_state(Content, 200, mapper)
+  // 120 distinct short relative files with 10-byte lines easily fit in 40 KB
+  // once rebased, whereas raw 380-byte absolute headers would exceed 40 KB.
+  for i in 0..<120 {
+    grep_record_match(state, "\{long_root}/f\{i}.txt", 1, "hit")
+  }
+  let res = finish_grep_search(state)
+  assert_false(res.content_byte_cut)
+  assert_eq(res.matches.length(), 120)
+  assert_eq(res.matches[0].path, "f0.txt")
+  assert_eq(res.total_matches, 120)
+}
+
+///|
+test "grep_collector_truncates_long_lines_and_enforces_byte_cap" {
+  let mapper = GrepPathMapper::{ resolved: None, raw_base: "." }
+  let state = new_grep_search_state(Content, 100, mapper)
+  let long_line = "x".repeat(GREP_LINE_CHAR_CAP + 50)
+  for i in 1..<=50 {
+    grep_record_match(state, "./big.txt", i, long_line)
+  }
+  let res = finish_grep_search(state)
+  assert_true(res.content_byte_cut)
+  assert_eq(res.total_matches, 50)
+  assert_true(res.matches.length() < 50)
+  assert_true(res.matches[0].content_truncated)
+  let (text, count, truncated) = grep_result_text(Content, res, 100)
+  assert_eq(count, 50)
+  assert_true(truncated)
+  assert_true(text.contains("…[cut]"))
+  assert_true(text.contains("… +"))
+}
+

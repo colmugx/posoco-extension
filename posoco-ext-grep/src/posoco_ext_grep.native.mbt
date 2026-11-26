@@ -37,10 +37,8 @@ fn file_glob_matches(file_glob : String, rel : String) -> Bool {
 }
 
 ///|
-/// Walk the tree sequentially (max_concurrency=1) so result order is
-/// deterministic. Hidden entries and `ignores` directories are pruned;
-/// unreadable or binary-looking files are skipped (rg parity) instead of
-/// failing the whole search. Returns flat `GrepMatch` entries.
+/// Walk sequentially for deterministic file grouping. The shared collector
+/// retains bounded output while continuing to count all matches.
 impl GrepSearcher for NativeGrepSearcher with fn search(
   self : NativeGrepSearcher,
   pattern : String,
@@ -48,8 +46,11 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
   file_glob : String,
   case_insensitive : Bool,
   use_regex : Bool,
-) -> Array[GrepMatch] {
-  let results : Array[GrepMatch] = []
+  mode : GrepOutputMode,
+  max_matches : Int32,
+  path_mapper : GrepPathMapper,
+) -> GrepSearchResult {
+  let state = new_grep_search_state(mode, max_matches, path_mapper)
   let match_line = grep_line_matcher(pattern, case_insensitive, use_regex)
   @fs.walk(
     base,
@@ -85,11 +86,7 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
         for line in text.split("\n") {
           line_num += 1
           if match_line(line) {
-            results.push(GrepMatch::{
-              path: full,
-              line: line_num,
-              content: line.to_owned(),
-            })
+            grep_record_match(state, full, line_num, line.to_owned())
           }
         }
       }
@@ -109,7 +106,7 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
         "grep: walk failed for '\{@devkit.sanitize_path(base)}'",
       )
   }
-  results
+  finish_grep_search(state)
 }
 
 ///|

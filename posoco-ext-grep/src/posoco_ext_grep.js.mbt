@@ -77,10 +77,129 @@ extern "js" fn js_spawn_envelope(
   #| }
 
 ///|
+/// Stream ripgrep stdout and aggregate matches as they arrive. Only bounded
+/// output is serialized back to MoonBit; full stdout is never retained.
+extern "js" fn js_spawn_grep_envelope(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
+  cmd : FixedArray[String],
+  mode : Int32,
+  max_matches : Int32,
+  line_cap : Int32,
+  byte_cap : Int32,
+  resolved_prefix : String,
+  raw_base : String,
+) -> @js_async.Promise[String] =
+  #| async (spawn, cmd, mode, maxMatches, lineCap, byteCap, resolvedPrefix, rawBase) => {
+  #|   const proc = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] })
+  #|   const matches = [], paths = [], counts = []
+  #|   let totalMatches = 0, totalFiles = 0, lastPath = "", lastPathStored = false
+  #|   let storedBytes = 0, contentByteCut = false
+  #|   let pendingPath = "", pendingLine = "", readingPath = true, lineOverflow = false
+  #|   const lineBufferLimit = lineCap * 2 + 128
+  #|   const normalizePath = (rawPath) => {
+  #|     const clean = rawPath.startsWith("./") ? rawPath.slice(2) : rawPath
+  #|     if (resolvedPrefix && clean.startsWith(resolvedPrefix)) {
+  #|       const rest = clean.slice(resolvedPrefix.length)
+  #|       return rawBase === "." || rawBase === "" ? rest : rawBase + "/" + rest
+  #|     }
+  #|     return clean
+  #|   }
+  #|   const processRecord = (rawPath, raw, overflow) => {
+  #|     const sep = raw.indexOf(":")
+  #|     if (sep <= 0) return
+  #|     const lineNo = Number(raw.slice(0, sep))
+  #|     if (!Number.isSafeInteger(lineNo) || lineNo <= 0) return
+  #|     const path = normalizePath(rawPath)
+  #|     totalMatches++
+  #|     if (mode === 0) {
+  #|       if (matches.length >= maxMatches || contentByteCut) return
+  #|       const rawContent = raw.slice(sep + 1)
+  #|       const chars = Array.from(rawContent)
+  #|       const cut = overflow || chars.length > lineCap
+  #|       const content = cut ? chars.slice(0, lineCap).join("") : rawContent
+  #|       const rendered = String(lineNo) + "|" + content + (cut ? "…[cut]" : "")
+  #|       const headerBytes = matches.length === 0 || matches[matches.length - 1].path !== path
+  #|         ? Buffer.byteLength(path, "utf8") + 1 : 0
+  #|       const lineBytes = Buffer.byteLength(rendered, "utf8") + 1
+  #|       if (matches.length === 0 || storedBytes + headerBytes + lineBytes <= byteCap) {
+  #|         matches.push({ path, line: lineNo, content, contentTruncated: cut })
+  #|         storedBytes += headerBytes + lineBytes
+  #|       } else contentByteCut = true
+  #|     } else if (path !== lastPath) {
+  #|       totalFiles++
+  #|       lastPath = path
+  #|       lastPathStored = paths.length < maxMatches
+  #|       if (lastPathStored) {
+  #|         paths.push(path)
+  #|         if (mode === 2) counts.push(1)
+  #|       }
+  #|     } else if (mode === 2 && lastPathStored) {
+  #|       counts[counts.length - 1]++
+  #|     }
+  #|   }
+  #|   const consumeChunk = (chunk) => {
+  #|     let pos = 0
+  #|     while (pos < chunk.length) {
+  #|       if (readingPath) {
+  #|         const nul = chunk.indexOf("\0", pos)
+  #|         const nl = chunk.indexOf("\n", pos)
+  #|         if (nl >= 0 && (nul < 0 || nl < nul)) {
+  #|           pendingPath = ""
+  #|           pos = nl + 1
+  #|           continue
+  #|         }
+  #|         if (nul < 0) { pendingPath += chunk.slice(pos); return }
+  #|         pendingPath += chunk.slice(pos, nul)
+  #|         pendingLine = ""; lineOverflow = false; readingPath = false; pos = nul + 1
+  #|       } else {
+  #|         const nl = chunk.indexOf("\n", pos)
+  #|         const end = nl < 0 ? chunk.length : nl
+  #|         const part = chunk.slice(pos, end)
+  #|         const remaining = Math.max(0, lineBufferLimit - pendingLine.length)
+  #|         if (remaining > 0) pendingLine += part.slice(0, remaining)
+  #|         if (part.length > remaining) lineOverflow = true
+  #|         if (nl < 0) return
+  #|         processRecord(pendingPath, pendingLine, lineOverflow)
+  #|         pendingPath = ""; pendingLine = ""; lineOverflow = false; readingPath = true; pos = nl + 1
+  #|       }
+  #|     }
+  #|   }
+  #|   const stdoutDone = new Promise((resolve) => {
+  #|     if (!proc.stdout) return resolve()
+  #|     let finished = false
+  #|     const finish = () => {
+  #|       if (finished) return
+  #|       finished = true
+  #|       if (!readingPath && pendingLine.length > 0) processRecord(pendingPath, pendingLine, lineOverflow)
+  #|       resolve()
+  #|     }
+  #|     proc.stdout.setEncoding("utf8")
+  #|     proc.stdout.on("data", consumeChunk)
+  #|     proc.stdout.on("end", finish); proc.stdout.on("close", finish); proc.stdout.on("error", finish)
+  #|   })
+  #|   let stderr = ""
+  #|   const stderrDone = new Promise((resolve) => {
+  #|     if (!proc.stderr) return resolve("")
+  #|     const finish = () => resolve(stderr)
+  #|     proc.stderr.setEncoding("utf8")
+  #|     proc.stderr.on("data", (chunk) => {
+  #|       if (stderr.length < 4096) stderr += chunk.slice(0, 4096 - stderr.length)
+  #|     })
+  #|     proc.stderr.on("end", finish); proc.stderr.on("close", finish); proc.stderr.on("error", finish)
+  #|   })
+  #|   const exitDone = new Promise((resolve) => {
+  #|     proc.on("close", (code) => resolve(code ?? -1))
+  #|     proc.on("error", () => resolve(-1))
+  #|   })
+  #|   const [exitCode, stderrText] = await Promise.all([exitDone, stderrDone, stdoutDone])
+  #|     .then(([code, errorText]) => [code, errorText])
+  #|   return JSON.stringify({ exitCode, stderr: stderrText, totalMatches, totalFiles, matches, paths, counts, contentByteCut })
+  #| }
+
+///|
 priv struct JsSpawnResult {
   exit_code : Int32
   stdout : String
-  stderr : String
 }
 
 ///|
@@ -88,21 +207,11 @@ async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
   let json : Json = @json.parse(
     js_spawn_envelope(cp_spawn, FixedArray::from_array(cmd)).wait(),
   ) catch {
-    _ =>
-      return {
-        exit_code: 2,
-        stdout: "",
-        stderr: "spawn envelope decode failed",
-      }
+    _ => return { exit_code: 2, stdout: "", }
   }
   let fields = match json {
     Json::Object(fields) => fields
-    _ =>
-      return {
-        exit_code: 2,
-        stdout: "",
-        stderr: "spawn envelope is not an object",
-      }
+    _ => return { exit_code: 2, stdout: "", }
   }
   let exit_code = match fields.get("exitCode") {
     Some(Json::Number(value, ..)) => value.to_int()
@@ -112,11 +221,146 @@ async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
     Some(Json::String(text)) => text
     _ => ""
   }
+  { exit_code, stdout, }
+}
+
+///|
+priv struct JsGrepSpawnResult {
+  exit_code : Int32
+  stderr : String
+  search_result : GrepSearchResult
+}
+
+///|
+fn rg_mode_code(mode : GrepOutputMode) -> Int32 {
+  match mode {
+    Content => 0
+    FilesWithMatches => 1
+    Count => 2
+  }
+}
+
+///|
+async fn js_spawn_grep_result(
+  cmd : Array[String],
+  mode : GrepOutputMode,
+  max_matches : Int32,
+  path_mapper : GrepPathMapper,
+) -> JsGrepSpawnResult noraise {
+  let resolved_prefix = match path_mapper.resolved {
+    Some("/") => "/"
+    Some(resolved) => "\{resolved}/"
+    None => ""
+  }
+  let json : Json = @json.parse(
+    js_spawn_grep_envelope(
+      cp_spawn,
+      FixedArray::from_array(cmd),
+      rg_mode_code(mode),
+      max_matches,
+      GREP_LINE_CHAR_CAP,
+      GREP_BYTE_CAP,
+      resolved_prefix,
+      path_mapper.raw_base,
+    ).wait(),
+  ) catch {
+    _ =>
+      return {
+        exit_code: 2,
+        stderr: "ripgrep stream envelope decode failed",
+        search_result: {
+          matches: [], paths: [], counts: [], total_matches: 0,
+          total_files: 0, content_byte_cut: false,
+        },
+      }
+  }
+  let fields = match json {
+    Json::Object(fields) => fields
+    _ =>
+      return {
+        exit_code: 2,
+        stderr: "ripgrep stream envelope is not an object",
+        search_result: {
+          matches: [], paths: [], counts: [], total_matches: 0,
+          total_files: 0, content_byte_cut: false,
+        },
+      }
+  }
+  let exit_code = match fields.get("exitCode") {
+    Some(Json::Number(value, ..)) => value.to_int()
+    _ => 2
+  }
   let stderr = match fields.get("stderr") {
-    Some(Json::String(text)) => text
+    Some(Json::String(value)) => value
     _ => ""
   }
-  { exit_code, stdout, stderr, }
+  let total_matches = match fields.get("totalMatches") {
+    Some(Json::Number(value, ..)) => value.to_int()
+    _ => 0
+  }
+  let total_files = match fields.get("totalFiles") {
+    Some(Json::Number(value, ..)) => value.to_int()
+    _ => 0
+  }
+  let content_byte_cut = fields.get("contentByteCut") is Some(Json::True)
+  let matches : Array[GrepMatch] = []
+  match fields.get("matches") {
+    Some(Json::Array(items)) => {
+      for item in items {
+        match item {
+          Json::Object(item_fields) => {
+            let path = match item_fields.get("path") {
+              Some(Json::String(value)) => value
+              _ => ""
+            }
+            let line = match item_fields.get("line") {
+              Some(Json::Number(value, ..)) => value.to_int()
+              _ => 0
+            }
+            let content = match item_fields.get("content") {
+              Some(Json::String(value)) => value
+              _ => ""
+            }
+            let content_truncated = item_fields.get("contentTruncated") is Some(Json::True)
+            matches.push(GrepMatch::{ path, line, content, content_truncated, })
+          }
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+  let paths : Array[String] = []
+  match fields.get("paths") {
+    Some(Json::Array(items)) => {
+      for item in items {
+        match item {
+          Json::String(value) => paths.push(value)
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+  let counts : Array[Int32] = []
+  match fields.get("counts") {
+    Some(Json::Array(items)) => {
+      for item in items {
+        match item {
+          Json::Number(value, ..) => counts.push(value.to_int())
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+  {
+    exit_code,
+    stderr,
+    search_result: {
+      matches, paths, counts, total_matches, total_files, content_byte_cut,
+    },
+  }
 }
 
 ///|
@@ -187,44 +431,13 @@ fn build_rg_args(
 }
 
 ///|
-/// Parse one rg NUL-separated content-mode output line. Lines without a
-/// numeric line prefix (binary-file summaries) yield None.
-fn parse_rg_line(line : String) -> GrepMatch? {
-  let idx = match line.find("\u{0}") {
-    Some(idx) => idx
-    None => return None
-  }
-  let path = line[:idx].to_owned()
-  let rest = line[idx + 1:].to_owned()
-  let sep = match rest.find(":") {
-    Some(sep) => sep
-    None => return None
-  }
-  let n = @string.parse_int(rest[:sep].to_owned()) catch { _ => return None }
-  Some(GrepMatch::{ path, line: n, content: rest[sep + 1:].to_owned(), })
-}
-
-///|
-/// Parse rg's NUL-separated content-mode output into matches. The `./`
-/// prefix rg adds to relative results is stripped later by the shared impl.
-fn parse_rg_stdout(stdout : String) -> Array[GrepMatch] {
-  let matches : Array[GrepMatch] = []
-  for line in stdout.split("\n") {
-    match parse_rg_line(line.to_owned()) {
-      Some(m) => matches.push(m)
-      None => ()
-    }
-  }
-  matches
-}
-
-///|
 priv struct JsRgSearcher {
   ignores : Array[String]
 }
 
 ///|
-/// Tier 1: delegate the search to a validated ripgrep binary.
+/// Tier 1: delegate to validated ripgrep. Stdout is parsed incrementally and
+/// only bounded output entries are sent back to MoonBit.
 impl GrepSearcher for JsRgSearcher with fn search(
   self : JsRgSearcher,
   pattern : String,
@@ -232,36 +445,28 @@ impl GrepSearcher for JsRgSearcher with fn search(
   file_glob : String,
   case_insensitive : Bool,
   use_regex : Bool,
-) -> Array[GrepMatch] {
+  mode : GrepOutputMode,
+  max_matches : Int32,
+  path_mapper : GrepPathMapper,
+) -> GrepSearchResult {
   match probe_rg() {
     Some(bin) => {
       let argv = build_rg_args(
-        bin,
-        pattern,
-        base,
-        file_glob,
-        case_insensitive,
-        use_regex,
-        self.ignores,
+        bin, pattern, base, file_glob, case_insensitive, use_regex, self.ignores,
       )
-      let result = js_spawn_result(argv)
-      // rg exit codes: 0 = matches found, 1 = no matches, 2 = error.
-      if result.exit_code == 2 {
+      let result = js_spawn_grep_result(argv, mode, max_matches, path_mapper)
+      if result.exit_code < 0 || result.exit_code > 1 {
         raise @posoco.RuntimeError::InvocationFailed(
-          "grep: rg error for '\{@devkit.sanitize_path(base)}': " +
-          result.stderr,
+          "grep: rg error for '\{@devkit.sanitize_path(base)}': " + result.stderr,
         )
       }
-      parse_rg_stdout(result.stdout)
+      result.search_result
     }
     None =>
       GrepSearcher::search(
         JsWalkGrepSearcher::{ ignores: self.ignores, },
-        pattern,
-        base,
-        file_glob,
-        case_insensitive,
-        use_regex,
+        pattern, base, file_glob, case_insensitive, use_regex, mode, max_matches,
+        path_mapper,
       )
   }
 }
@@ -402,16 +607,19 @@ impl GrepSearcher for JsWalkGrepSearcher with fn search(
   file_glob : String,
   case_insensitive : Bool,
   use_regex : Bool,
-) -> Array[GrepMatch] {
-  let results : Array[GrepMatch] = []
+  mode : GrepOutputMode,
+  max_matches : Int32,
+  path_mapper : GrepPathMapper,
+) -> GrepSearchResult {
+  let state = new_grep_search_state(mode, max_matches, path_mapper)
   let match_line = grep_line_matcher(pattern, case_insensitive, use_regex)
-  js_walk_grep_dir(self.ignores, match_line, file_glob, base, base, "", results) catch {
+  js_walk_grep_dir(self.ignores, match_line, file_glob, base, base, "", state) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "grep: walk failed for '\{@devkit.sanitize_path(base)}'",
       )
   }
-  results
+  finish_grep_search(state)
 }
 
 ///|
@@ -424,7 +632,7 @@ fn js_walk_grep_dir(
   base : String,
   dir : String,
   rel : String,
-  out : Array[GrepMatch],
+  state : Ref[GrepSearchState],
 ) -> Unit raise @posoco.RuntimeError {
   let entries = match js_readdir_entries(dir) {
     Some(entries) => entries
@@ -449,7 +657,7 @@ fn js_walk_grep_dir(
     match js_is_directory(entry_full) {
       Some(true) =>
         js_walk_grep_dir(
-          ignores, match_line, file_glob, base, entry_full, entry_rel, out,
+          ignores, match_line, file_glob, base, entry_full, entry_rel, state,
         )
       _ => {
         if file_glob != "" && !js_grep_glob_matches(file_glob, entry_rel) {
@@ -469,11 +677,7 @@ fn js_walk_grep_dir(
         for line in text.split("\n") {
           line_num += 1
           if match_line(line) {
-            out.push(GrepMatch::{
-              path: entry_full,
-              line: line_num,
-              content: line.to_owned(),
-            })
+            grep_record_match(state, entry_full, line_num, line.to_owned())
           }
         }
       }
