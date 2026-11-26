@@ -126,6 +126,21 @@ fn finish_session_open(
 }
 
 ///|
+pub fn HawdbSessionStore::from_database(
+  db : @hawdb.Database,
+  cwd~ : String? = None,
+) -> Result[HawdbSessionStore, String] {
+  let schema = match ensure_hawdb_schema(db) {
+    Ok(_) => ensure_hawdb_receipts(db)
+    Err(reason) => Err(reason)
+  }
+  match schema {
+    Ok(_) => Ok({ db, current_id: None, command_session_id: None, cwd })
+    Err(reason) => Err(reason)
+  }
+}
+
+///|
 pub fn HawdbSessionStore::open(
   path : String,
   cwd~ : String? = None,
@@ -187,6 +202,14 @@ fn empty_session() -> @posoco.Session {
 }
 
 ///|
+fn metadata_cwd(metadata : Map[String, Json]) -> String? {
+  match nonempty_text(metadata.get("posoco.cwd")) {
+    Some(value) => Some(value)
+    None => nonempty_text(metadata.get("cetas.cwd"))
+  }
+}
+
+///|
 fn hawdb_metadata_with_cwd(
   metadata : Map[String, Json],
   cwd : String?,
@@ -196,10 +219,12 @@ fn hawdb_metadata_with_cwd(
     _ => return metadata
   }
   let recorded = hawdb_normalize_cwd(path)
-  if metadata.get("cetas.cwd") == Some(Json::string(recorded)) {
+  if metadata.get("posoco.cwd") == Some(Json::string(recorded)) &&
+    metadata.get("cetas.cwd") == Some(Json::string(recorded)) {
     return metadata
   }
   let updated = metadata.copy()
+  updated["posoco.cwd"] = Json::string(recorded)
   updated["cetas.cwd"] = Json::string(recorded)
   updated
 }
@@ -220,7 +245,7 @@ fn check_session_cwd(
   metadata : Map[String, Json],
   cwd : String?,
 ) -> Result[Unit, String] {
-  match (nonempty_text(metadata.get("cetas.cwd")), cwd) {
+  match (metadata_cwd(metadata), cwd) {
     (Some(recorded), Some(requested)) if recorded !=
       hawdb_normalize_cwd(requested) =>
       Err("session belongs to another workspace: " + recorded)
@@ -546,6 +571,7 @@ pub extend HawdbSessionStore with @posoco.SessionPort::{
   append_messages,
   checkpoint,
   truncate,
+  fork,
 }
 
 ///|
@@ -650,5 +676,81 @@ pub impl @posoco.SessionPort for HawdbSessionStore with fn truncate(
   match result {
     Ok(_) => self.current_id = Some(id)
     Err(error) => raise @posoco.SessionError::Save(error.describe())
+  }
+}
+
+///|
+pub impl @posoco.SessionPort for HawdbSessionStore with fn fork(
+  self,
+  id : String,
+  fork : @posoco.SessionFork,
+) -> Unit raise @posoco.SessionError {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
+  match HawdbSessionStore::check_id(fork.from_id) {
+    Ok(_) => ()
+    Err(reason) => raise @posoco.SessionError::Save(reason)
+  }
+  let merged_meta = hawdb_metadata_with_cwd(fork.metadata, self.cwd).copy()
+  if !merged_meta.contains(@posoco.PARENT_THREAD_ID_KEY) {
+    merged_meta[@posoco.PARENT_THREAD_ID_KEY] = Json::string(fork.from_id)
+  }
+  if !merged_meta.contains(@posoco.PARENT_FORK_INDEX_KEY) {
+    merged_meta[@posoco.PARENT_FORK_INDEX_KEY] = Json::number(
+      fork.at_index.to_double(),
+    )
+  }
+  let persisted : @posoco.Session = {
+    messages: fork.messages,
+    metadata: merged_meta,
+  }
+  let result = self.db.with_transaction(fn(tx) {
+    match write_session(tx, id, persisted, self.cwd) {
+      Ok(_) => Ok(())
+      Err(reason) => Err(@hawdb.HawdbError::Codec(reason))
+    }
+  })
+  match result {
+    Ok(_) => self.current_id = Some(id)
+    Err(error) => raise @posoco.SessionError::Save(error.describe())
+  }
+}
+
+///|
+pub fn HawdbSessionStore::delete_session(
+  self : HawdbSessionStore,
+  id : String,
+) -> Result[Unit, String] {
+  match HawdbSessionStore::check_id(id) {
+    Ok(_) => ()
+    Err(reason) => return Err(reason)
+  }
+  let result = self.db.with_transaction(fn(tx) {
+    match read_session_head(tx, id) {
+      Ok(Some((_, metadata, _))) =>
+        match check_session_cwd(metadata, self.cwd) {
+          Ok(_) => ()
+          Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
+        }
+      Ok(None) => return Ok(())
+      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
+    }
+    match clear_session(tx, id) {
+      Ok(_) => ()
+      Err(reason) => return Err(@hawdb.HawdbError::Codec(reason))
+    }
+    match
+      tx.query_sql("DELETE FROM posoco_hawdb_operations WHERE id = $1", [
+        @hawdb.Value::Text(id),
+      ]) {
+      Ok(_) => Ok(())
+      Err(error) => Err(error)
+    }
+  })
+  match result {
+    Ok(_) => Ok(())
+    Err(error) => Err(error.describe())
   }
 }

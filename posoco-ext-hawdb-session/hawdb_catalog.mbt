@@ -111,7 +111,7 @@ fn hawdb_summary(
     title,
     model,
     effort,
-    cwd: nonempty_text(metadata.get("cetas.cwd")),
+    cwd: metadata_cwd(metadata),
   }
 }
 

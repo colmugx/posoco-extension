@@ -11,6 +11,6 @@ license = "Apache-2.0"
 description = "Transactional native HawDB SessionStore for Posoco"
 
 import {
-  "colmugx/posoco@0.23.1",
-  "nowledge-co/hawdb@0.36.0",
+  "colmugx/posoco@0.26.0",
+  "nowledge-co/hawdb@0.40.0",
 }
