@@ -30,7 +30,7 @@ pub async fn DynamicWorkflowController::authorize_scope_extension(
       if !valid_id(id) || seen.contains(id) {
         return Err(InvalidScope)
       }
-      seen.add(id)
+      seen.insert(id)
     }
     if requested.is_empty() {
       return Err(InvalidScope)

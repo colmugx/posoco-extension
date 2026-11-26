@@ -33,7 +33,7 @@ fn DynamicWorkflowController::new_proposal(
   if deadline <= (self.now_ms)() {
     return Err(BudgetExceeded)
   }
-  self.used_authorities.add(authorization_id)
+  self.used_authorities.insert(authorization_id)
   self.reservations = self.reservations.max(self.expansions_committed) + 1
   self.expansions_attempted += 1
   let host = @expansion.ExpansionHost(

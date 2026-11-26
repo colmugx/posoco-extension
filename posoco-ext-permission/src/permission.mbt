@@ -457,14 +457,14 @@ async fn PermissionPolicy::gate(
           // Remember every approval scope of the call; keyless calls stay
           // per-call.
           for k in keys {
-            self.session_approved.add(k)
+            self.session_approved.insert(k)
           }
           let scope = if keys.length() > 0 { keys.join("&") } else { name }
           @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope=scope)
         }
         AllowToolSession => {
           // One grant covers the whole tool for this agent's lifetime.
-          self.session_approved.add(name)
+          self.session_approved.insert(name)
           @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope=name)
         }
         Deny(reason~) =>

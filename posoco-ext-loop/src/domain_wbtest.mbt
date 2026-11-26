@@ -49,13 +49,12 @@ test "extension contributes the command and a lifecycle, never a tool" {
 test "command input supports raw and structured JSON" {
   assert_true(loop_raw_args(Json::string("5m check CI")) is Ok("5m check CI"))
   assert_true(
-    loop_raw_args(Json::object({ "input": Json::string("1h inspect") })) is
-    Ok("1h inspect"),
+    loop_raw_args(Json::object({ "input": Json::string("1h inspect") }))
+    is Ok("1h inspect"),
   )
   assert_true(
-    loop_raw_args(Json::object({
-      "_positional": Json::string("pause loop_1"),
-    })) is Ok("pause loop_1"),
+    loop_raw_args(Json::object({ "_positional": Json::string("pause loop_1") }))
+    is Ok("pause loop_1"),
   )
   assert_true(loop_raw_args(Json::number(3.0)) is Err(_))
 }

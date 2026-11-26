@@ -198,7 +198,7 @@ fn validate_expansion_input(
     if refs.contains(candidate.local_ref) {
       return Some(InvalidInput(reason="duplicate expansion local_ref"))
     }
-    refs.add(candidate.local_ref)
+    refs.insert(candidate.local_ref)
     if candidate.id.value.trim().is_empty() {
       return Some(InvalidInput(reason="task id must not be empty"))
     }

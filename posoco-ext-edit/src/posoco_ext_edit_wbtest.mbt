@@ -431,7 +431,6 @@ test "edit_tool_definition_explains uniqueness_and_freshness_contract" {
   assert_true(def.description.contains("read line prefixes"))
 }
 
-
 ///|
 fn batch_edit_call(path : String, hunks : Array[Json]) -> @posoco.ToolCall {
   {
@@ -455,7 +454,9 @@ fn batch_hunk(old_text : String, new_text : String) -> Json {
 ///|
 test "edit_batch_rejects_empty_and_malformed_hunks" {
   for hunks in [[], [Json::string("bad")]] {
-    let result = Ok(extract_edit_args(batch_edit_call("unused", hunks).arguments)) catch {
+    let result = Ok(
+      extract_edit_args(batch_edit_call("unused", hunks).arguments),
+    ) catch {
       error => Err(error)
     }
     assert_true(result is Err(_))
@@ -464,11 +465,15 @@ test "edit_batch_rejects_empty_and_malformed_hunks" {
 
 ///|
 test "edit_batch_rejects_mixed_argument_forms" {
-  let result = Ok(extract_edit_args(Json::object({
-    "path": Json::string("unused"),
-    "old_text": Json::string("old"),
-    "hunks": Json::array([batch_hunk("a", "b")]),
-  }))) catch {
+  let result = Ok(
+    extract_edit_args(
+      Json::object({
+        "path": Json::string("unused"),
+        "old_text": Json::string("old"),
+        "hunks": Json::array([batch_hunk("a", "b")]),
+      }),
+    ),
+  ) catch {
     error => Err(error)
   }
   assert_true(result is Err(_))
@@ -517,10 +522,14 @@ async test "edit_batch_failed_later_hunk_leaves_file_unchanged" {
     write_file_native(path, original)
     let tools = EditTools::EditTools()
     for target in ["missing", "beta"] {
-      match run_edit(tools, batch_edit_call(path, [
-        batch_hunk("alpha", "ALPHA"),
-        batch_hunk(target, "changed"),
-      ])) {
+      match
+        run_edit(
+          tools,
+          batch_edit_call(path, [
+            batch_hunk("alpha", "ALPHA"),
+            batch_hunk(target, "changed"),
+          ]),
+        ) {
         @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
           assert_true(content.contains("hunk 2:"))
         _ => fail("expected batch edit failure")

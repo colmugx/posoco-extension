@@ -251,8 +251,8 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
           task.ready_since_ms != None {
           bad("invalid expansion task mapping")
         }
-        ids.add(task.id)
-        refs.add(entry.local_ref)
+        ids.insert(task.id)
+        refs.insert(entry.local_ref)
         candidates.push(
           @domain.GraphTask::from_record(
             id=task.id,

@@ -3,10 +3,11 @@
 /// persist through SessionPort, not through a separate model call.
 async test "loop command drives real Posoco turn and persisted session" {
   let now = Ref(0L)
-  let loop_ext = LoopExtension(
-    now_ms=fn() { now.val },
-    sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
-  )
+  let loop_ext = LoopExtension(now_ms=fn() { now.val }, sleep_ms=async fn(
+    _ : Int32,
+  ) {
+    @async.sleep(60000)
+  })
   let model = @tk.ScriptedModel([
     @tk.ScriptedModelStep::Respond(@tk.tk_stop_response("checked")),
   ])

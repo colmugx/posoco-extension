@@ -28,7 +28,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s: timestamp.sec(), mtime_ns: timestamp.nsec(), size, }
+  { mtime_s: timestamp.sec(), mtime_ns: timestamp.subsec_nanos(), size, }
 }
 
 ///|

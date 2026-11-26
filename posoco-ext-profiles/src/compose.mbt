@@ -91,7 +91,7 @@ pub fn compose_profiles(
     if seen_extensions.contains(id) {
       return Err("profiles: duplicate extension id '{id}'")
     }
-    seen_extensions.add(id)
+    seen_extensions.insert(id)
     for provider in ext.manifest().tools {
       for tool in provider.list_tools() {
         attribution[tool.name.to_string()] = id
@@ -103,7 +103,7 @@ pub fn compose_profiles(
     if seen_extensions.contains(id) {
       return Err("profiles: duplicate extension id '{id}'")
     }
-    seen_extensions.add(id)
+    seen_extensions.insert(id)
     for provider in ext.manifest().tools {
       for tool in provider.list_tools() {
         attribution[tool.name.to_string()] = id

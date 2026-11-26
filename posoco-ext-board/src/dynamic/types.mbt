@@ -152,7 +152,7 @@ pub fn DynamicWorkflowSpec::validate(self : DynamicWorkflowSpec) -> Bool {
     if !valid_id(id) || seen.contains(id) {
       return false
     }
-    seen.add(id)
+    seen.insert(id)
   }
   match self.expansion {
     None => true

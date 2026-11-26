@@ -17,9 +17,9 @@ async test "due loop runs once and uses fixed delay after completion" {
       max_failures=3,
       bound_session=Some("s1"),
     )
-    let id = runtime.change(
-      Add(session_id="s1", interval_ms=5000L, prompt="check CI"),
-    ).unwrap()
+    let id = runtime
+      .change(Add(session_id="s1", interval_ms=5000L, prompt="check CI"))
+      .unwrap()
     now.val = 5999L
     runtime.poll()
     assert_eq(calls.val, 0)
@@ -59,7 +59,9 @@ async test "pause resume stop invalidate schedule without lost ticks" {
       max_failures=3,
       bound_session=Some("s1"),
     )
-    let id = runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap()
+    let id = runtime
+      .change(Add(session_id="s1", interval_ms=1000L, prompt="task"))
+      .unwrap()
     assert_true(runtime.change(Pause(id~)) is Ok(_))
     now.val = 2000L
     runtime.poll()
@@ -93,7 +95,11 @@ async test "inactive sessions are dormant and never receive other session work" 
       max_failures=3,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
+    ignore(
+      runtime
+      .change(Add(session_id="s1", interval_ms=1000L, prompt="task"))
+      .unwrap(),
+    )
     runtime.bind(Some("s2"))
     now.val = 2000L
     runtime.poll()
@@ -121,13 +127,21 @@ async test "Busy is retried without consuming failure budget" {
       sleep_ms=async fn(_ : Int32) { @async.sleep(60000) },
       execute=async fn(_ : String, _ : String) -> DispatchResult {
         calls.val = calls.val + 1
-        if calls.val == 1 { Busy } else { Done }
+        if calls.val == 1 {
+          Busy
+        } else {
+          Done
+        }
       },
       trace=fn(_ : String) { () },
       max_failures=3,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
+    ignore(
+      runtime
+      .change(Add(session_id="s1", interval_ms=1000L, prompt="task"))
+      .unwrap(),
+    )
     now.val = 1000L
     runtime.poll()
     @async.with_timeout(2000, () => {
@@ -165,7 +179,11 @@ async test "repeated errors pause the loop at the configured threshold" {
       max_failures=2,
       bound_session=Some("s1"),
     )
-    ignore(runtime.change(Add(session_id="s1", interval_ms=1000L, prompt="task")).unwrap())
+    ignore(
+      runtime
+      .change(Add(session_id="s1", interval_ms=1000L, prompt="task"))
+      .unwrap(),
+    )
     now.val = 1000L
     runtime.poll()
     @async.with_timeout(2000, () => {

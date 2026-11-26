@@ -14,9 +14,7 @@ pub struct LoopExtension {
 ///|
 pub fn LoopExtension::LoopExtension(
   now_ms~ : () -> Int64 = fn() { @async.now() },
-  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) {
-    @async.sleep(ms)
-  },
+  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) { @async.sleep(ms) },
   trace~ : (String) -> Unit = fn(_ : String) { () },
   max_failures~ : Int32 = 3,
 ) -> LoopExtension {
@@ -26,7 +24,11 @@ pub fn LoopExtension::LoopExtension(
     now_ms,
     sleep_ms,
     trace,
-    max_failures: if max_failures > 0 { max_failures } else { 3 },
+    max_failures: if max_failures > 0 {
+      max_failures
+    } else {
+      3
+    },
   }
 }
 
@@ -50,9 +52,9 @@ pub fn LoopExtension::start(
     max_failures=self.max_failures,
     bound_session=self.session_id,
     execute=async fn(session_id : String, prompt : String) -> DispatchResult {
-      let input : @posoco.Message = @posoco.Message::UserMessage(
-        content=[@posoco.Content::Text(prompt)],
-      )
+      let input : @posoco.Message = @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text(prompt),
+      ])
       let result : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
         agent.run_turn(input, session_id),
       ) catch {
@@ -136,11 +138,9 @@ pub impl @posoco.Extension for LoopExtension with fn extension_id(
 pub impl @posoco.Extension for LoopExtension with fn manifest(
   self : LoopExtension,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_loop",
-    lifecycle=[self],
-    commands=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_loop", lifecycle=[self], commands=[
+    self,
+  ])
 }
 
 ///|

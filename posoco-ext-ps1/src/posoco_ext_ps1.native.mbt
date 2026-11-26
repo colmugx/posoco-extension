@@ -174,7 +174,7 @@ async fn ps1_read_drained(reader : @process.ReadFromProcess) -> Bytes {
   }
   let buffer = @buffer.Buffer::Buffer()
   for chunk in chunks {
-    buffer.write_bytes(chunk[:])
+    buffer.write_bytesview(chunk[:])
   }
   buffer.to_bytes()
 }

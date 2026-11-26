@@ -118,7 +118,8 @@ fn loop_tick(
     return
   }
   for job in state.jobs {
-    if job.status == "scheduled" && job.next_due_at_ms <= now_ms &&
+    if job.status == "scheduled" &&
+      job.next_due_at_ms <= now_ms &&
       state.bound_session == Some(job.session_id) {
       job.status = "running"
       loop_dispatch(ctx, job, effects)
@@ -180,11 +181,10 @@ fn loop_fold_signal(
     Tick(now_ms~) => loop_tick(ctx, state, effects, now_ms)
     Finished(id~, generation~, result~) =>
       loop_finished(state, effects, id, generation, result)
-    Bound(session_id~) => {
+    Bound(session_id~) =>
       // Jobs for other sessions stay dormant. Returning to a session
       // causes at most one overdue run, never a missed-tick avalanche.
       state.bound_session = session_id
-    }
     Halt => state.stopped = true
   }
   state
@@ -202,10 +202,11 @@ fn loop_fold_request(
   } else {
     match request {
       List => Jobs(loop_snapshot(state.jobs))
-      Add(session_id~, interval_ms~, prompt~) => {
+      Add(session_id~, interval_ms~, prompt~) =>
         if state.bound_session != Some(session_id) {
           Action(Err("loop session is not active"))
-        } else if interval_ms < 1000L || interval_ms > 86400000L ||
+        } else if interval_ms < 1000L ||
+          interval_ms > 86400000L ||
           prompt.trim() == "" {
           Action(Err("invalid loop interval or empty task"))
         } else {
@@ -232,7 +233,6 @@ fn loop_fold_request(
             Action(Ok(id))
           }
         }
-      }
       Pause(id~) =>
         match loop_find(state.jobs, id) {
           Some(job) if job.status == "scheduled" || job.status == "running" => {
@@ -301,9 +301,7 @@ fn LoopRuntime::start(
   let actor = @fuwaroid.Fuwaroid::spawn(
     group~,
     init=initial,
-    on_cmd=fn(ctx, state, cmd) {
-      loop_fold_signal(ctx, state, cmd, effects)
-    },
+    on_cmd=fn(ctx, state, cmd) { loop_fold_signal(ctx, state, cmd, effects) },
     on_query=fn(ctx, state, query) {
       loop_fold_request(ctx, state, query, effects)
     },
@@ -324,7 +322,7 @@ fn LoopRuntime::start(
     Ok(_) => ()
     Err(_) => trace("loop ticker failed to start")
   }
-  { actor, effects }
+  { actor, effects, }
 }
 
 ///|

@@ -325,7 +325,7 @@ pub fn decode_expansion_proposal(
           ),
         )
       }
-      keys.add(task.key)
+      keys.insert(task.key)
       tasks.push(task)
     }
     if tasks.is_empty() {

@@ -926,7 +926,7 @@ fn validate_dependencies(
     if seen.contains(dependency) {
       return Err(DuplicateDependency(task=root, dependency~))
     }
-    seen.add(dependency)
+    seen.insert(dependency)
   }
   match dependency_cycle(state, root, dependencies) {
     Some(cycle) => Err(DependencyCycle(cycle~))
@@ -965,7 +965,7 @@ fn dependency_cycle(
         continue
       }
       path.push(dependency)
-      on_path.add(dependency)
+      on_path.insert(dependency)
       match walk(dependency) {
         Some(cycle) => return Some(cycle)
         None => {

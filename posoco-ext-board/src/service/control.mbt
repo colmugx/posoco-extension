@@ -63,7 +63,7 @@ pub async fn BoardWorkflows::authorize_control(
         }) {
         raise WorkflowFault(OperationRejected)
       }
-      seen.add(id)
+      seen.insert(id)
     }
     let owner = self.owner.unwrap()
     if status.phase != @workflow.Paused ||
@@ -247,7 +247,7 @@ pub async fn BoardWorkflowControl::run_wave(
         raise WorkflowFault(RevisionConflict)
       }
       // Conservatively burn candidates even when admission becomes ambiguous.
-      self.attempted.add(candidate.attempt_id)
+      self.attempted.insert(candidate.attempt_id)
     }
     self.running = true
     defer {
@@ -307,7 +307,7 @@ pub async fn BoardWorkflowControl::take_results(
       if self.consumed.contains(id) {
         continue
       }
-      self.consumed.add(id)
+      self.consumed.insert(id)
       let mut assistant_text : String? = None
       for channel in self.workflows.channels {
         if channel.take(binding) is Some(text) {

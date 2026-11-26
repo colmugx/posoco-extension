@@ -349,7 +349,7 @@ async fn SubagentTools::spawn(
       let seen : Set[String] = Set([])
       for tool in requested {
         if !seen.contains(tool) && list_contains(whitelist, tool) {
-          seen.add(tool)
+          seen.insert(tool)
           intersection.push(tool)
         }
       }

@@ -72,7 +72,7 @@ fn check_authority(
         seen.contains(id) {
         return Err(InvalidAuthorization("invalid or duplicate scope ID"))
       }
-      seen.add(id)
+      seen.insert(id)
     }
   }
   if !auth.workflow_scope_.contains(auth.parent_) {

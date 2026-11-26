@@ -69,7 +69,7 @@ async fn sort_newest_first(paths : Array[String]) -> Unit noraise {
   for path in paths {
     let stamp = @fs.mtime(path) catch { _ => return }
     let s = stamp.sec()
-    let ns = stamp.nsec()
+    let ns = stamp.subsec_nanos()
     stamps.push((s, ns, path))
   }
   stamps.sort_by((a, b) => {

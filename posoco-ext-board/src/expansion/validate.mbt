@@ -77,7 +77,7 @@ fn validate_expansion(
     if keys.contains(task.key) {
       return Err(InvalidProposal("duplicate local key"))
     }
-    keys.add(task.key)
+    keys.insert(task.key)
   }
   let mut edges = 0
   for task in draft.tasks {
@@ -139,7 +139,7 @@ fn validate_expansion(
     let next : Set[String] = Set([])
     for id in frontier {
       for dependency in dependencies[id] {
-        next.add(dependency)
+        next.insert(dependency)
       }
     }
     frontier = next.iter().collect()

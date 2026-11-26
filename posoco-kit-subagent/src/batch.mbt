@@ -86,7 +86,7 @@ pub fn BatchPlan::build(
     if seen.contains(item.key) {
       raise BatchPlanError::DuplicateKey(key=item.key)
     }
-    seen.add(item.key)
+    seen.insert(item.key)
     if item.timeout_ms <= 0 {
       raise BatchPlanError::InvalidTimeout(key=item.key)
     }

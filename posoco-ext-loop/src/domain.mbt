@@ -61,11 +61,7 @@ fn loop_split_first(raw : String) -> (String, String) {
     at = at + 1
   }
   let head = text[:at].to_owned()
-  let tail = if at < text.length() {
-    text[at:].trim().to_owned()
-  } else {
-    ""
-  }
+  let tail = if at < text.length() { text[at:].trim().to_owned() } else { "" }
   (head, tail)
 }
 
@@ -107,21 +103,35 @@ fn parse_loop_action(raw : String) -> Result[LoopAction, String] {
     "" | "list" if tail == "" => Ok(ListJobs)
     "stop" if tail != "" => {
       let (id, extra) = loop_split_first(tail)
-      if extra != "" { Err("usage: /loop stop <id>") } else { Ok(StopJob(id~)) }
+      if extra != "" {
+        Err("usage: /loop stop <id>")
+      } else {
+        Ok(StopJob(id~))
+      }
     }
     "pause" if tail != "" => {
       let (id, extra) = loop_split_first(tail)
-      if extra != "" { Err("usage: /loop pause <id>") } else { Ok(PauseJob(id~)) }
+      if extra != "" {
+        Err("usage: /loop pause <id>")
+      } else {
+        Ok(PauseJob(id~))
+      }
     }
     "resume" if tail != "" => {
       let (id, extra) = loop_split_first(tail)
-      if extra != "" { Err("usage: /loop resume <id>") } else { Ok(ResumeJob(id~)) }
+      if extra != "" {
+        Err("usage: /loop resume <id>")
+      } else {
+        Ok(ResumeJob(id~))
+      }
     }
     "stop" | "pause" | "resume" => Err("missing loop id")
     "list" => Err("usage: /loop list")
     _ => {
       if tail == "" {
-        return Err("usage: /loop <interval> <task> (example: /loop 5m check CI)")
+        return Err(
+          "usage: /loop <interval> <task> (example: /loop 5m check CI)",
+        )
       }
       match parse_loop_interval(verb) {
         Ok(interval_ms) => Ok(CreateJob(interval_ms~, prompt=tail))

@@ -76,7 +76,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "hunks": Json::object({
             "type": Json::string("array"),
-            "description": Json::string("Ordered same-file replacements; mutually exclusive with top-level old_text/new_text/replace_all"),
+            "description": Json::string(
+              "Ordered same-file replacements; mutually exclusive with top-level old_text/new_text/replace_all",
+            ),
             "minItems": Json::number(1.0),
             "maxItems": Json::number(20.0),
             "items": Json::object({
@@ -181,7 +183,9 @@ fn extract_edit_args(
           (p, parsed, true)
         }
         Some(_) =>
-          raise @posoco.RuntimeError::UnknownTool("edit: hunks must be an array")
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: hunks must be an array",
+          )
       }
     }
     _ =>

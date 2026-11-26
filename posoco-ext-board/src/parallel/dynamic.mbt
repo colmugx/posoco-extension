@@ -72,7 +72,7 @@ pub async fn ParallelWorkflowRunner::extend_scope(
       seen.contains(id) {
       return Err(@workflow.InvalidScope)
     }
-    seen.add(id)
+    seen.insert(id)
   }
   self.scope_busy = true
   defer {

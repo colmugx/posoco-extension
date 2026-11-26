@@ -97,7 +97,7 @@ fn validate_restored_attempt_references(
     if tasks.get(attempt.task_id) is None {
       return Err(TaskMissing(task=attempt.task_id))
     }
-    attempt_ids.add(attempt.id)
+    attempt_ids.insert(attempt.id)
   }
   Ok(())
 }
@@ -122,7 +122,7 @@ fn validate_restored_expansion_records(
       if mapped.contains(entry.task_id) {
         return Err(InvalidInput(reason="task mapped by multiple expansions"))
       }
-      mapped.add(entry.task_id)
+      mapped.insert(entry.task_id)
     }
     expansions[record.expansion_id] = record
   }
@@ -168,8 +168,8 @@ fn validate_restored_expansion(
     if tasks.get(entry.task_id) is None {
       return Err(TaskMissing(task=entry.task_id))
     }
-    refs.add(entry.local_ref)
-    ids.add(entry.task_id)
+    refs.insert(entry.local_ref)
+    ids.insert(entry.task_id)
   }
   Ok(())
 }
@@ -251,7 +251,7 @@ fn validate_restored_dependencies(
     if seen.contains(dependency) {
       return Err(DuplicateDependency(task=task.id, dependency~))
     }
-    seen.add(dependency)
+    seen.insert(dependency)
   }
   Ok(())
 }

@@ -105,10 +105,17 @@ fn loop_job_list_text(jobs : Array[LoopJob]) -> String {
   let out = StringBuilder()
   for job in jobs {
     out.write_string(
-      job.id + " [" + job.status + "] every " +
-      (job.interval_ms / 1000L).to_string() + "s" +
-      " (runs=" + job.run_count.to_string() + ") " +
-      job.prompt + "\n",
+      job.id +
+      " [" +
+      job.status +
+      "] every " +
+      (job.interval_ms / 1000L).to_string() +
+      "s" +
+      " (runs=" +
+      job.run_count.to_string() +
+      ") " +
+      job.prompt +
+      "\n",
     )
   }
   out.to_string()
@@ -143,7 +150,10 @@ pub impl @posoco.CommandPort for LoopExtension with fn invoke(
     CreateJob(interval_ms~, prompt~) =>
       match self.session_id {
         Some(session_id) =>
-          loop_runtime_change_safe(runtime, Add(session_id~, interval_ms~, prompt~))
+          loop_runtime_change_safe(
+            runtime,
+            Add(session_id~, interval_ms~, prompt~),
+          )
         None => Err("no active session: host must call loop.set_session(id)")
       }
     PauseJob(id~) => loop_runtime_change_safe(runtime, Pause(id~))
