@@ -53,6 +53,10 @@ pub struct Stats {
   mut sum_tps_ms : Int64
   mut tps_rounds : Int32
   cache_buckets : Map[String, CacheBucket]
+  priv timing_buckets : Map[String, TimingBucket]
+  priv active_turns : Map[String, Int64]
+  priv active_model_requests : Map[String, Int64]
+  priv active_tools : Map[String, Int64]
 }
 
 ///|
@@ -98,6 +102,10 @@ pub fn Stats::Stats(
     sum_tps_ms: 0,
     tps_rounds: 0,
     cache_buckets: Map::from_array([]),
+    timing_buckets: Map::from_array([]),
+    active_turns: Map::from_array([]),
+    active_model_requests: Map::from_array([]),
+    active_tools: Map::from_array([]),
   }
 }
 
@@ -107,29 +115,52 @@ pub impl @posoco.Observer for Stats with fn on_event(
   scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
 ) -> Unit {
+  let key = scope_key(scope)
   match event {
     TurnStarted => {
-      self.round_started_ms = Some((self.clock)())
+      let now = (self.clock)()
+      self.round_started_ms = Some(now)
       self.reset_round()
+      self.note_turn_started(key, now)
     }
     ModelRequestStarted => {
       // The exact per-step anchor: the kernel declared the next model
       // request (after pre-model hooks, before the port executes it), so
       // ttft excludes tool-execution and inter-response time.
-      self.round_started_ms = Some((self.clock)())
+      let now = (self.clock)()
+      self.round_started_ms = Some(now)
       self.reset_round()
+      self.note_model_request_started(key, now)
     }
-    StreamChunkReceived(chunk~) => self.note_chunk(chunk)
+    StreamChunkReceived(chunk~) => self.note_chunk(key, chunk)
     ModelResponseReceived(usage~, ..) => {
       match usage {
-        Some(u) => self.note_cache_usage(scope_key(scope), u)
+        Some(u) => self.note_cache_usage(key, u)
         None => ()
       }
-      self.close_round(usage)
+      self.close_round(key, usage)
     }
+    ToolCallStarted(call~) => self.note_tool_started(key, call)
+    ToolCallSucceeded(call~, ..) =>
+      self.note_tool_finished(key, call, Succeeded)
+    ToolCallFailed(call~, ..) => self.note_tool_finished(key, call, Failed)
+    ToolCallAbandoned(call~, ..) =>
+      self.note_tool_finished(key, call, Abandoned)
+    ToolCallRejected(call~, ..) => self.note_tool_rejected(key, call)
     // Every terminal closes the round; a cancelled turn is not a failure but
     // it must not leave the round open into the next turn either.
-    TurnFailed(_) | TurnCancelled | TurnCompleted => self.reset_round()
+    TurnCompleted => {
+      self.note_turn_ended(key, Completed)
+      self.reset_round()
+    }
+    TurnFailed(_) => {
+      self.note_turn_ended(key, Failed)
+      self.reset_round()
+    }
+    TurnCancelled => {
+      self.note_turn_ended(key, Cancelled)
+      self.reset_round()
+    }
     _ => ()
   }
 }
@@ -271,13 +302,17 @@ fn Stats::publish_segment(
 /// Route one streamed chunk: delta chunks mark first/last token, accumulate
 /// chars, and attempt a throttled live publish; a `Usage` chunk with output
 /// tokens makes the live rate exact; `Finish` carries no rate signal.
-fn Stats::note_chunk(self : Stats, chunk : @posoco.StreamChunk) -> Unit {
+fn Stats::note_chunk(
+  self : Stats,
+  key : String,
+  chunk : @posoco.StreamChunk,
+) -> Unit {
   match chunk {
     TextDelta(token~) | ReasoningDelta(token~) =>
-      self.note_delta(token.length())
+      self.note_delta(key, token.length())
     ToolCallDelta(arguments_delta~, ..) =>
       match arguments_delta {
-        Some(args) => self.note_delta(args.length())
+        Some(args) => self.note_delta(key, args.length())
         None => ()
       }
     Usage(output_tokens~, ..) =>
@@ -293,15 +328,17 @@ fn Stats::note_chunk(self : Stats, chunk : @posoco.StreamChunk) -> Unit {
 /// One delta chunk arrived; `chars` is its UTF-16 length. The clock is read
 /// once and reused for the first-token mark, the last-chunk mark, and the
 /// throttled live publish.
-fn Stats::note_delta(self : Stats, chars : Int32) -> Unit {
+fn Stats::note_delta(self : Stats, key : String, chars : Int32) -> Unit {
   let now = (self.clock)()
   match (self.round_started_ms, self.first_token_ms) {
     (Some(started), None) => {
       self.first_token_ms = Some(now)
+      let ttft_ms = now - started
+      self.note_ttft(key, ttft_ms)
       self.publish_segment(
         segment="ttft",
         priority=50,
-        value="\{now - started}ms",
+        value="\{ttft_ms}ms",
       )
     }
     _ => ()
@@ -379,8 +416,13 @@ fn cache_status_value(totals : CacheTotals) -> String {
 }
 
 ///|
-fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
+fn Stats::close_round(
+  self : Stats,
+  key : String,
+  usage : @posoco.Usage?,
+) -> Unit {
   let now = (self.clock)()
+  self.note_model_response(key, now)
   // Decode span: first → last delta chunk. Prefill, tool gaps, and the
   // commit tail after the last chunk stay out of the denominator.
   let decode_ms : Int64? = match (self.first_token_ms, self.last_chunk_ms) {
@@ -550,6 +592,19 @@ pub impl @posoco.CommandPort for Stats with fn commands(_self : Stats) -> Array[
       visible: true,
       metadata: None,
     },
+    @posoco.CommandDef::{
+      id: "perf",
+      label: "Turn & tool timing",
+      description: "Per-session and aggregate turn duration, model request latency, tool execution breakdown, and cache hit summary",
+      category: "stats",
+      ctype: @posoco.CommandType::Action,
+      params: [],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
   ]
 }
 
@@ -594,6 +649,12 @@ fn bucket_json(key : String, bucket : CacheBucket) -> Json {
       ),
       ("sum_output_tokens", Json::number(bucket.sum_output.to_double())),
       ("sum_cached_tokens", Json::number(bucket.sum_cached.to_double())),
+      (
+        "sum_uncached_cache_input_tokens",
+        Json::number(
+          uncached_cache_input(bucket.sum_cache_input, bucket.sum_cached).to_double(),
+        ),
+      ),
     ]),
   )
 }
@@ -617,6 +678,7 @@ pub impl @posoco.CommandPort for Stats with fn invoke(
   match id {
     "cache_doctor" => self.cache_doctor_report()
     "usage" => self.usage_report()
+    "perf" => self.perf_report()
     _ => raise @posoco.CommandError::NotFound(id)
   }
 }
@@ -794,6 +856,12 @@ fn Stats::usage_report(self : Stats) -> @posoco.CommandOutcome {
           ("sum_output_tokens", Json::number(totals.sum_output.to_double())),
           ("hit_requests", Json::number(totals.hit_requests.to_double())),
           ("sum_cached_tokens", Json::number(totals.sum_cached.to_double())),
+          (
+            "sum_uncached_cache_input_tokens",
+            Json::number(
+              uncached_cache_input(totals.sum_cache_input, totals.sum_cached).to_double(),
+            ),
+          ),
         ]),
       ),
     ),

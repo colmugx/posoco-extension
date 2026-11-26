@@ -274,7 +274,7 @@ test "second round re-anchors and avg aggregates tokens over decode time" {
 test "chunk events publish ttft immediately and non-delta chunks stay silent" {
   let capture = status_channel()
   let stats = Stats(
-    clock=stepped_clock([1000, 1300, 1400, 1500]),
+    clock=stepped_clock([1000, 1300, 1400, 1500, 1600]),
     live_interval_ms=suppress_live,
   )
   stats.on_event(None, @posoco.TurnEvent::TurnStarted)
@@ -857,7 +857,7 @@ test "manifest contributes the stats observer and the cache doctor command" {
   assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.requires.length(), 0)
   let defs = stats.commands()
-  assert_eq(defs.length(), 2)
+  assert_eq(defs.length(), 3)
   assert_eq(defs[0].id, "cache_doctor")
   assert_eq(defs[0].label, "Cache doctor")
   assert_eq(defs[0].category, "stats")
@@ -870,6 +870,12 @@ test "manifest contributes the stats observer and the cache doctor command" {
   assert_eq(defs[1].ctype, @posoco.CommandType::Action)
   assert_eq(defs[1].params.length(), 0)
   assert_true(defs[1].visible)
+  assert_eq(defs[2].id, "perf")
+  assert_eq(defs[2].label, "Turn & tool timing")
+  assert_eq(defs[2].category, "stats")
+  assert_eq(defs[2].ctype, @posoco.CommandType::Action)
+  assert_eq(defs[2].params.length(), 0)
+  assert_true(defs[2].visible)
 }
 
 ///|

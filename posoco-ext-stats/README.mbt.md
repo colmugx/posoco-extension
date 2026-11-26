@@ -78,19 +78,21 @@ reported data: a round without usage never counts as a request, and absent
 token fields contribute nothing — unknown is not zero
 (`src/stats.mbt:31-46,108-132`).
 
-Two read-only commands render these buckets as multi-line feedback plus a
-structured JSON twin (`src/stats.mbt:398-408`):
+Three read-only commands render these buckets as multi-line feedback plus a
+structured JSON twin:
 
 - **`cache_doctor`** — per-session prompt-cache hit rates with a read-only
   channel diagnosis: a channel with ≥ 5 usage rounds and an essentially
   zero token hit rate warns that the provider may not cache prompts or a
-  proxy splits session affinity across upstreams (`src/stats.mbt:389-395`).
+  proxy splits session affinity across upstreams.
 - **`usage`** — cumulative, explicitly labeled token accounting, one line
   per session plus an aggregate
   (`requests · in · out · cache hits <hits>/<requests> (<rate>%)`; the rate
   is omitted while no input tokens are reported) with a `stats_usage`
-  structured twin (`src/stats.mbt:493-570`).
+  structured twin (including `sum_uncached_cache_input_tokens`).
+- **`perf`** — per-session and aggregate turn duration, model request count
+  and latency (with average TTFT), per-tool execution counts and duration
+  breakdown (including failures, abandonments, and rejections), and reported
+  cache savings, with a `stats_perf` structured twin.
 
-Both commands mutate nothing; tests: `cache_doctor …` / `usage reports
-cumulative labeled accounting per session and aggregate`
-(`src/stats_wbtest.mbt:648-844`).
+All three commands mutate nothing and leave tool schemas untouched.
