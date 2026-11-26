@@ -46,14 +46,42 @@ priv struct GrepMatch {
   path : String
   line : Int32
   content : String
+  content_truncated : Bool
+}
+
+///|
+priv struct GrepSearchResult {
+  matches : Array[GrepMatch]
+  paths : Array[String]
+  counts : Array[Int32]
+  total_matches : Int32
+  total_files : Int32
+  content_byte_cut : Bool
+}
+
+///|
+/// Rewrites raw engine paths into display paths (stripping leading `./` and
+/// rebasing anchored results) before collection and byte-budget accounting.
+priv struct GrepPathMapper {
+  resolved : String?
+  raw_base : String
+}
+
+///|
+fn GrepPathMapper::map(self : GrepPathMapper, path : String) -> String {
+  let clean = @devkit.strip_dot_prefix(path)
+  match self.resolved {
+    Some(resolved) => rebase_match_path(clean, resolved, self.raw_base)
+    None => clean
+  }
 }
 
 ///|
 /// High-level content-search boundary.
 ///
-/// Engines return flat `GrepMatch` lists; the shared impl derives the three
-/// output modes, caps, and formatting from them. `ignores` lives on the
-/// searcher so both engines prune identically.
+/// Engines aggregate matches into a bounded `GrepSearchResult` using the
+/// shared mode, cap, and display-path mapping. `ignores` lives on the
+/// searcher so all engines prune identically.
 priv trait GrepSearcher {
   async fn search(
     self : Self,
@@ -62,7 +90,10 @@ priv trait GrepSearcher {
     file_glob : String,
     case_insensitive : Bool,
     use_regex : Bool,
-  ) -> Array[GrepMatch] raise @posoco.RuntimeError
+    mode : GrepOutputMode,
+    max_matches : Int32,
+    path_mapper : GrepPathMapper,
+  ) -> GrepSearchResult raise @posoco.RuntimeError
 }
 
 ///|
@@ -139,6 +170,153 @@ const GREP_LINE_CHAR_CAP = 1200
 /// Max formatted bytes of the match body before the page is cut, matching
 /// the read tool.
 const GREP_BYTE_CAP = 40_000
+
+///|
+priv struct GrepSearchState {
+  mode : GrepOutputMode
+  max_matches : Int32
+  path_mapper : GrepPathMapper
+  matches : Array[GrepMatch]
+  paths : Array[String]
+  counts : Array[Int32]
+  total_matches : Int32
+  total_files : Int32
+  last_path : String
+  last_path_stored : Bool
+  content_bytes : Int32
+  content_byte_cut : Bool
+}
+
+///|
+fn new_grep_search_state(
+  mode : GrepOutputMode,
+  max_matches : Int32,
+  path_mapper : GrepPathMapper,
+) -> Ref[GrepSearchState] {
+  Ref(GrepSearchState::{
+    mode,
+    max_matches,
+    path_mapper,
+    matches: [],
+    paths: [],
+    counts: [],
+    total_matches: 0,
+    total_files: 0,
+    last_path: "",
+    last_path_stored: false,
+    content_bytes: 0,
+    content_byte_cut: false,
+  })
+}
+
+///|
+/// Retain only bounded output entries while continuing to count every match.
+fn grep_record_match(
+  state : Ref[GrepSearchState],
+  raw_path : String,
+  line : Int32,
+  content : String,
+) -> Unit {
+  let current = state.val
+  let path = current.path_mapper.map(raw_path)
+  let total_matches = current.total_matches + 1
+  match current.mode {
+    Content => {
+      let matches = current.matches
+      let mut content_bytes = current.content_bytes
+      let mut content_byte_cut = current.content_byte_cut
+      if matches.length() < current.max_matches && !content_byte_cut {
+        let clipped = @devkit.truncate_chars(content, GREP_LINE_CHAR_CAP)
+        let content_truncated = clipped != content
+        let rendered_content = if content_truncated {
+          clipped + "…[cut]"
+        } else {
+          clipped
+        }
+        let rendered = "\{line}|\{rendered_content}"
+        let header_bytes = if matches.length() == 0 ||
+          matches[matches.length() - 1].path != path {
+          @utf8.encode(path).length() + 1
+        } else {
+          0
+        }
+        let line_bytes = @utf8.encode(rendered).length() + 1
+        if matches.length() == 0 ||
+          content_bytes + header_bytes + line_bytes <= GREP_BYTE_CAP {
+          matches.push(GrepMatch::{
+            path,
+            line,
+            content: clipped,
+            content_truncated,
+          })
+          content_bytes += header_bytes + line_bytes
+        } else {
+          content_byte_cut = true
+        }
+      }
+      state.val = GrepSearchState::{
+        mode: current.mode,
+        max_matches: current.max_matches,
+        path_mapper: current.path_mapper,
+        matches,
+        paths: current.paths,
+        counts: current.counts,
+        total_matches,
+        total_files: current.total_files,
+        last_path: current.last_path,
+        last_path_stored: current.last_path_stored,
+        content_bytes,
+        content_byte_cut,
+      }
+    }
+    FilesWithMatches | Count => {
+      let paths = current.paths
+      let counts = current.counts
+      let mut total_files = current.total_files
+      let mut last_path_stored = current.last_path_stored
+      if path != current.last_path {
+        total_files += 1
+        last_path_stored = paths.length() < current.max_matches
+        if last_path_stored {
+          paths.push(path)
+          if current.mode is Count {
+            counts.push(1)
+          }
+        }
+      } else if current.mode is Count && last_path_stored {
+        let last = counts.length() - 1
+        counts[last] = counts[last] + 1
+      }
+      state.val = GrepSearchState::{
+        mode: current.mode,
+        max_matches: current.max_matches,
+        path_mapper: current.path_mapper,
+        matches: current.matches,
+        paths,
+        counts,
+        total_matches,
+        total_files,
+        last_path: path,
+        last_path_stored,
+        content_bytes: current.content_bytes,
+        content_byte_cut: current.content_byte_cut,
+      }
+    }
+  }
+}
+
+///|
+fn finish_grep_search(state : Ref[GrepSearchState]) -> GrepSearchResult {
+  let current = state.val
+  GrepSearchResult::{
+    matches: current.matches,
+    paths: current.paths,
+    counts: current.counts,
+    total_matches: current.total_matches,
+    total_files: current.total_files,
+    content_byte_cut: current.content_byte_cut,
+  }
+}
 
 ///|
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
@@ -294,7 +472,9 @@ fn extract_grep_args(
 ///|
 /// Render one compact grouped match line as `line|text`.
 fn render_match_line(m : GrepMatch) -> String {
-  let content = if m.content.length() > GREP_LINE_CHAR_CAP {
+  let content = if m.content_truncated {
+    m.content + "…[cut]"
+  } else if m.content.length() > GREP_LINE_CHAR_CAP {
     @devkit.truncate_chars(m.content, GREP_LINE_CHAR_CAP) + "…[cut]"
   } else {
     m.content
@@ -346,39 +526,6 @@ fn render_content_body(
 }
 
 ///|
-/// Distinct paths of `matches` in first-appearance order.
-fn distinct_paths(matches : Array[GrepMatch]) -> Array[String] {
-  let seen : Map[String, Unit] = Map::from_array([])
-  for m in matches {
-    if !seen.contains(m.path) {
-      seen[m.path] = ()
-    }
-  }
-  let paths : Array[String] = []
-  for path, _ in seen {
-    paths.push(path)
-  }
-  paths
-}
-
-///|
-/// Match count per distinct path in first-appearance order.
-fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int32)] {
-  let counts : Map[String, Int32] = Map::from_array([])
-  for m in matches {
-    counts[m.path] = match counts.get(m.path) {
-      Some(n) => n + 1
-      None => 1
-    }
-  }
-  let entries : Array[(String, Int32)] = []
-  for path, n in counts {
-    entries.push((path, n))
-  }
-  entries
-}
-
-///|
 fn grep_summary(count : Int32, noun : String) -> String {
   if count == 0 {
     "no matches"
@@ -388,8 +535,6 @@ fn grep_summary(count : Int32, noun : String) -> String {
 }
 
 ///|
-/// Structured payload for observers/UIs; never sent to the model. Carries
-/// the reserved `summary` field plus the total count and truncation flag.
 fn grep_structured(count : Int32, noun : String, truncated : Bool) -> Json {
   Json::object(
     Map::from_array([
@@ -401,59 +546,55 @@ fn grep_structured(count : Int32, noun : String, truncated : Bool) -> Json {
 }
 
 ///|
-/// Build the model-visible output for a mode from the full match list.
-/// Header counts are totals; the body lists at most `max_matches` entries;
-/// a footer reports the remainder when anything was cut.
 fn grep_result_text(
   mode : GrepOutputMode,
-  matches : Array[GrepMatch],
-  _pattern : String,
+  result : GrepSearchResult,
   max_matches : Int32,
 ) -> (String, Int32, Bool) {
-  if matches.length() == 0 {
+  let total = if mode is Content {
+    result.total_matches
+  } else {
+    result.total_files
+  }
+  if total == 0 {
     return ("(no matches)", 0, false)
   }
   match mode {
     Content => {
-      let (body, shown, byte_cut) = render_content_body(matches, max_matches)
-      let total = matches.length()
-      let truncated = byte_cut || shown < total
+      let (body, shown, byte_cut) = render_content_body(result.matches, max_matches)
+      let truncated = result.content_byte_cut || byte_cut ||
+        shown < result.total_matches
       let mut text = body.trim_end(chars="\n").to_owned()
       if truncated {
-        text = "\{text}\n… +\{total - shown} matches"
+        text = "\{text}\n… +\{result.total_matches - shown} matches"
       }
-      (text, total, truncated)
+      (text, result.total_matches, truncated)
     }
     FilesWithMatches => {
-      let paths = distinct_paths(matches)
-      let total = paths.length()
-      let shown = if total < max_matches { total } else { max_matches }
+      let shown = result.paths.length()
       let builder = StringBuilder()
-      for i in 0..<shown {
-        builder.write_string(paths[i])
+      for path in result.paths {
+        builder.write_string(path)
         builder.write_char('\n')
       }
       let mut text = builder.to_string().trim_end(chars="\n").to_owned()
-      if shown < total {
-        text = "\{text}\n… +\{total - shown} files"
+      if shown < result.total_files {
+        text = "\{text}\n… +\{result.total_files - shown} files"
       }
-      (text, total, shown < total)
+      (text, result.total_files, shown < result.total_files)
     }
     Count => {
-      let counts = match_counts(matches)
-      let total = counts.length()
-      let shown = if total < max_matches { total } else { max_matches }
+      let shown = result.paths.length()
       let builder = StringBuilder()
       for i in 0..<shown {
-        let (path, n) = counts[i]
-        builder.write_string("\{path}:\{n}")
+        builder.write_string("\{result.paths[i]}:\{result.counts[i]}")
         builder.write_char('\n')
       }
       let mut text = builder.to_string().trim_end(chars="\n").to_owned()
-      if shown < total {
-        text = "\{text}\n… +\{total - shown} files"
+      if shown < result.total_files {
+        text = "\{text}\n… +\{result.total_files - shown} files"
       }
-      (text, total, shown < total)
+      (text, result.total_files, shown < result.total_files)
     }
   }
 }
@@ -499,44 +640,24 @@ async fn execute_grep_impl(
     use_regex,
     max_matches,
   ) = extract_grep_args(call.arguments)
-  let matches = match anchor {
+  let (search_base, path_mapper) = match anchor {
     Some(anchor) => {
       let resolved = anchor.resolve(raw_base)
-      let found = searcher.search(
-        pattern, resolved, file_glob, case_insensitive, use_regex,
-      )
-      [
-        for m in found => {
-          GrepMatch::{
-            path: rebase_match_path(
-              @devkit.strip_dot_prefix(m.path),
-              resolved,
-              raw_base,
-            ),
-            line: m.line,
-            content: m.content,
-          }
-        }
-      ]
+      (resolved, GrepPathMapper::{ resolved: Some(resolved), raw_base })
     }
-    None => {
-      let found = searcher.search(
-        pattern, raw_base, file_glob, case_insensitive, use_regex,
-      )
-      [
-        for m in found => {
-          GrepMatch::{
-            path: @devkit.strip_dot_prefix(m.path),
-            line: m.line,
-            content: m.content,
-          }
-        }
-      ]
-    }
+    None => (raw_base, GrepPathMapper::{ resolved: None, raw_base })
   }
-  let (text, count, truncated) = grep_result_text(
-    mode, matches, pattern, max_matches,
+  let result = searcher.search(
+    pattern,
+    search_base,
+    file_glob,
+    case_insensitive,
+    use_regex,
+    mode,
+    max_matches,
+    path_mapper,
   )
+  let (text, count, truncated) = grep_result_text(mode, result, max_matches)
   let noun = match mode {
     Content => "matches"
     FilesWithMatches => "files"
