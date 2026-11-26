@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-mbtx"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.25.1",
+  "colmugx/posoco@0.26.0",
   "colmugx/fuwaroid@0.4.0",
 }
 

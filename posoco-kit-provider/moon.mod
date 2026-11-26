@@ -15,6 +15,6 @@ description = "Posoco Provider contracts kit - provider factories, model slots, 
 source = "src"
 
 import {
-  "colmugx/posoco@0.25.1",
+  "colmugx/posoco@0.26.0",
   "posoco/ext-oauth@0.1.0",
 }

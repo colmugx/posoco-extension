@@ -15,5 +15,5 @@ description = "Posoco events kit - the closed payload ADTs and @posoco.Event con
 source = "src"
 
 import {
-  "colmugx/posoco@0.25.1",
+  "colmugx/posoco@0.26.0",
 }

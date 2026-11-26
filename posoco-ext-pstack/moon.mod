@@ -15,7 +15,7 @@ keywords = [ "posoco", "agent-skills", "pstack", "poteto-mode", "coding-agent" ]
 description = "PStack engineering workflows via file-backed native Posoco Skills"
 
 import {
-  "colmugx/posoco@0.25.1",
+  "colmugx/posoco@0.26.0",
   "colmugx/posoco-ext-skills@0.2.0",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.1",
