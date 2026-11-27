@@ -144,11 +144,7 @@ fn Stats::note_ttft(self : Stats, key : String, ttft_ms : Int64) -> Unit {
 }
 
 ///|
-fn Stats::note_model_response(
-  self : Stats,
-  key : String,
-  now : Int64,
-) -> Unit {
+fn Stats::note_model_response(self : Stats, key : String, now : Int64) -> Unit {
   let bucket = self.timing_bucket(key)
   bucket.model_requests += 1
   match self.active_model_requests.get(key) {
@@ -351,7 +347,9 @@ fn format_tool_summary(tools : Map[String, ToolTiming]) -> String? {
       details.push("\{t.rejected} rejected")
     }
     let detail_str = details.join(", ")
-    parts.push("\{name} \{t.calls} (\{fmt_duration_ms(t.sum_ms)}, \{detail_str})")
+    parts.push(
+      "\{name} \{t.calls} (\{fmt_duration_ms(t.sum_ms)}, \{detail_str})",
+    )
   }
   Some("tools: " + parts.join(" · "))
 }
@@ -403,10 +401,7 @@ fn perf_line(
 }
 
 ///|
-fn timing_bucket_json(
-  session : String?,
-  bucket : TimingBucket,
-) -> Json {
+fn timing_bucket_json(session : String?, bucket : TimingBucket) -> Json {
   let fields : Array[(String, Json)] = []
   match session {
     Some(s) => fields.push(("session", Json::string(s)))

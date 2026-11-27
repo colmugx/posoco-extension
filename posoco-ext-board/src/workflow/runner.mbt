@@ -367,12 +367,10 @@ async fn SequentialWorkflowRunner::drive(
       })
       self.run_loop(spec)
     }) catch {
-      WorkflowDeadline => {
-        println("WFD deadline-reached")
+      WorkflowDeadline =>
         if self.phase != Unresolved {
           self.finish(Stopped, DeadlineReached)
         }
-      }
       _ =>
         if self.phase != Unresolved {
           self.finish(Failed, UnexpectedFailure)

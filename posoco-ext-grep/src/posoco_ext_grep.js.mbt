@@ -269,8 +269,12 @@ async fn js_spawn_grep_result(
         exit_code: 2,
         stderr: "ripgrep stream envelope decode failed",
         search_result: {
-          matches: [], paths: [], counts: [], total_matches: 0,
-          total_files: 0, content_byte_cut: false,
+          matches: [],
+          paths: [],
+          counts: [],
+          total_matches: 0,
+          total_files: 0,
+          content_byte_cut: false,
         },
       }
   }
@@ -281,8 +285,12 @@ async fn js_spawn_grep_result(
         exit_code: 2,
         stderr: "ripgrep stream envelope is not an object",
         search_result: {
-          matches: [], paths: [], counts: [], total_matches: 0,
-          total_files: 0, content_byte_cut: false,
+          matches: [],
+          paths: [],
+          counts: [],
+          total_matches: 0,
+          total_files: 0,
+          content_byte_cut: false,
         },
       }
   }
@@ -305,7 +313,7 @@ async fn js_spawn_grep_result(
   let content_byte_cut = fields.get("contentByteCut") is Some(Json::True)
   let matches : Array[GrepMatch] = []
   match fields.get("matches") {
-    Some(Json::Array(items)) => {
+    Some(Json::Array(items)) =>
       for item in items {
         match item {
           Json::Object(item_fields) => {
@@ -321,44 +329,47 @@ async fn js_spawn_grep_result(
               Some(Json::String(value)) => value
               _ => ""
             }
-            let content_truncated = item_fields.get("contentTruncated") is Some(Json::True)
+            let content_truncated = item_fields.get("contentTruncated")
+              is Some(Json::True)
             matches.push(GrepMatch::{ path, line, content, content_truncated, })
           }
           _ => ()
         }
       }
-    }
     _ => ()
   }
   let paths : Array[String] = []
   match fields.get("paths") {
-    Some(Json::Array(items)) => {
+    Some(Json::Array(items)) =>
       for item in items {
         match item {
           Json::String(value) => paths.push(value)
           _ => ()
         }
       }
-    }
     _ => ()
   }
   let counts : Array[Int32] = []
   match fields.get("counts") {
-    Some(Json::Array(items)) => {
+    Some(Json::Array(items)) =>
       for item in items {
         match item {
           Json::Number(value, ..) => counts.push(value.to_int())
           _ => ()
         }
       }
-    }
     _ => ()
   }
   {
     exit_code,
     stderr,
     search_result: {
-      matches, paths, counts, total_matches, total_files, content_byte_cut,
+      matches,
+      paths,
+      counts,
+      total_matches,
+      total_files,
+      content_byte_cut,
     },
   }
 }
@@ -452,12 +463,19 @@ impl GrepSearcher for JsRgSearcher with fn search(
   match probe_rg() {
     Some(bin) => {
       let argv = build_rg_args(
-        bin, pattern, base, file_glob, case_insensitive, use_regex, self.ignores,
+        bin,
+        pattern,
+        base,
+        file_glob,
+        case_insensitive,
+        use_regex,
+        self.ignores,
       )
       let result = js_spawn_grep_result(argv, mode, max_matches, path_mapper)
       if result.exit_code < 0 || result.exit_code > 1 {
         raise @posoco.RuntimeError::InvocationFailed(
-          "grep: rg error for '\{@devkit.sanitize_path(base)}': " + result.stderr,
+          "grep: rg error for '\{@devkit.sanitize_path(base)}': " +
+          result.stderr,
         )
       }
       result.search_result
@@ -465,7 +483,13 @@ impl GrepSearcher for JsRgSearcher with fn search(
     None =>
       GrepSearcher::search(
         JsWalkGrepSearcher::{ ignores: self.ignores, },
-        pattern, base, file_glob, case_insensitive, use_regex, mode, max_matches,
+        pattern,
+        base,
+        file_glob,
+        case_insensitive,
+        use_regex,
+        mode,
+        max_matches,
         path_mapper,
       )
   }

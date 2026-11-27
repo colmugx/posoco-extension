@@ -462,7 +462,6 @@ async fn BoardExecutionOwner::drive(
   // Cancellation bypasses catch in async 0.22; handle_cancellation confirms
   // the driver's structured lifetime has unwound before durable settlement.
   owned.entered = true
-  println("WFD drive-start exec=\{owned.binding.execution_id}")
   let outcome = if owned.cancel_requested {
     Cancelled
   } else {
@@ -490,9 +489,6 @@ async fn BoardExecutionOwner::drive(
       None => Cancelled
     }
   }
-  println(
-    "WFD drive-out exec=\{owned.binding.execution_id} outcome=\{outcome_wire(outcome)} cancel_requested=\{owned.cancel_requested}",
-  )
   @async.protect_from_cancel(() => {
     self.finish(owned, outcome)
     slot.execution = None
@@ -520,9 +516,6 @@ async fn BoardExecutionOwner::finish(
   self.mutex.acquire()
   defer self.mutex.release()
   if !owned.started || self.poisoned {
-    println(
-      "WFDBG finish-unresolved attempt=\{owned.binding.attempt_id} started=\{owned.started} poisoned=\{self.poisoned} outcome=\{outcome_wire(outcome)}",
-    )
     ignore(
       self.record(owned, {
         ..owned.binding,
@@ -554,9 +547,6 @@ async fn BoardExecutionOwner::finish(
     attempt.status is Running
   })
   if !running {
-    println(
-      "WFDBG finish-not-running attempt=\{owned.binding.attempt_id} outcome=\{outcome_wire(outcome)}",
-    )
     ignore(self.record(owned, { ..owned.binding, phase: Unresolved, }))
     self.poisoned = true
     return
@@ -571,9 +561,6 @@ async fn BoardExecutionOwner::finish(
   if result.accepted {
     ignore(self.record(owned, { ..owned.binding, phase: Settled, }))
   } else {
-    println(
-      "WFDBG finish-rejected attempt=\{owned.binding.attempt_id} outcome=\{outcome_wire(outcome)}",
-    )
     ignore(self.record(owned, { ..owned.binding, phase: Unresolved, }))
     self.poisoned = true
   }
@@ -591,9 +578,6 @@ pub fn BoardExecutionOwner::cancel(
     match (slot.execution, slot.worker) {
       (Some(owned), Some(task)) =>
         if owned.binding.execution_id == execution_id {
-          println(
-            "WFD cancel-hit exec=\{execution_id} entered=\{owned.entered}",
-          )
           owned.cancel_requested = true
           if owned.entered {
             task.cancel()
@@ -621,7 +605,6 @@ pub async fn BoardExecutionOwner::shutdown(
   self : BoardExecutionOwner,
   timeout_ms~ : Int32 = 4000,
 ) -> Bool {
-  println("WFD shutdown")
   self.closed = true
   @async.protect_from_cancel(() => {
     let workers : Array[@async.Task[BoardExecutionBinding]] = []

@@ -561,8 +561,12 @@ fn grep_result_text(
   }
   match mode {
     Content => {
-      let (body, shown, byte_cut) = render_content_body(result.matches, max_matches)
-      let truncated = result.content_byte_cut || byte_cut ||
+      let (body, shown, byte_cut) = render_content_body(
+        result.matches,
+        max_matches,
+      )
+      let truncated = result.content_byte_cut ||
+        byte_cut ||
         shown < result.total_matches
       let mut text = body.trim_end(chars="\n").to_owned()
       if truncated {
@@ -643,18 +647,12 @@ async fn execute_grep_impl(
   let (search_base, path_mapper) = match anchor {
     Some(anchor) => {
       let resolved = anchor.resolve(raw_base)
-      (resolved, GrepPathMapper::{ resolved: Some(resolved), raw_base })
+      (resolved, GrepPathMapper::{ resolved: Some(resolved), raw_base, })
     }
-    None => (raw_base, GrepPathMapper::{ resolved: None, raw_base })
+    None => (raw_base, GrepPathMapper::{ resolved: None, raw_base, })
   }
   let result = searcher.search(
-    pattern,
-    search_base,
-    file_glob,
-    case_insensitive,
-    use_regex,
-    mode,
-    max_matches,
+    pattern, search_base, file_glob, case_insensitive, use_regex, mode, max_matches,
     path_mapper,
   )
   let (text, count, truncated) = grep_result_text(mode, result, max_matches)

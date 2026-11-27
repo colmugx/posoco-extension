@@ -188,9 +188,15 @@ async test "perf records failed, abandoned, and rejected tools and cleans up orp
               assert_true(
                 agg.get("cancelled_turns") is Some(Json::Number(1.0, ..)),
               )
-              assert_true(agg.get("failed_turns") is Some(Json::Number(1.0, ..)))
-              assert_true(agg.get("tool_failures") is Some(Json::Number(2.0, ..)))
-              assert_true(agg.get("tool_rejected") is Some(Json::Number(1.0, ..)))
+              assert_true(
+                agg.get("failed_turns") is Some(Json::Number(1.0, ..)),
+              )
+              assert_true(
+                agg.get("tool_failures") is Some(Json::Number(2.0, ..)),
+              )
+              assert_true(
+                agg.get("tool_rejected") is Some(Json::Number(1.0, ..)),
+              )
               assert_true(
                 agg.get("sum_tool_ms") is Some(Json::Number(180.0, ..)),
               )
@@ -266,4 +272,3 @@ async test "perf separates multiple sessions and aggregates shared tool names" {
     _ => fail("expected perf success")
   }
 }
-

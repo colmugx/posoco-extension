@@ -2,7 +2,7 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
 }
 ----
 
@@ -96,7 +96,11 @@ async fn build_frontend(web : String) -> Unit {
   println(
     "board-web dist is out of date; building the frontend (bun run build in \{web})",
   )
-  @shell.Cmd("bun", ["run", "build"], cwd=web).run()
+  ignore(
+    @process.Cmd("bun", ["run", "build"], cwd=web, stdin=Empty, accepted_exit_code=code => {
+      code == 0
+    }).run(),
+  )
 }
 
 ///|
@@ -187,8 +191,15 @@ async fn main {
     @fs.remove(dist, recursive=true)
   }
   copy_tree(source, dist)
-  @shell.Cmd("moon", [
-    "--target-dir", "_build/assets-generator", "run", "tools/embed-assets/generate.mbtx",
-    "--target", "native", "--output-json", "--", dist,
-  ]).run()
+  ignore(
+    @process.Cmd(
+      "moon",
+      [
+        "--target-dir", "_build/assets-generator", "run", "tools/embed-assets/generate.mbtx",
+        "--target", "native", "--output-json", "--", dist,
+      ],
+      stdin=Empty,
+      accepted_exit_code=code => code == 0,
+    ).run(),
+  )
 }

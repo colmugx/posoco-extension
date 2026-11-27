@@ -388,7 +388,8 @@ async test "grep_count_mode_caps_files_and_preserves_exact_totals" {
           _ => fail("expected exact structured count for capped count mode")
         }
       }
-      other => fail("expected Success for capped count mode, got " + other.to_string())
+      other =>
+        fail("expected Success for capped count mode, got " + other.to_string())
     }
   }
 }
@@ -426,12 +427,14 @@ async test "grep_files_mode_caps_paths_and_preserves_exact_totals" {
           _ => fail("expected exact structured count for capped files mode")
         }
       }
-      other => fail("expected Success for capped files mode, got " + other.to_string())
+      other =>
+        fail("expected Success for capped files mode, got " + other.to_string())
     }
   }
 }
 
 ///|
+
 ///|
 async test "grep_case_insensitive_flag_broadens_matching" {
   @async.with_task_group() <| group => {
@@ -652,7 +655,12 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
 ///|
 test "grep_render_match_line_matches_compact_read_style" {
   assert_eq(
-    render_match_line({ path: "a.txt", line: 42, content: "needle", content_truncated: false, }),
+    render_match_line({
+      path: "a.txt",
+      line: 42,
+      content: "needle",
+      content_truncated: false,
+    }),
     "42|needle",
   )
 }
@@ -680,11 +688,7 @@ test "grep_result_text_does_not_echo_pattern_on_miss" {
     total_files: 0,
     content_byte_cut: false,
   }
-  let (text, count, truncated) = grep_result_text(
-    Content,
-    empty,
-    100,
-  )
+  let (text, count, truncated) = grep_result_text(Content, empty, 100)
   assert_eq(text, "(no matches)")
   assert_eq(count, 0)
   assert_false(truncated)
@@ -885,7 +889,7 @@ async test "grep_literal_case_insensitive_folds_unicode_like_regex" {
 
 ///|
 test "grep_collector_strips_dot_prefix_without_anchor" {
-  let mapper = GrepPathMapper::{ resolved: None, raw_base: "." }
+  let mapper = GrepPathMapper::{ resolved: None, raw_base: ".", }
   let content_state = new_grep_search_state(Content, 10, mapper)
   grep_record_match(content_state, "./src/a.mbt", 3, "needle")
   let content_res = finish_grep_search(content_state)
@@ -908,7 +912,7 @@ test "grep_collector_strips_dot_prefix_without_anchor" {
 ///|
 test "grep_collector_budgets_bytes_against_rebased_display_path" {
   let long_root = "/" + "workspace-segment/".repeat(20) + "repo"
-  let mapper = GrepPathMapper::{ resolved: Some(long_root), raw_base: "." }
+  let mapper = GrepPathMapper::{ resolved: Some(long_root), raw_base: ".", }
   let state = new_grep_search_state(Content, 200, mapper)
   // 120 distinct short relative files with 10-byte lines easily fit in 40 KB
   // once rebased, whereas raw 380-byte absolute headers would exceed 40 KB.
@@ -924,7 +928,7 @@ test "grep_collector_budgets_bytes_against_rebased_display_path" {
 
 ///|
 test "grep_collector_truncates_long_lines_and_enforces_byte_cap" {
-  let mapper = GrepPathMapper::{ resolved: None, raw_base: "." }
+  let mapper = GrepPathMapper::{ resolved: None, raw_base: ".", }
   let state = new_grep_search_state(Content, 100, mapper)
   let long_line = "x".repeat(GREP_LINE_CHAR_CAP + 50)
   for i in 1..<=50 {
@@ -941,4 +945,3 @@ test "grep_collector_truncates_long_lines_and_enforces_byte_cap" {
   assert_true(text.contains("…[cut]"))
   assert_true(text.contains("… +"))
 }
-

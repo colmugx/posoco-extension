@@ -335,11 +335,7 @@ fn Stats::note_delta(self : Stats, key : String, chars : Int32) -> Unit {
       self.first_token_ms = Some(now)
       let ttft_ms = now - started
       self.note_ttft(key, ttft_ms)
-      self.publish_segment(
-        segment="ttft",
-        priority=50,
-        value="\{ttft_ms}ms",
-      )
+      self.publish_segment(segment="ttft", priority=50, value="\{ttft_ms}ms")
     }
     _ => ()
   }

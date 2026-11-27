@@ -289,6 +289,25 @@ async fn check(
 }
 
 ///|
+/// Close `file` and unlink `tmp` unless it has already been renamed away.
+async fn discard_temporary(
+  file : @fs.File,
+  tmp : String,
+) -> Unit raise EmbedError {
+  file.close()
+  let remaining = @fs.exists(tmp) catch {
+    err =>
+      raise EmbedError("cannot inspect temporary file \{tmp}: \{Repr(err)}")
+  }
+  if remaining {
+    @fs.remove(tmp) catch {
+      err =>
+        raise EmbedError("cannot clean temporary file \{tmp}: \{Repr(err)}")
+    }
+  }
+}
+
+///|
 /// Write `content` to `config.out` atomically: temp file in the target
 /// directory, then rename over the previous file.
 async fn write_atomic(
@@ -308,19 +327,12 @@ async fn write_atomic(
   let file = @fs.create(tmp, allow_existing=false, permission=0o644) catch {
     err => raise EmbedError("cannot create \{tmp}: \{Repr(err)}")
   }
-  defer {
-    file.close()
-    let remaining = @fs.exists(tmp) catch {
-      err =>
-        raise EmbedError("cannot inspect temporary file \{tmp}: \{Repr(err)}")
-    }
-    if remaining {
-      @fs.remove(tmp) catch {
-        err =>
-          raise EmbedError("cannot clean temporary file \{tmp}: \{Repr(err)}")
-      }
-    }
-  }
+  // A cancelled write must still reach the unlink, so the cleanup runs
+  // shielded; the shield widens errors to `Error`, so narrow back here.
+  defer (@async.protect_from_cancel(() => discard_temporary(file, tmp)) catch {
+    EmbedError(_) as err => raise err
+    err => raise EmbedError("cannot clean temporary file \{tmp}: \{Repr(err)}")
+  })
   file.write(@utf8.encode(content)[:]) catch {
     err => raise EmbedError("cannot write \{tmp}: \{Repr(err)}")
   }
