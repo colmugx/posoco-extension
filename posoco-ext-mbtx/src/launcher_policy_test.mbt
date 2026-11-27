@@ -28,14 +28,16 @@ async test "auto falls back to moon and an early cancelled invocation can retry"
 ///|
 async test "normal imports and embedded policy do not bypass host guest filesystem policy" {
   let source =
-    #|// policy:
-    #|//   fs:
-    #|//     read: ["."]
+    #|----
     #|import {
     #|  "moonbitlang/async@0.22.7",
     #|  "moonbitlang/async@0.22.7/stdio",
     #|  "moonbitlang/async@0.22.7/fs",
     #|}
+    #|----
+    #|// policy:
+    #|//   fs:
+    #|//     read: ["."]
     #|async fn main {
     #|  @stdio.stdout.write("{\"type\":\"hello\",\"protocol\":1}\n")
     #|  ignore(@stdio.stdin.read_until("\n"))

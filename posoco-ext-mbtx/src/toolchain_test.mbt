@@ -1,11 +1,13 @@
 ///|
 /// Wire fixture independent of the unpublished SDK, exercising real script imports.
 let script_source : String =
+  #|----
   #|import {
   #|  "moonbitlang/async@0.22.7",
   #|  "moonbitlang/async@0.22.7/stdio",
   #|  "moonbitlang/core/json",
   #|}
+  #|----
   #|async fn main {
   #|  @stdio.stdout.write("{\"type\":\"hello\",\"protocol\":1}\n")
   #|  guard @stdio.stdin.read_until("\n") is Some(line) else { fail("missing invocation") }
@@ -25,9 +27,11 @@ let script_source : String =
 /// `core/compress/gzip` share the `gzip` alias), so the run dies in package
 /// solving and never reaches the compiler that would name `unknown_value`.
 let invalid_script_source : String =
+  #|----
   #|import {
   #|  "moonbitlang/async@0.22.7",
   #|}
+  #|----
   #|fn main {
   #|  unknown_value
   #|}

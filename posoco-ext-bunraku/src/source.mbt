@@ -11,11 +11,13 @@
 /// { "error": code, "content": text } as a plain value.
 fn inline_guest_source(code : String) -> String {
   let prefix : String =
+    #|----
     #|import {
     #|  "moonbitlang/async@0.22.7",
     #|  "moonbitlang/core/json",
     #|  "posoco/ears@0.1.0" @ears,
     #|}
+    #|----
     #|
     #|struct GuestContext {
     #|  ears : @ears.Ears
